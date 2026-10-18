@@ -349,6 +349,7 @@ class _StylistPageState extends ConsumerState<StylistPage> {
           ],
           const SizedBox(height: 24),
           ExpansionTile(
+            key: const PageStorageKey('stylist:demo-scenarios'),
             tilePadding: EdgeInsets.zero,
             title: const Text('Kịch bản kiểm thử demo', style: T.small),
             children: [

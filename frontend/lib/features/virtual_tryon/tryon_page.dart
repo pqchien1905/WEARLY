@@ -547,6 +547,7 @@ class _TryOnPageState extends ConsumerState<TryOnPage> {
                   ],
                   const SizedBox(height: 24),
                   ExpansionTile(
+                    key: const PageStorageKey('try-on:demo-scenarios'),
                     tilePadding: EdgeInsets.zero,
                     title: const Text('Kịch bản kiểm thử demo', style: T.small),
                     children: [

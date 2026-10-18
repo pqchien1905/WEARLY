@@ -140,6 +140,7 @@ PostgreSQL tạm không còn được dùng sau reboot. Backend hiện dùng Pos
 
 ## Xử lý lỗi
 
+- Flutter báo `double/int is not a subtype of bool?` sau khi bấm F12 hoặc thay đổi chiều rộng: đã sửa xung đột PageStorage giữa vị trí cuộn và các mục thu gọn. Trong terminal đang chạy `flutter run`, nhấn `R` viết hoa để hot restart và nạp bản sửa, xóa trạng thái lỗi cũ trong bộ nhớ.
 - Docker500 hoặc WSL virtualization: kiểm tra vmcompute/hns, `wsl --status` và trạng thái Windows pending restart. Lỗi trên máy này đã hết sau khi Restart áp dụng bản sửa DISM; không chạy reset/unregister distro để xử lý lỗi này.
 - P1001/connect refused: kiểm tra port/host/container health và DATABASE_URL.
 - Invalid environment: thay placeholder, secrets khác nhau dài≥32, durations tính theo giây.

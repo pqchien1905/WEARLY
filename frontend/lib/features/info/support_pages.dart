@@ -164,6 +164,7 @@ class FaqPage extends StatelessWidget {
             ),
           ])
             ExpansionTile(
+              key: PageStorageKey('faq:${item.$1}'),
               tilePadding: EdgeInsets.zero,
               title: Text(
                 item.$1,

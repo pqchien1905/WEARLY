@@ -164,6 +164,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                   if (ref.read(accountRepositoryProvider)
                       case final MockAccountRepository repo)
                     ExpansionTile(
+                      key: const PageStorageKey('account:demo-scenarios'),
                       tilePadding: EdgeInsets.zero,
                       title: const Text(
                         'Kịch bản kiểm thử demo',

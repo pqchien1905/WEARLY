@@ -237,6 +237,7 @@ class _ProductDetailState extends ConsumerState<ProductDetail> {
         ),
         const SizedBox(height: 24),
         ExpansionTile(
+          key: PageStorageKey('product:${p.id}:care'),
           tilePadding: EdgeInsets.zero,
           title: const Text('Chất liệu & chăm sóc', style: T.body),
           children: [
@@ -253,6 +254,7 @@ class _ProductDetailState extends ConsumerState<ProductDetail> {
           ],
         ),
         ExpansionTile(
+          key: PageStorageKey('product:${p.id}:shipping'),
           tilePadding: EdgeInsets.zero,
           title: const Text('Giao hàng & đổi trả', style: T.body),
           children: [

@@ -81,3 +81,9 @@ Sau review: sửa bốn findings bằng regression RED→GREEN; thêm migration 
 ## Docker restored — 2026-10-18, sau restart20:39
 
 Người dùng xác nhận lưu công việc và cho phép restart. Windows đã áp dụng bản sửa đang pending: vmcompute/hns phục hồi và Running; WSL2 không còn báo lỗi; CBS RebootPending=false. Docker Desktop4.95.0/Engine29.8.2 đã chạy, hello-world pull/run exit0. Compose PostgreSQL17.11 và Redis7 Healthy tại127.0.0.1:5433/6380; SQL query/PONG đạt. Native PostgreSQL/Memurai vẫn Running, không đổi dữ liệu hoặc env. API/worker/MinIO container chưa build/chạy; dev processes cần chạy lại sau reboot. Setup/report đã cập nhật, lỗi Docker về Virtual Machine Platform đã được xử lý.
+
+## Flutter resize / F12 regression — 2026-10-18
+
+Reproduced the reported numeric-to-bool TypeError in Chrome: scroll a product, Stylist or Try-On page, then narrow the viewport as docked DevTools does. Unkeyed ExpansionTiles shared the route's PageStorage identifier with its scroll view; Expansible read the saved numeric scroll offset as a nullable bool when the responsive layout recreated it. Opening a section could also overwrite the scroll offset with a boolean.
+
+Added distinct PageStorageKeys to all six ExpansionTile call sites, including account demo controls and individual FAQ entries. No layout, API or database changes. Five actual-route regression tests failed before the fix and pass afterward, covering fractional scroll offsets, repeated responsive changes and independent expanded state. Full Flutter suite:185 passed,1 live-API test skipped; analyzer clean; Web release build passed. Chrome checks on product, Stylist, Try-On, login and FAQ all pass after scrolling and resizing through1440/600/375px, with no Flutter/browser exceptions. For an existing `flutter run` session, use uppercase `R` to rebuild and clear the old in-memory PageStorage state.
