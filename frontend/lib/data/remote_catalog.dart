@@ -31,7 +31,7 @@ class RemoteProductRepository implements ProductRepository {
       final data = response as Map<String, dynamic>;
       return ProductPage(
         (data['items'] as List)
-            .map((e) => _product(e as Map<String, dynamic>))
+            .map((e) => productFromJson(e as Map<String, dynamic>))
             .toList(),
         data['total'] as int,
       );
@@ -50,7 +50,7 @@ class RemoteProductRepository implements ProductRepository {
         'products/${Uri.encodeComponent(slug)}',
         authenticated: false,
       );
-      return _product(data as Map<String, dynamic>);
+      return productFromJson(data as Map<String, dynamic>);
     } on ApiException catch (e) {
       if (e.status == 404) return null;
       rethrow;
@@ -87,7 +87,7 @@ class RemoteProductRepository implements ProductRepository {
     return amount;
   }
 
-  static Product _product(Map<String, dynamic> p) {
+  static Product productFromJson(Map<String, dynamic> p) {
     try {
       final media = (p['images'] as List)
           .map(

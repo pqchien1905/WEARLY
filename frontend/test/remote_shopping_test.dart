@@ -255,7 +255,6 @@ void main() {
     for (final path in [
       '/ai-stylist',
       '/virtual-try-on',
-      '/wishlist',
       '/account/style',
       '/forgot-password',
     ]) {

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../app/api_providers.dart';
+import '../../core/widgets/wishlist_button.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/providers.dart';
@@ -62,7 +62,6 @@ class _ProductDetailState extends ConsumerState<ProductDetail> {
     final p = widget.product;
     final variants = p.variants.where((v) => v.color == color).toList();
     final selected = variants.where((v) => v.size == size).firstOrNull;
-    final saved = ref.watch(wishlistProvider).contains(p.id);
     final mobile = MediaQuery.sizeOf(context).width < 800;
     Future<void> add() async {
       if (selected == null) {
@@ -213,16 +212,7 @@ class _ProductDetailState extends ConsumerState<ProductDetail> {
                 onPressed: () =>
                     context.go('/virtual-try-on?product=${p.slug}'),
               ),
-            IconButton(
-              tooltip: saved ? 'Bỏ yêu thích' : 'Lưu yêu thích',
-              onPressed: () => ref.read(remoteApiProvider)
-                  ? context.go('/wishlist')
-                  : ref.read(wishlistProvider.notifier).toggle(p.id),
-              icon: Icon(
-                saved ? Icons.favorite : Icons.favorite_border,
-                color: T.accent,
-              ),
-            ),
+            WishlistButton(p),
           ],
         ),
         const SizedBox(height: 24),

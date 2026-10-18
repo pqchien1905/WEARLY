@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../app/providers.dart';
-import '../../app/api_providers.dart';
+import 'wishlist_button.dart';
 import '../../domain/catalog.dart';
 import '../design/tokens.dart';
 import '../format.dart';
@@ -15,7 +14,6 @@ class ProductCard extends ConsumerWidget {
   final Product product;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final saved = ref.watch(wishlistProvider).contains(product.id);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -34,22 +32,7 @@ class ProductCard extends ConsumerWidget {
               Positioned(
                 top: 8,
                 right: 8,
-                child: IconButton.filledTonal(
-                  style: IconButton.styleFrom(
-                    backgroundColor: T.surface.withValues(alpha: .94),
-                  ),
-                  tooltip: saved
-                      ? 'Bỏ yêu thích ${product.name}'
-                      : 'Yêu thích ${product.name}',
-                  onPressed: () => ref.read(remoteApiProvider)
-                      ? context.go('/wishlist')
-                      : ref.read(wishlistProvider.notifier).toggle(product.id),
-                  icon: Icon(
-                    saved ? Icons.favorite : Icons.favorite_border,
-                    size: 20,
-                    color: saved ? T.accent : T.ink,
-                  ),
-                ),
+                child: WishlistButton(product, card: true),
               ),
               Positioned(
                 bottom: 10,

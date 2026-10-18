@@ -6,6 +6,7 @@ import '../../app/remote_route_gate.dart';
 import 'commerce_feedback.dart';
 import '../../app/config.dart';
 import '../../app/providers.dart';
+import '../../app/remote_wishlist.dart';
 import '../../core/design/tokens.dart';
 import '../../core/design/motion.dart';
 import '../../core/format.dart';
@@ -125,10 +126,25 @@ class CartPage extends ConsumerWidget {
                       },
                     ),
                     TextButton(
-                      onPressed: () {
+                      onPressed: () async {
                         if (cart.remote) {
-                          if (compact) Navigator.pop(context);
-                          context.go('/wishlist');
+                          final wishlist = ref.read(remoteWishlistProvider);
+                          try {
+                            final product = await ref
+                                .read(productRepositoryProvider)
+                                .bySlug(item.slug);
+                            if (product == null) {
+                              throw StateError('Sản phẩm không còn mở bán.');
+                            }
+                            await wishlist.save(product.id);
+                            if (context.mounted) {
+                              toast(context, 'Đã lưu vào danh sách yêu thích.');
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              toast(context, wishlist.error ?? '$e');
+                            }
+                          }
                           return;
                         }
                         ref

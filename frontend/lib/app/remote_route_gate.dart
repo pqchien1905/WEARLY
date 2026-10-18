@@ -5,6 +5,7 @@ import '../core/widgets/primitives.dart';
 import 'account_state.dart';
 import 'api_providers.dart';
 import '../features/admin/remote/admin_pages.dart';
+import '../features/catalog/remote_wishlist_page.dart';
 
 class RemoteRouteGate extends ConsumerWidget {
   const RemoteRouteGate({super.key, required this.path, required this.child});
@@ -18,10 +19,14 @@ class RemoteRouteGate extends ConsumerWidget {
       if (account?.role != 'ADMIN') return const SizedBox.shrink();
       return RemoteAdminRoute(key: ValueKey((account!.id, path)), path: path);
     }
+    if (path == '/wishlist') {
+      return ref.watch(accountProvider) == null
+          ? const LoginRequired(next: '/wishlist')
+          : const RemoteWishlistPage();
+    }
     if ([
       '/ai-stylist',
       '/virtual-try-on',
-      '/wishlist',
       '/account/style',
       '/account/try-ons',
       '/forgot-password',
