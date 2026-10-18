@@ -2,7 +2,11 @@
 
 Chạy backend bằng `npm run start:dev` trong `backend`. Từ thư mục gốc chạy `.\tools\frontend.ps1 api`; nếu đang đứng trong `frontend`, dùng `..\tools\frontend.ps1 api`.
 
-Đăng nhập tài khoản ADMIN rồi mở `http://localhost:8080/#/admin` hoặc liên kết **Quản trị** cuối trang. Khách hàng và người chưa đăng nhập không đọc được dữ liệu quản trị; backend kiểm tra quyền trên từng yêu cầu. Phiên đăng nhập chỉ ở RAM, vì vậy reload trình duyệt cần đăng nhập lại.
+Mở `http://localhost:8080/#/admin/login` để đăng nhập quản trị. Trang này có giao diện riêng, không có menu mua sắm, giỏ hàng hay đăng ký công khai. Truy cập trực tiếp một trang quản trị khi chưa đăng nhập sẽ chuyển tới form này, rồi trở lại đúng trang sau khi xác thực. Liên kết **Quản trị** cuối cửa hàng cũng mở form quản trị.
+
+Khách hàng dùng `http://localhost:8080/#/login`. Hai khu vực giữ phiên độc lập: đăng nhập, hết phiên hoặc đăng xuất ở một khu vực không thay đổi phiên còn lại. ADMIN vẫn có thể đăng nhập riêng ở cửa hàng để mua sắm. Tài khoản CUSTOMER bị từ chối ngay tại API đăng nhập quản trị; backend tiếp tục kiểm tra quyền trên mọi yêu cầu quản trị.
+
+Các phiên chỉ ở RAM, vì vậy reload trình duyệt cần đăng nhập lại. Dữ liệu vẫn được giữ trên PostgreSQL. Chế độ demo (`run`) hiển thị rõ dữ liệu minh họa và không yêu cầu tài khoản quản trị thật.
 
 Tại máy phát triển, cấp quyền cho email đã đăng ký bằng:
 

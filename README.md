@@ -45,6 +45,11 @@ Mở terminal thứ hai tại `D:\Fashion Shop`, chạy giao diện Flutter kế
 
 Nếu terminal đang ở `D:\Fashion Shop\frontend`, chạy `..\tools\frontend.ps1 api`.
 
-Mở Chrome tại `http://localhost:8080`: đăng ký/đăng nhập, hồ sơ, địa chỉ, giỏ hàng, đặt COD, lịch sử và hủy đơn dùng dữ liệu PostgreSQL. Tài khoản ADMIN mở `http://localhost:8080/#/admin` để quản lý sản phẩm, biến thể, tồn kho, đơn hàng và xem khách hàng. Sau khi tải lại trang cần đăng nhập lại; dữ liệu vẫn được lưu trên máy chủ. Chạy `.\tools\frontend.ps1 run` để xem demo độc lập. Yêu thích, AI và khôi phục mật khẩu chưa nối vào chế độ API; chưa có thanh toán online.
+Mở Chrome tại `http://localhost:8080`: đăng ký/đăng nhập, hồ sơ, địa chỉ, giỏ hàng, đặt COD, lịch sử và hủy đơn dùng dữ liệu PostgreSQL.
+
+- Khách hàng: `http://localhost:8080/#/login`.
+- Quản trị: `http://localhost:8080/#/admin/login`, dành cho tài khoản ADMIN để quản lý sản phẩm, biến thể, tồn kho, đơn hàng và xem khách hàng.
+
+Hai khu vực có giao diện và phiên đăng nhập riêng; đăng xuất một bên giữ nguyên phiên bên kia. ADMIN có thể đăng nhập riêng ở cửa hàng để mua sắm. Sau khi tải lại trang cần đăng nhập lại; dữ liệu vẫn được lưu trên máy chủ. Chạy `.\tools\frontend.ps1 run` để xem demo độc lập. Yêu thích, AI và khôi phục mật khẩu chưa nối vào chế độ API; chưa có thanh toán online.
 
 Cấp ADMIN cho một tài khoản đã đăng ký, từ thư mục gốc: `node tools/grant-admin.cjs email-cua-ban@example.com`. Công cụ chỉ đổi quyền tài khoản hiện có và thu hồi các phiên cũ; không tạo mật khẩu mặc định. Đăng nhập lại sau khi được cấp quyền. Chi tiết: [Quản trị trực tuyến](docs/admin.md).

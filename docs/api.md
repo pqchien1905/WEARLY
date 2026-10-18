@@ -5,6 +5,7 @@ Base URL: `http://localhost:3000/api/v1`. Swagger: `http://localhost:3000/api/do
 | Method | Path (sau /api/v1) | Quyền / trạng thái |
 |---|---|---|
 | POST | /auth/register, /auth/login, /auth/refresh | Public, rate limited |
+| POST | /auth/admin/login | Public, rate limited; xác thực mật khẩu và yêu cầu role ADMIN trước khi cấp phiên |
 | POST | /auth/logout | Bearer; revoke session family |
 | GET | /auth/me | Bearer |
 | GET, PATCH | /users/me | Bearer |
@@ -48,6 +49,8 @@ Register `{name,email,password}`; password 12..128 ký tự, email normalize low
 ```
 
 POST refresh `{refreshToken}` xoay token và vô hiệu hóa session cũ. Replay token cũ revoke toàn family. Logout cần access token, revoke family. Tokens không được log hoặc lưu vào URL. Flutter đã tích hợp bearer auth khi bật `USE_REMOTE_API=true`; access/refresh token chỉ ở RAM, refresh đồng thời được gộp, logout/đổi tài khoản loại cache cá nhân. Sau reload cần đăng nhập lại, dữ liệu trên PostgreSQL vẫn được giữ.
+
+`POST /auth/admin/login` nhận `{email,password}` và trả cùng shape login. Sai thông tin trả401; tài khoản đúng mật khẩu nhưng không có quyền ADMIN trả403, không tạo refresh token. Flutter sử dụng client/token/account riêng cho quản trị; logout hoặc refresh thất bại không ảnh hưởng phiên mua sắm. `/auth/login` vẫn chấp nhận ADMIN để họ mua sắm bằng một phiên độc lập. Đây là tách luồng sử dụng và phiên; quyền endpoint vẫn xác minh theo role hiện tại trên máy chủ.
 
 ## Catalog
 

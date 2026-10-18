@@ -40,19 +40,31 @@ module.exports = async function verify({ root, fixture, email, customerEmail, pa
       }
       throw new Error('Flutter control could not be scrolled into view');
     }
-    async function button(name) { const node = page.getByRole('button', { name, exact: true }); if (name !== 'Đăng xuất') await reveal(node); await node.click(); await page.waitForTimeout(300); }
+    async function button(name) { const node = page.getByRole('button', { name, exact: true }); if (name !== 'Đăng xuất quản trị') await reveal(node); await node.click(); await page.waitForTimeout(300); }
     async function fill(name, value) {
       const field = page.getByRole('textbox', { name, exact: true });
       await reveal(field); await field.click(); await page.waitForTimeout(150);
       await field.fill(value); await page.waitForTimeout(200);
       assert.equal(await field.inputValue(), value);
     }
-    async function login(account) { await fill('Email', account); await fill('Mật khẩu', password); await button('Đăng nhập'); }
-    await page.goto('http://127.0.0.1:4183/#/login?next=%2Fadmin'); await semantics();
+    async function login(account, admin = true) { await fill('Email', account); await fill('Mật khẩu', password); await button(admin ? 'Đăng nhập quản trị' : 'Đăng nhập'); }
+    await page.goto('http://127.0.0.1:4183/#/admin'); await semantics();
+    await page.getByRole('button', { name: 'Đăng nhập quản trị', exact: true }).waitFor();
+    assert(page.url().includes('/admin/login?next='));
+    assert(!(await page.locator('body').ariaSnapshot()).includes('Bản tin'));
+    await page.screenshot({ path: path.join(output, 'admin-login-desktop.png') });
+    await page.setViewportSize({ width: 375, height: 812 }); await page.waitForTimeout(400);
+    await page.screenshot({ path: path.join(output, 'admin-login-mobile.png') });
+    await page.setViewportSize({ width: 1440, height: 900 }); await page.waitForTimeout(400);
+    await login(customerEmail);
+    // Flutter also announces live errors in a separate accessibility element.
+    await page.locator('flt-semantics').getByText('Tài khoản này chưa có quyền quản trị. Vui lòng dùng tài khoản được cửa hàng cấp quyền.', { exact: true }).waitFor();
+    assert(page.url().includes('/admin/login'));
     await login(email);
     await page.getByText('Một góc nhìn toàn cảnh.', { exact: true }).waitFor();
     await page.screenshot({ path: path.join(output, 'dashboard-desktop.png'), fullPage: true });
     console.log('Chrome admin: authenticated dashboard.');
+    assert(!requests.some(r => r.path.endsWith('/auth/login') || r.path.endsWith('/cart') || r.path.includes('/users/me')), 'Admin login must not initialize shopper data');
     await route('/admin/products/new');
     await fill('Tên sản phẩm', 'Áo quản trị trình duyệt');
     await fill('Đường dẫn sản phẩm', fixture + '-admin');
@@ -84,7 +96,7 @@ module.exports = async function verify({ root, fixture, email, customerEmail, pa
     await button('Lưu thông tin sản phẩm');
     await page.waitForTimeout(500);
     await page.reload(); await semantics();
-    await button('Đăng nhập'); await login(email);
+    await login(email);
     await page.getByText('Đang bán · Tồn kho: 8', { exact: true }).waitFor();
     assert((await page.locator('body').ariaSnapshot()).includes('700.000'));
     console.log('Chrome admin: product, gallery, SKU price and stock persisted across reload/login.');
@@ -99,14 +111,34 @@ module.exports = async function verify({ root, fixture, email, customerEmail, pa
     await route('/admin/customers'); await page.getByText('Khách hàng & tài khoản', { exact: true }).waitFor();
     await page.waitForTimeout(500);
     assert((await page.locator('body').ariaSnapshot()).includes('Quản trị kiểm thử'));
-    await button('Đăng xuất');
+    await button('Đăng xuất quản trị');
+    await page.getByRole('button', { name: 'Đăng nhập quản trị', exact: true }).waitFor();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await route('/login?next=%2Fadmin');
+    await page.getByText('Đăng nhập khách hàng', { exact: true }).waitFor();
+    await page.screenshot({ path: path.join(output, 'customer-login-desktop.png') });
+    await login(customerEmail, false);
+    await page.getByText('Chào Khách kiểm thử.', { exact: true }).waitFor();
+    assert(page.url().endsWith('/account'), 'Shopper next must not enter admin');
+    await route('/admin/customers');
+    await page.getByRole('button', { name: 'Đăng nhập quản trị', exact: true }).waitFor();
+    await login(email);
+    await page.getByText('Khách hàng & tài khoản', { exact: true }).waitFor();
+    await button('Đăng xuất quản trị');
+    await route('/account');
+    await page.getByText('Chào Khách kiểm thử.', { exact: true }).waitFor();
+    await route('/admin/customers'); await login(email);
+    await page.getByText('Khách hàng & tài khoản', { exact: true }).waitFor();
+    await route('/account'); await button('Đăng xuất');
     await page.getByText('Đăng nhập để tiếp tục', { exact: true }).waitFor();
-    await button('Đăng nhập'); await login(customerEmail);
-    await page.getByText('Cần quyền quản trị', { exact: true }).waitFor();
+    await route('/admin/customers');
+    await page.getByText('Khách hàng & tài khoản', { exact: true }).waitFor();
+    console.log('Chrome admin: independent shopper/staff identities, both logout directions and safe return paths.');
     assert.deepEqual(errors, []);
     assert(requests.some(r => r.path.endsWith('/status') && r.status === 200));
-    assert(!requests.some(r => r.status >= 400), 'Unexpected API failure');
-    console.log('PASS Chrome admin: CRUD, stock, order lifecycle, responsive UI, logout and customer gate.');
+    assert.equal(requests.filter(r => r.path.endsWith('/auth/admin/login') && r.status === 403).length, 1);
+    assert(!requests.some(r => r.status >= 400 && !(r.path.endsWith('/auth/admin/login') && r.status === 403)), 'Unexpected API failure');
+    console.log('PASS Chrome admin: CRUD, stock, order lifecycle, responsive separate login UI, isolated logout and customer gate.');
   } catch (error) {
     if (page) { fs.writeFileSync(path.join(output, 'failure-aria.txt'), await page.locator('body').ariaSnapshot()); await page.screenshot({ path: path.join(output, 'failure.png'), fullPage: true }); }
     throw error;

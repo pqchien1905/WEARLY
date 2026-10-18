@@ -227,7 +227,16 @@ class _AdminLoginPageState extends ConsumerState<AdminLoginPage> {
                 children: [
                   SizedBox(
                     width: MediaQuery.sizeOf(context).width * .38,
-                    child: identity(),
+                    child: LayoutBuilder(
+                      builder: (_, constraints) => SingleChildScrollView(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: constraints.maxHeight,
+                          ),
+                          child: IntrinsicHeight(child: identity()),
+                        ),
+                      ),
+                    ),
                   ),
                   Expanded(
                     child: LayoutBuilder(

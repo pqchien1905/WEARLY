@@ -69,6 +69,17 @@ void main() {
     return (c, router);
   }
 
+  testWidgets('admin login fits a short desktop viewport with DevTools open', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await mount(tester, '/admin/login');
+    expect(tester.takeException(), isNull);
+  });
+
   for (final width in [375.0, 1440.0]) {
     testWidgets(
       'admin deep link shows standalone login at $width and returns after authentication',

@@ -112,4 +112,10 @@ Kiểm chứng trước final review: backend lint/build, 11 unit và 15 Postgre
 
 Phần còn lại: admin audit đầy đủ, quản lý taxonomy bằng UI, uploads catalog, đối soát COD, wishlist/reviews/promotions/style, reset-email và AI/provider/payment thật. Hướng dẫn sử dụng và kiểm thử tại [admin.md](admin.md).
 
+## Separate customer and administrator sign-in — 2026-10-18
+
+Khách hàng đăng nhập tại `/#/login`; quản trị đăng nhập tại `/#/admin/login` với form Studio độc lập. Tách client, token, account và dữ liệu quản trị khỏi phiên mua sắm. ADMIN được dùng cả hai khu vực bằng hai lần đăng nhập riêng; logout/hết phiên một bên giữ bên còn lại. Deep link quản trị chuyển tới form riêng và quay lại đường dẫn an toàn sau xác thực. API `/auth/admin/login` chặn CUSTOMER trước khi tạo phiên; các endpoint quản trị vẫn kiểm tra quyền máy chủ.
+
+Kiểm chứng: 235 Flutter tests đạt (2 live opt-in không chạy trong suite thường), analyzer sạch; backend build/lint, 11 unit và 16 PostgreSQL E2E đạt (17 worker/storage opt-in không chạy). Chrome thật với PostgreSQL `_test` xác nhận hai giao diện, CUSTOMER bị từ chối, hai chiều logout độc lập, safe return path và các thao tác quản trị/sản phẩm/kho/đơn tiếp tục hoạt động. Ảnh desktop1440/mobile375 đã được xem; thêm regression cho viewport1440×400 khi mở DevTools, sửa overflow cột Studio bằng cuộn độc lập. Reload vẫn cần đăng nhập lại vì token chỉ ở RAM.
+
 Final review độc lập phát hiện một lỗi mất ảnh khi quản trị viên lưu metadata từ bản cũ. Đã sửa PATCH chỉ gửi trường thay đổi và cập nhật mốc so sánh sau khi lưu thành công. Hai regression đã thất bại trước sửa và đạt sau sửa: giữ thay đổi gallery/chất liệu của người khác và giữ đúng mốc sau lần sửa gallery. Suite cuối225 đạt,2 opt-in bỏ qua; analyzer sạch. Không có finding Critical/Important/Minor còn tồn đọng. Các giới hạn taxonomy/upload/audit, đối soát COD, native và production giữ nguyên như tài liệu.
