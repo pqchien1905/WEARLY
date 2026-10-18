@@ -258,7 +258,6 @@ void main() {
       '/wishlist',
       '/account/style',
       '/forgot-password',
-      '/admin/settings',
     ]) {
       router.go(path);
       await tester.pumpAndSettle();

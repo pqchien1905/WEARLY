@@ -3,7 +3,6 @@ import { PrismaService } from '../../database/prisma.service';
 import { transaction } from '../../common/transaction';
 import { fail } from '../../common/errors';
 import { PageDto } from '../products/dto/query-products.dto';
-import { catalogInclude } from '../products/products.service';
 import { publicUser } from '../auth/auth.service';
 import {
   AdjustInventoryDto,
@@ -14,20 +13,64 @@ import {
   UpdateProductDto,
   UpdateSkuDto,
 } from './dto/admin.dto';
+const adminProductInclude = {
+  category: true,
+  brand: true,
+  images: { orderBy: { position: 'asc' as const } },
+  variants: { orderBy: { sku: 'asc' as const }, include: { inventory: true } },
+};
+const adminOrderInclude = {
+  items: true,
+  payment: true,
+  user: { select: { email: true, name: true } },
+};
 @Injectable()
 export class AdminService {
   constructor(private readonly db: PrismaService) {}
+  async summary() {
+    const [products, inventory, orders, pendingOrders, customers] =
+      await this.db.$transaction([
+        this.db.product.count(),
+        this.db.inventory.aggregate({ _sum: { quantity: true } }),
+        this.db.order.count(),
+        this.db.order.count({ where: { status: 'PENDING' } }),
+        this.db.user.count({ where: { role: 'CUSTOMER' } }),
+      ]);
+    return {
+      products,
+      inventoryUnits: inventory._sum.quantity ?? 0,
+      orders,
+      pendingOrders,
+      customers,
+    };
+  }
+  async product(id: string) {
+    const value = await this.db.product.findUnique({
+      where: { id },
+      include: adminProductInclude,
+    });
+    if (!value) throw new NotFoundException();
+    return value;
+  }
+  async order(id: string) {
+    const value = await this.db.order.findUnique({
+      where: { id },
+      include: adminOrderInclude,
+    });
+    if (!value) throw new NotFoundException();
+    return value;
+  }
   async list(kind: 'products' | 'inventory' | 'orders' | 'users', q: PageDto) {
     const args = {
       skip: (q.page - 1) * q.limit,
       take: q.limit,
-      orderBy: { createdAt: 'desc' as const },
+      orderBy: [{ createdAt: 'desc' as const }, { id: 'desc' as const }],
     };
     if (kind === 'products')
       return {
         items: await this.db.product.findMany({
           ...args,
-          include: catalogInclude,
+          include: adminProductInclude,
         }),
         total: await this.db.product.count(),
         page: q.page,
@@ -37,7 +80,11 @@ export class AdminService {
       return {
         items: await this.db.inventory.findMany({
           ...args,
-          include: { variant: true },
+          include: {
+            variant: {
+              include: { product: { select: { name: true, active: true } } },
+            },
+          },
         }),
         total: await this.db.inventory.count(),
         page: q.page,
@@ -47,7 +94,7 @@ export class AdminService {
       return {
         items: await this.db.order.findMany({
           ...args,
-          include: { items: true, payment: true },
+          include: adminOrderInclude,
         }),
         total: await this.db.order.count(),
         page: q.page,
@@ -61,10 +108,44 @@ export class AdminService {
     };
   }
   createProduct(dto: CreateProductDto) {
-    return this.db.product.create({ data: dto });
+    const { images, ...data } = dto;
+    return this.db.product.create({
+      data: {
+        ...data,
+        images: images
+          ? {
+              create: images.map((image, position) => ({ ...image, position })),
+            }
+          : undefined,
+      },
+      include: adminProductInclude,
+    });
   }
   updateProduct(id: string, dto: UpdateProductDto) {
-    return this.db.product.update({ where: { id }, data: dto });
+    const { images, ...data } = dto;
+    // Explicit delete then create avoids a unique(productId,position) collision.
+    // The transaction rolls back both metadata and gallery if any write fails.
+    return transaction(this.db, async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${id}::uuid FOR UPDATE`;
+      if (images !== undefined)
+        await tx.productImage.deleteMany({ where: { productId: id } });
+      return tx.product.update({
+        where: { id },
+        data: {
+          ...data,
+          images:
+            images === undefined
+              ? undefined
+              : {
+                  create: images.map((image, position) => ({
+                    ...image,
+                    position,
+                  })),
+                },
+        },
+        include: adminProductInclude,
+      });
+    });
   }
   createSku(dto: CreateSkuDto) {
     return this.db.productVariant.create({
@@ -126,7 +207,7 @@ export class AdminService {
       // settlement workflow is implemented.
       return tx.order.findUniqueOrThrow({
         where: { id },
-        include: { items: true, payment: true },
+        include: adminOrderInclude,
       });
     });
   }

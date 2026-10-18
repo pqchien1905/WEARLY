@@ -27,6 +27,15 @@ import {
 @Controller('admin')
 export class AdminController {
   constructor(private readonly service: AdminService) {}
+  @Get('summary') summary() {
+    return this.service.summary();
+  }
+  @Get('products/:id') product(@Param('id', ParseUUIDPipe) id: string) {
+    return this.service.product(id);
+  }
+  @Get('orders/:id') order(@Param('id', ParseUUIDPipe) id: string) {
+    return this.service.order(id);
+  }
   @Get('products') products(@Query() q: PageDto) {
     return this.service.list('products', q);
   }

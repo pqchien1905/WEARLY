@@ -169,7 +169,7 @@ Nền tảng local đã đáp ứng các tiêu chí chạy API/database/Prisma/a
 ## H. Việc tiếp theo
 
 1. Docker đã phục hồi; tiếp theo kiểm chứng container build/runtime API/worker/MinIO và migrations/seed trên DB container riêng. Worker native đã được kiểm thử.
-2. Luồng Flutter auth → địa chỉ → cart → COD/orders đã nối. Tiếp tục remote admin, wishlist/style/reviews và khôi phục mật khẩu; xem [migration-plan.md](migration-plan.md).
+2. Luồng Flutter auth → địa chỉ → cart → COD/orders và quản trị sản phẩm/kho/đơn/khách hàng đã nối. Tiếp tục wishlist/style/reviews và khôi phục mật khẩu; xem [migration-plan.md](migration-plan.md) và [admin.md](admin.md).
 3. Nối private upload hiện có vào Flutter, triển khai TryOnProvider thật, bổ sung cancel riêng job và kiểm thử provider thực.
 4. Payment gateway/webhook và reservation expiry; COD settlement; không tự đánh dấu đã thanh toán.
 5. Hoàn thiện admin audit/concurrency, wishlist/reviews/promotions/style profile, CI, backup/restore và hardening production.

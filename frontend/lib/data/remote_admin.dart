@@ -1,0 +1,86 @@
+import '../core/network/api_client.dart';
+import 'commerce_json.dart';
+
+typedef AdminRecord = Map<String, dynamic>;
+
+class AdminPage {
+  AdminPage(AdminRecord json)
+    : items = (json['items'] as List).map(commerceMap).toList(),
+      total = json['total'] as int,
+      page = json['page'] as int,
+      limit = json['limit'] as int;
+  final List<AdminRecord> items;
+  final int total, page, limit;
+  bool get hasNext => page * limit < total;
+}
+
+/// Private administration contracts intentionally retain disabled SKUs and
+/// version numbers, unlike the public storefront catalog representation.
+class AdminRepository {
+  AdminRepository(this.api) : _generation = api.tokens.generation;
+  final ApiClient api;
+  final int _generation;
+  bool _disposed = false;
+  void dispose() => _disposed = true;
+  void _check() {
+    if (_disposed || api.tokens.generation != _generation) throw sessionChanged;
+  }
+
+  Future<AdminRecord> _call(
+    String method,
+    String path, {
+    AdminRecord? body,
+    Map<String, String>? query,
+  }) async {
+    _check();
+    final value = await api.request(method, path, body: body, query: query);
+    _check();
+    return commerceMap(value);
+  }
+
+  Future<AdminPage> list(String kind, int page) async => AdminPage(
+    await _call('GET', 'admin/$kind', query: {'page': '$page', 'limit': '20'}),
+  );
+  Future<AdminRecord> detail(String kind, String id) =>
+      _call('GET', 'admin/$kind/${Uri.encodeComponent(id)}');
+  Future<AdminRecord> summary() => _call('GET', 'admin/summary');
+  Future<AdminRecord> references() async {
+    _check();
+    final values = await Future.wait([
+      api.get('categories'),
+      api.get('brands'),
+    ]);
+    _check();
+    return {'categories': values[0], 'brands': values[1]};
+  }
+
+  Future<AdminRecord> saveProduct(String? id, AdminRecord body) => _call(
+    id == null ? 'POST' : 'PATCH',
+    id == null ? 'admin/products' : 'admin/products/${Uri.encodeComponent(id)}',
+    body: body,
+  );
+  Future<AdminRecord> saveSku(String? id, AdminRecord body) => _call(
+    id == null ? 'POST' : 'PATCH',
+    id == null ? 'admin/skus' : 'admin/skus/${Uri.encodeComponent(id)}',
+    body: body,
+  );
+  Future<AdminRecord> adjust(
+    String id, {
+    required int delta,
+    required int version,
+    required String reason,
+  }) => _call(
+    'POST',
+    'admin/inventory/${Uri.encodeComponent(id)}/adjust',
+    body: {'delta': delta, 'expectedVersion': version, 'reason': reason},
+  );
+  Future<AdminRecord> status(
+    String id, {
+    required String status,
+    required int version,
+  }) => _call(
+    'PATCH',
+    'admin/orders/${Uri.encodeComponent(id)}/status',
+    body: {'status': status, 'expectedVersion': version},
+  );
+}

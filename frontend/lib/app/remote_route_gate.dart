@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../core/widgets/primitives.dart';
 import 'account_state.dart';
 import 'api_providers.dart';
+import '../features/admin/remote/admin_pages.dart';
 
 class RemoteRouteGate extends ConsumerWidget {
   const RemoteRouteGate({super.key, required this.path, required this.child});
@@ -12,8 +13,18 @@ class RemoteRouteGate extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (!ref.watch(remoteApiProvider)) return child;
+    if (path == '/admin' || path.startsWith('/admin/')) {
+      final account = ref.watch(accountProvider);
+      if (account == null) return LoginRequired(next: path);
+      if (account.role != 'ADMIN') {
+        return const StatePanel(
+          title: 'Cần quyền quản trị',
+          message: 'Tài khoản này chưa được cấp quyền quản trị cửa hàng.',
+        );
+      }
+      return RemoteAdminRoute(key: ValueKey((account.id, path)), path: path);
+    }
     if ([
-      '/admin',
       '/ai-stylist',
       '/virtual-try-on',
       '/wishlist',

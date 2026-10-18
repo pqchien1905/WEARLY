@@ -21,13 +21,14 @@ Base URL: `http://localhost:3000/api/v1`. Swagger: `http://localhost:3000/api/do
 | GET | /orders, /orders/:id | Owner, phân trang list |
 | POST | /orders/:id/cancel | Owner; chỉ PENDING |
 | GET, POST | /admin/products | ADMIN |
-| PATCH | /admin/products/:id | ADMIN |
+| GET, PATCH | /admin/products/:id | ADMIN; chi tiết gồm cả SKU đã ẩn |
+| GET | /admin/summary | ADMIN; products, inventoryUnits, orders, pendingOrders, customers |
 | POST | /admin/skus | ADMIN; inventory ban đầu 0 |
 | PATCH | /admin/skus/:id | ADMIN; price/active |
 | POST | /admin/categories | ADMIN |
 | GET | /admin/inventory | ADMIN |
 | POST | /admin/inventory/:id/adjust | ADMIN; delta,expectedVersion,reason |
-| GET | /admin/orders | ADMIN |
+| GET | /admin/orders, /admin/orders/:id | ADMIN; gồm snapshots, version, payment và user.email/name |
 | PATCH | /admin/orders/:id/status | ADMIN; status,expectedVersion |
 | GET | /admin/users | ADMIN; không passwordHash |
 | POST, GET | /ai/try-on/jobs, /ai/try-on/jobs/:id | Owner; create trả503 khi provider Disabled |
@@ -73,6 +74,8 @@ POST orders có header `Idempotency-Key: checkout-unique-key`:
 Response là order trực tiếp, có items và payment. subtotal/shipping/total là decimal strings. Standard30.000, miễn từ1.500.000; express50.000. Tất cả tính ở backend, thống nhất BrandConfig demo. expectedSubtotal bắt buộc, cartVersion nên luôn gửi từ adapter thật. COD Payment vẫn PENDING.
 
 List orders/admin dùng page/limit. Hủy đơn hoặc sửa inventory có kiểm tra trạng thái/phiên bản. Luồng admin: PENDING→CONFIRMED→SHIPPED→DELIVERED, không nhảy bước.
+
+Admin list sắp xếp createdAt/id giảm dần. Admin products trả categoryId/brandId UUID, variants gồm active, price dạng chuỗi và inventory {id,quantity,version}; không dùng shape giá public `{amount,currency}`. POST/PATCH product nhận thêm `images:[{url,alt,color?}]` tối đa20; bỏ field images giữ nguyên bộ ảnh, gửi mảng thay thế bộ ảnh theo thứ tự mảng trong cùng transaction. URL chấp nhận HTTPS hoặc `assets/images/`; không tải file hoặc tạo public URL cho ảnh người dùng. Summary đếm toàn database, customers chỉ role CUSTOMER; danh sách users có cả ADMIN.
 
 ## AI foundation
 

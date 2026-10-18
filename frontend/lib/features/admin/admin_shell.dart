@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/design/tokens.dart';
 import '../../core/widgets/store_shell.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../app/api_providers.dart';
+import '../../app/account_state.dart';
 
 const adminNav = [
   ('Tổng quan', '/admin', Icons.space_dashboard_outlined),
@@ -16,11 +19,12 @@ const adminNav = [
   ('Cài đặt demo', '/admin/settings', Icons.tune),
 ];
 
-class AdminShell extends StatelessWidget {
+class AdminShell extends ConsumerWidget {
   const AdminShell({super.key, required this.child});
   final Widget child;
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final remote = ref.watch(remoteApiProvider);
     final wide = MediaQuery.sizeOf(context).width >= 1024;
     final path = GoRouterState.of(context).uri.path;
     Widget navigation({bool drawer = false}) => Column(
@@ -37,7 +41,7 @@ class AdminShell extends StatelessWidget {
         Expanded(
           child: ListView(
             children: [
-              for (final item in adminNav)
+              for (final item in remote ? adminNav.take(5) : adminNav)
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -118,11 +122,22 @@ class AdminShell extends StatelessWidget {
                           borderRadius: T.radius,
                         ),
                         child: Text(
-                          wide ? 'Phiên quản trị demo' : 'Demo',
+                          remote
+                              ? 'Trực tuyến'
+                              : wide
+                              ? 'Phiên quản trị demo'
+                              : 'Demo',
                           style: T.small.copyWith(color: T.accent),
                         ),
                       ),
                       if (wide) const SizedBox(width: 16),
+                      if (remote && ref.watch(accountProvider) != null)
+                        IconButton(
+                          tooltip: 'Đăng xuất',
+                          icon: const Icon(Icons.logout),
+                          onPressed: () =>
+                              ref.read(accountProvider.notifier).signOut(),
+                        ),
                       if (wide)
                         const CircleAvatar(
                           radius: 17,

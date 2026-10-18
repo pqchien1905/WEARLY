@@ -6,12 +6,12 @@ Giữ Flutter, Riverpod, go_router và bố cục hiện có. `USE_REMOTE_API=tr
 |---|---|---|
 | ProductRepository.list / bySlug | GET /products, /products/:slug | Remote adapter có test và live smoke |
 | ProductRepository.availableColors | GET /products/facets | Facets toàn catalog active |
-| ProductRepository.save / delete | Admin PATCH /products/:id; ẩn bằng active=false | API có; Flutter admin chưa nối |
+| ProductRepository.save / delete | Admin POST/PATCH /products, /skus; ẩn bằng active=false | Remote admin riêng: metadata/bộ ảnh, SKU, giá/trạng thái; giữ adapter public độc lập |
 | ProductRepository.consumeStock | Không có public endpoint trừ kho | Chỉ POST /orders được trừ kho; remote adapter từ chối |
 | CartRepository.items / subtotal | GET /cart | Cache remote, loading/error/retry, tách theo tài khoản |
 | CartRepository.add / update / remove / clear | POST /cart/items, PATCH/DELETE /cart/items/:id | Mutations async tuần tự, dùng UUID dòng giỏ; clear xóa từng dòng |
 | OrderRepository.checkout | POST /orders, Idempotency-Key, addressId, expectedSubtotal, cartVersion | Remote COD; retry sau lỗi mạng giữ nguyên key/body; không gọi consumeStock |
-| OrderRepository.orders / setStatus | GET /orders, GET /orders/:id, POST /orders/:id/cancel | Lịch sử phân trang, chi tiết và hủy đơn chờ xác nhận; admin chưa nối |
+| OrderRepository.orders / setStatus | GET /orders, GET /orders/:id, POST /orders/:id/cancel; admin PATCH /orders/:id/status | Khách xem/hủy đơn chờ; ADMIN chuyển trạng thái theo bước và expectedVersion |
 | AccountRepository.signIn(register), save, signOut | POST /auth/register, /auth/login, PATCH /users/me, POST /auth/logout | Remote auth/refresh, hồ sơ name/phone, logout xóa cache ngay |
 | AccountRepository.requestPasswordReset | Chưa có endpoint | Cần mail provider/token có hạn, response không lộ tài khoản |
 | AccountDetailsRepository.read/saveAddress/deleteAddress/setDefault | GET/POST/PATCH/DELETE /users/me/addresses; isDefault | Remote CRUD/default; checkout chọn UUID đã lưu |
@@ -35,7 +35,7 @@ Giá VND được đọc từ chuỗi số nguyên, không làm tròn. Checkout 
 
 ## Các bước còn lại
 
-1. Flutter quản trị có quyền ADMIN và mutations thật; hiện các route admin bị chặn trong chế độ API.
+1. Quản trị sản phẩm/SKU/kho/đơn/khách hàng đã nối API với quyền ADMIN. Còn audit đầy đủ, quản lý danh mục/thương hiệu bằng UI và đối soát COD.
 2. Wishlist/reviews/promotions/style preferences, khôi phục mật khẩu và email provider.
 3. Nối private upload hiện có → AI adapter thật → polling/cancel riêng job; đưa consent/delete/quota vào UI hiện tại.
 4. Payment provider, webhook và hạ tầng triển khai production. Chưa có cam kết production-ready.

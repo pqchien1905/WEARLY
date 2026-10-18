@@ -1,0 +1,117 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const http = require('node:http');
+const assert = require('node:assert/strict');
+
+module.exports = async function verify({ root, fixture, email, customerEmail, password, orderId }) {
+  const { chromium } = require(path.join(root, '.tools/browser/node_modules/playwright'));
+  const web = path.join(root, 'frontend/build/web');
+  const output = path.join(root, '.tools/api-admin-verification');
+  fs.mkdirSync(output, { recursive: true });
+  const mime = { '.html': 'text/html', '.js': 'application/javascript', '.json': 'application/json', '.wasm': 'application/wasm', '.jpg': 'image/jpeg', '.png': 'image/png', '.ttf': 'font/ttf' };
+  const server = http.createServer((req, res) => {
+    const file = path.resolve(web, '.' + (req.url.split('?')[0] === '/' ? '/index.html' : decodeURIComponent(req.url.split('?')[0])));
+    if (!file.startsWith(web + path.sep)) { res.writeHead(403).end(); return; }
+    fs.readFile(file, (error, data) => { res.writeHead(error ? 404 : 200, { 'Content-Type': mime[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-store' }); res.end(error ? 'Not found' : data); });
+  });
+  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(4183, '127.0.0.1', resolve); });
+  let browser, page;
+  const errors = [], requests = [];
+  try {
+    browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
+    page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    page.setDefaultTimeout(18000);
+    page.on('pageerror', e => errors.push(e.message));
+    page.on('console', m => { if (/EXCEPTION CAUGHT|Another exception|subtype|TypeError/.test(m.text())) errors.push(m.text()); });
+    page.on('response', r => { if (r.url().includes('/api/v1/')) requests.push({ path: new URL(r.url()).pathname, status: r.status() }); });
+    async function semantics() { await page.waitForTimeout(700); await page.evaluate(() => document.querySelector('flt-semantics-placeholder')?.click()); }
+    async function route(value) { await page.evaluate(value => { location.hash = value; }, value); await page.waitForTimeout(400); }
+    // Scroll the Flutter viewport, not the browser's semantics overlay. Native
+    // scrollIntoView can move the overlay without moving the canvas hit targets.
+    async function reveal(node) {
+      await node.waitFor({ state: 'attached' });
+      for (let i = 0; i < 24; i++) {
+        const box = await node.boundingBox();
+        const viewport = page.viewportSize();
+        if (box && box.y >= 95 && box.y + box.height <= viewport.height - 35) return;
+        await page.mouse.move(viewport.width * 0.8, viewport.height * 0.7);
+        await page.mouse.wheel(0, box && box.y < 95 ? -350 : 350);
+        await page.waitForTimeout(180);
+      }
+      throw new Error('Flutter control could not be scrolled into view');
+    }
+    async function button(name) { const node = page.getByRole('button', { name, exact: true }); if (name !== 'Đăng xuất') await reveal(node); await node.click(); await page.waitForTimeout(300); }
+    async function fill(name, value) {
+      const field = page.getByRole('textbox', { name, exact: true });
+      await reveal(field); await field.click(); await page.waitForTimeout(150);
+      await field.fill(value); await page.waitForTimeout(200);
+      assert.equal(await field.inputValue(), value);
+    }
+    async function login(account) { await fill('Email', account); await fill('Mật khẩu', password); await button('Đăng nhập'); }
+    await page.goto('http://127.0.0.1:4183/#/login?next=%2Fadmin'); await semantics();
+    await login(email);
+    await page.getByText('Một góc nhìn toàn cảnh.', { exact: true }).waitFor();
+    await page.screenshot({ path: path.join(output, 'dashboard-desktop.png'), fullPage: true });
+    console.log('Chrome admin: authenticated dashboard.');
+    await route('/admin/products/new');
+    await fill('Tên sản phẩm', 'Áo quản trị trình duyệt');
+    await fill('Đường dẫn sản phẩm', fixture + '-admin');
+    await page.getByText('Danh mục', { exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Áo kiểm thử', exact: true }).click();
+    await page.waitForTimeout(300);
+    await page.getByText('Thương hiệu', { exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Wearly kiểm thử', exact: true }).click();
+    await page.waitForTimeout(300);
+    await fill('Mô tả', 'Sản phẩm kiểm thử quản trị.');
+    await fill('Chất liệu', 'Cotton');
+    await fill('Phong cách', 'Tối giản');
+    await button('Thêm ảnh');
+    await fill('Đường dẫn ảnh', 'assets/images/shirt.jpg');
+    await fill('Mô tả ảnh', 'Áo kiểm thử quản trị');
+    await button('Lưu thông tin sản phẩm');
+    console.log('Chrome admin: created product with gallery.');
+    await button('Thêm biến thể');
+    await fill('Mã SKU', fixture + '-admin-M'); await fill('Kích cỡ', 'M');
+    await fill('Màu sắc', 'Trắng'); await fill('Mã màu HEX', '#FFFFFF'); await fill('Giá bán (VND)', '690000');
+    await button('Lưu thay đổi');
+    await button('Điều chỉnh kho');
+    await fill('Số lượng thay đổi', '8'); await fill('Lý do', 'Nhập kho kiểm thử');
+    await button('Lưu thay đổi');
+    await page.getByText('Đang bán · Tồn kho: 8', { exact: true }).waitFor();
+    await button('Sửa giá / trạng thái'); await fill('Giá bán (VND)', '700000'); await button('Lưu thay đổi');
+    const visible = page.getByRole('switch', { name: /Hiển thị sản phẩm/ });
+    await reveal(visible); await visible.click(); await page.waitForTimeout(300);
+    await button('Lưu thông tin sản phẩm');
+    await page.waitForTimeout(500);
+    await page.reload(); await semantics();
+    await button('Đăng nhập'); await login(email);
+    await page.getByText('Đang bán · Tồn kho: 8', { exact: true }).waitFor();
+    assert((await page.locator('body').ariaSnapshot()).includes('700.000'));
+    console.log('Chrome admin: product, gallery, SKU price and stock persisted across reload/login.');
+    await page.setViewportSize({ width: 375, height: 812 });
+    await route('/admin/inventory'); await page.getByText(fixture + '-admin-M · Trắng / M', { exact: true }).waitFor();
+    await page.screenshot({ path: path.join(output, 'inventory-mobile.png'), fullPage: true });
+    await route('/admin/orders/' + orderId);
+    for (const name of ['Xác nhận đơn', 'Bắt đầu giao hàng', 'Đánh dấu đã giao']) { await button(name); await button('Lưu thay đổi'); await page.waitForTimeout(400); }
+    await page.getByText('Đã giao', { exact: true }).waitFor();
+    assert((await page.locator('body').ariaSnapshot()).includes('Chưa thu tiền'));
+    await page.screenshot({ path: path.join(output, 'order-mobile.png'), fullPage: true });
+    await route('/admin/customers'); await page.getByText('Khách hàng & tài khoản', { exact: true }).waitFor();
+    await page.waitForTimeout(500);
+    assert((await page.locator('body').ariaSnapshot()).includes('Quản trị kiểm thử'));
+    await button('Đăng xuất');
+    await page.getByText('Đăng nhập để tiếp tục', { exact: true }).waitFor();
+    await button('Đăng nhập'); await login(customerEmail);
+    await page.getByText('Cần quyền quản trị', { exact: true }).waitFor();
+    assert.deepEqual(errors, []);
+    assert(requests.some(r => r.path.endsWith('/status') && r.status === 200));
+    assert(!requests.some(r => r.status >= 400), 'Unexpected API failure');
+    console.log('PASS Chrome admin: CRUD, stock, order lifecycle, responsive UI, logout and customer gate.');
+  } catch (error) {
+    if (page) { fs.writeFileSync(path.join(output, 'failure-aria.txt'), await page.locator('body').ariaSnapshot()); await page.screenshot({ path: path.join(output, 'failure.png'), fullPage: true }); }
+    throw error;
+  } finally {
+    fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify({ errors, requests }, null, 2));
+    await browser?.close(); await new Promise(resolve => server.close(resolve));
+  }
+};

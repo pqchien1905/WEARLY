@@ -26,6 +26,7 @@ const { PrismaService } = requireBackend('./dist/database/prisma.service');
 const { configureApp } = requireBackend('./dist/bootstrap');
 const fixture = 'flutter-test-' + randomUUID();
 const browser = process.argv.includes('--browser');
+const admin = process.argv.includes('--admin');
 function flutter(args) {
   const binary = path.join(root, '.tools/flutter/bin/flutter.bat');
   // All arguments below are local constants, loopback URLs or generated UUIDs.
@@ -50,7 +51,29 @@ async function main() {
       images: { create: { url: 'assets/images/shirt.jpg', alt: 'Áo cotton', position: 0 } },
       variants: { create: { sku: fixture, size: 'M', color: 'Trắng', colorHex: '#FFFFFF', price: '490000', inventory: { create: { quantity: 10 } } } } } });
     const url = (await app.getUrl()) + '/api/v1';
-    if (browser) {
+    if (admin) {
+      const password = 'Browser-only-Password-2026';
+      const post = async (path, body, token, headers = {}) => {
+        const res = await fetch(url + '/' + path, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}), ...headers }, body: JSON.stringify(body) });
+        if (!res.ok) throw new Error('Admin fixture request failed: ' + path + ' ' + res.status);
+        return res.json();
+      };
+      const email = 'admin-' + fixture + '@example.com';
+      const adminUser = await post('auth/register', { name: 'Quản trị kiểm thử', email, password });
+      await db.user.update({ where: { id: adminUser.user.id }, data: { role: 'ADMIN' } });
+      const customerEmail = 'browser-' + fixture + '@example.com';
+      const customer = await post('auth/register', { name: 'Khách kiểm thử', email: customerEmail, password });
+      const address = await post('users/me/addresses', { recipient: 'Khách kiểm thử', phone: '0901234567', address: '12 Nguyễn Huệ, TP.HCM', label: 'Nhà' }, customer.accessToken);
+      await post('cart/items', { sku: fixture, quantity: 1 }, customer.accessToken);
+      const order = await post('orders', { addressId: address.id, shippingMethod: 'standard', expectedSubtotal: '490000' }, customer.accessToken, { 'Idempotency-Key': randomUUID() });
+      await flutter(['build', 'web', '--release', '--dart-define=USE_REMOTE_API=true', '--dart-define=API_BASE_URL=' + url]);
+      await require('./verify-admin-browser.cjs')({ root, fixture, email, customerEmail, password, orderId: order.id });
+      const saved = await db.product.findUniqueOrThrow({ where: { slug: fixture + '-admin' }, include: { variants: { include: { inventory: true } }, images: true } });
+      if (!saved.active || saved.variants.length !== 1 || saved.variants[0].inventory.quantity !== 8 || saved.variants[0].price.toString() !== '700000' || saved.images.length !== 1) throw new Error('Persisted admin product does not match browser operations');
+      const delivered = await db.order.findUniqueOrThrow({ where: { id: order.id }, include: { payment: true } });
+      if (delivered.status !== 'DELIVERED' || delivered.payment.status !== 'PENDING') throw new Error('Persisted order/COD state mismatch');
+      console.log('PASS database assertions: product, SKU, gallery, stock, order delivered with COD pending.');
+    } else if (browser) {
       await flutter(['build', 'web', '--release', '--dart-define=USE_REMOTE_API=true', '--dart-define=API_BASE_URL=' + url]);
       await require('./verify-api-browser.cjs')({ root, url, fixture });
     } else {
@@ -60,7 +83,7 @@ async function main() {
   } finally {
     // Restrict every cleanup to this run's exact account emails/product IDs.
     try {
-      const users = await db.user.findMany({ where: { email: { in: [fixture + '@example.com', 'browser-' + fixture + '@example.com'] } }, select: { id: true } });
+      const users = await db.user.findMany({ where: { email: { in: [fixture + '@example.com', 'browser-' + fixture + '@example.com', 'admin-' + fixture + '@example.com'] } }, select: { id: true } });
       const owner = { userId: { in: users.map(user => user.id) } };
       await db.$transaction(async tx => {
         await tx.inventoryMovement.deleteMany({ where: { order: owner } });
@@ -68,11 +91,12 @@ async function main() {
         await tx.orderItem.deleteMany({ where: { order: owner } });
         await tx.order.deleteMany({ where: owner });
         await tx.user.deleteMany({ where: { id: owner.userId } });
-        if (product) {
-          await tx.inventory.deleteMany({ where: { variant: { productId: product.id } } });
-          await tx.productVariant.deleteMany({ where: { productId: product.id } });
-          await tx.product.delete({ where: { id: product.id } });
-        }
+        const products = await tx.product.findMany({ where: { slug: { in: [fixture, fixture + '-admin'] } }, select: { id: true } });
+        const productIds = { in: products.map(p => p.id) };
+        await tx.inventoryMovement.deleteMany({ where: { inventory: { variant: { productId: productIds } } } });
+        await tx.inventory.deleteMany({ where: { variant: { productId: productIds } } });
+        await tx.productVariant.deleteMany({ where: { productId: productIds } });
+        await tx.product.deleteMany({ where: { id: productIds } });
         if (category) await tx.category.delete({ where: { id: category.id } });
         if (brand) await tx.brand.delete({ where: { id: brand.id } });
       });

@@ -1,5 +1,9 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
+  IsArray,
+  ArrayMaxSize,
+  ValidateNested,
   IsBoolean,
   IsIn,
   IsInt,
@@ -12,6 +16,19 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+export class ProductImageDto {
+  @ApiProperty()
+  @IsString()
+  @MaxLength(2000)
+  @Matches(/^(https:\/\/[^\s]+|assets\/images\/[a-zA-Z0-9_./-]+)$/)
+  url!: string;
+  @ApiProperty() @IsString() @MaxLength(200) alt!: string;
+  @ApiProperty({ required: false })
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsString()
+  @MaxLength(60)
+  color?: string;
+}
 export class CreateProductDto {
   @ApiProperty()
   @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
@@ -31,6 +48,13 @@ export class CreateProductDto {
   @ValidateIf((_object, value) => value !== undefined)
   @IsBoolean()
   tryOnSupported?: boolean;
+  @ApiProperty({ required: false, type: [ProductImageDto] })
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => ProductImageDto)
+  images?: ProductImageDto[];
 }
 export class UpdateProductDto extends PartialType(CreateProductDto, {
   skipNullProperties: false,

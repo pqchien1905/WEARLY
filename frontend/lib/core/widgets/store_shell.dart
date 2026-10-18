@@ -393,13 +393,13 @@ class _SearchPanelState extends ConsumerState<SearchPanel> {
   }
 }
 
-class StoreFooter extends StatefulWidget {
+class StoreFooter extends ConsumerStatefulWidget {
   const StoreFooter({super.key});
   @override
-  State<StoreFooter> createState() => _StoreFooterState();
+  ConsumerState<StoreFooter> createState() => _StoreFooterState();
 }
 
-class _StoreFooterState extends State<StoreFooter> {
+class _StoreFooterState extends ConsumerState<StoreFooter> {
   final form = GlobalKey<FormState>();
   final email = TextEditingController();
   @override
@@ -528,7 +528,9 @@ class _StoreFooterState extends State<StoreFooter> {
               ),
               TextButton(
                 onPressed: () => context.go('/admin'),
-                child: const Text('Quản trị demo'),
+                child: Text(
+                  ref.watch(remoteApiProvider) ? 'Quản trị' : 'Quản trị demo',
+                ),
               ),
               TextButton(
                 onPressed: () => context.go('/design-system'),
