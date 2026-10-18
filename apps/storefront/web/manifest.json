@@ -1,0 +1,10 @@
+{
+  "name": "Wearly — Tủ đồ đương đại",
+  "short_name": "Wearly",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#65394D",
+  "description": "Cửa hàng thời trang và Stylist mô phỏng.",
+  "icons": [{"src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}]
+}

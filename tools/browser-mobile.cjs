@@ -1,0 +1,54 @@
+const {chromium}=require('../.tools/browser/node_modules/playwright');
+const fs=require('fs');
+const path=require('path');
+const out=path.resolve(__dirname,'../docs/qa');
+(async()=>{
+ const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
+ const page=await browser.newPage({viewport:{width:375,height:812}});
+ page.setDefaultTimeout(10000);
+ const results=[],errors=[],requests=[];
+ page.on('pageerror',e=>errors.push(e.message));
+ page.on('request',r=>{if(!r.url().startsWith('http://127.0.0.1:4173')&&!r.url().startsWith('data:')&&!r.url().startsWith('blob:'))requests.push(r.url());});
+ const button=name=>page.getByRole('button',{name,exact:true});
+ const route=async p=>{await page.evaluate(p=>location.hash=p,p);await page.waitForTimeout(600);};
+ const check=async(name,text)=>{if(!(await page.locator('body').ariaSnapshot()).includes(text))throw Error(`${name}: missing ${text}`);results.push(name);console.log('PASS '+name);};
+ try{
+  await page.goto('http://127.0.0.1:4173/#/');
+  await page.waitForTimeout(1800);
+  await page.evaluate(()=>document.querySelector('flt-semantics-placeholder')?.click());
+  await button('Tìm kiếm').click();
+  await page.getByRole('textbox',{name:'Tìm tên sản phẩm, chất liệu',exact:true}).fill('cotton');
+  await page.keyboard.press('Enter');await page.waitForTimeout(700);
+  if(!page.url().includes('q=cotton'))throw Error('Search did not update URL');
+  await check('Mobile keyboard search', 'Áo cotton không tay Essential');
+  await route('/shop');
+  await button('Bộ lọc').click();
+  await page.getByRole('checkbox',{name:'M',exact:true}).click();
+  if(page.url().includes('size=M'))throw Error('Draft filter changed URL before Apply');
+  await button('Xem kết quả').click();
+  await page.waitForTimeout(700);
+  if(!page.url().includes('size=M'))throw Error('Filter did not update query');
+  results.push('Mobile filter sheet applies query');
+  await page.screenshot({path:path.join(out,'screenshots/catalog-filtered-375.png')});
+  await button('Mở menu').click();
+  await check('Store drawer accessible', 'Phòng thử');
+  await page.keyboard.press('Escape');
+  await route('/admin/settings');
+  const offline=()=>page.getByRole('switch',{name:/Mô phỏng mất kết nối/});
+  await offline().click();await page.waitForTimeout(300);
+  if(!await offline().isChecked())throw Error('Offline switch did not update');
+  await route('/shop');
+  await check('Offline error state', 'Mất kết nối mô phỏng');
+  await route('/admin/settings');await offline().click();await page.waitForTimeout(300);
+  if(await offline().isChecked())throw Error('Offline switch did not reset');
+  await route('/shop');
+  await check('Offline recovery restores catalog', '32 thiết kế');
+  await route('/admin/products');
+  await page.setViewportSize({width:375,height:640});
+  await button('Mở menu quản trị').click();
+  await check('Admin drawer on short mobile viewport', 'Cài đặt demo');
+  await page.screenshot({path:path.join(out,'screenshots/admin-menu-375.png')});
+  await page.keyboard.press('Escape');
+ }catch(e){errors.push(e.stack);fs.writeFileSync(path.join(out,'mobile-failure.txt'),await page.locator('body').ariaSnapshot());await page.screenshot({path:path.join(out,'screenshots/mobile-failure.png')});process.exitCode=1;}
+ finally{fs.writeFileSync(path.join(out,'browser-mobile.json'),JSON.stringify({results,errors,externalRequests:requests},null,2));console.log(JSON.stringify({results,errors,externalRequests:requests},null,2));await browser.close();}
+})();

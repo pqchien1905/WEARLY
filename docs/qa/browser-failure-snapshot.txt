@@ -1,0 +1,8 @@
+- menu "Menu bật lên":
+  - group:
+    - menuitem "Trắng / S"
+    - menuitem "Trắng / M"
+    - menuitem "Trắng / L"
+    - menuitem "Đen / S"
+    - menuitem "Đen / M"
+    - menuitem "Đen / L"

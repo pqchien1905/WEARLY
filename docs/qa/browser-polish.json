@@ -1,0 +1,17 @@
+{
+  "results": [
+    "Animated drawer exposes selected variant",
+    "Populated cart at 375px",
+    "Populated checkout at 375px",
+    "Populated cart at 1440px",
+    "Populated checkout at 1440px",
+    "Populated cart at 1920px",
+    "Populated checkout at 1920px",
+    "Wide footer retains working newsletter field",
+    "Reduced-motion rapid navigation remains usable",
+    "Reduced-motion drawer remains interactive",
+    "Escape restores storefront after reduced-motion drawer"
+  ],
+  "errors": [],
+  "externalRequests": []
+}

@@ -1,0 +1,53 @@
+# Execution ledger — 2026-10-15-fashion-frontend
+
+P0 in progress: source specifications and installed frontend-design read. Two concepts evaluated; A selected. Documents written. Toolchain detection: Chrome available; Flutter, Git, Node not in PATH.
+
+Ruling: implement in the explicitly requested empty workspace; no existing Git branch to isolate. Preserve source documents.
+Ruling: repository models are shared by storefront/admin; same variant pricing used in catalog/cart/checkout. No backends created.
+
+## Checkpoint — 2026-10-16
+
+User requested the current interface for review, with refinement to continue later. Preview confirmed HTTP 200 at http://127.0.0.1:4173. Latest release build succeeded after the shell semantics fix. Automatic opening of Chrome was blocked by execution policy; user can open the preview link directly.
+
+Implemented: P0 design system/reference screens; P1 storefront/cart/checkout; P2 mock Stylist/Try-On; P3 account/Admin. P4 audit and documentation are underway. 112 Flutter tests passed before the final semantics wrapper change. Desktop browser flow: 9 checks passed. Mobile browser flow after semantics fix: 6 checks passed, zero browser errors and zero external requests. Local CanvasKit and font fallback included.
+
+Resume: final analyze/tests after last changes; rerun desktop browser flow; review final screenshots; finish docs/visual-qa.md, docs/frontend-acceptance.md and P1–P4 milestone reports. README_FRONTEND.md, architecture, API contracts, SEO strategy, code-review notes and asset attribution are written. All services remain in-memory mock; do not claim production readiness.
+
+## Brand update — 2026-10-16
+
+Renamed current brand to Wearly at user request. Updated BrandConfig, web metadata/loading shell, favicon W, demo email, SKU/order prefixes, promotion code and current design/handover documents. Internal product slugs remain stable. Constrained wordmark width to retain mobile layout. Verification: 112/112 tests pass, analyzer clean, release build succeeds; Chrome branding verified and screenshots captured at 375 and 1440, no browser errors. Preview serves the updated build at http://127.0.0.1:4173. Earlier P4 documentation work remains pending for the later continuation.
+
+## Final frontend demo acceptance — 2026-10-16
+
+User resumed refinement. P0–P4 frontend demo work is complete within the documented mock scope. Added asynchronous AccountRepository and feedback/retry, generation guards for reset/logout, controlled order status with cancellation/navigation guards, 150% search layout fix, input contrast token, tonal colors, announcement touch target and static skeleton. Review findings have regression coverage.
+
+Final verification: 123/123 Flutter tests pass; analyzer clean; release build succeeds. Chrome desktop9 + mobile6 + account7 checks pass, errors[] and externalRequests[] in all three runs. Screenshot capture: 7 routes ×4 widths =28 references, no browser errors. All11 measured contrast pairs meet their respective thresholds. Final release served at http://127.0.0.1:4173.
+
+Completed milestone reports, visual QA, acceptance checklist, architecture/API contracts, attribution, SEO boundaries and README. No Git repository exists, so integration/commit/PR workflow does not apply. No real backend/auth/payment/AI added. Remaining production dependencies and untested screen-reader/device/performance coverage are explicit in docs/frontend-acceptance.md; repeated photography and single-photo gallery remain known demo asset limitations.
+
+## Storefront refinement — 2026-10-16
+
+User approved the concrete review fixes. Implemented nullable unlimited price caps, repository color facets, transactional mobile filter draft, quick add, typed color media/gallery, compact Try-On and metadata-only result routes, Contact/FAQ/curated collections, Admin mobile cards. Independent review found image-replacement/run race; fixed with delayed-XFile red/green regression. Eight-color mobile card overflow also reproduced and fixed. Gallery keyboard/result deletion/Admin media preservation verified. Full suite147 passes; final browser/visual verification ongoing.
+
+Ruling: retain licensed source images and explicit missing-color disclosure; no invented alternate-angle/photo variants. Actual complete photography is still outstanding and clearly documented. No backend/AI/auth/payment or persistent storage added.
+
+Final refinement verification:147/147 tests, analyzer clean, release build success;33 Chrome checks pass, errors[]/externalRequests[] in all4 suites.48 reference images plus interaction states captured; final visual corrections applied to sheets/dialogs and curated collection selection. Preview4173 responds200 and serves the final build. Actual per-color/multi-angle photography remains outstanding; all other scoped code tasks completed. See docs/refinement-2026-10-16.md.
+
+## Full-width layout — 2026-10-16
+
+User requested full-screen expansion. Removed the shared1440px page/header cap via T.maxWidth; page gutters remain56/32/20px and local reading/form/modal constraints remain intentional. Admin shell already fills remaining viewport beside sidebar. Full suite147 passes; analyzer/build/browser screenshots are being verified under docs/qa/full-width-*.
+Final full-width verification:147/147 tests pass, analyzer clean, web release rebuilt; Chrome Home/Catalog1920px and Home375px captured, browser errors[]. Preview4173 serves updated build. Screenshot: docs/qa/screenshots/full-width-home-1920.png.
+
+## Visual polish — 2026-10-16
+
+Implemented shared motion tokens, finite route fade, clipped image hover and focus outline, reduced-motion handling, button/form/table theme refinement, active navigation, responsive footer, portrait hero and gallery framing, four-column wide catalog, desktop auth editorial layout, bounded checkout reading widths, compact Try-On preview and full-panel Admin tables. Full-width page/header preserved; checkout uses a local1320px form group to avoid excessive distance between fields and summary. Home collection story now spans the page with two editorial columns.
+
+Verification complete:151/151 Flutter tests, analyzer clean, final release web build succeeds.44 Chrome checks across5 suites pass with errors[] and externalRequests[].52 reference screenshots at375/768/1440/1920 plus populated cart/checkout/drawer/footer states reviewed.11 measured contrast pairs pass. Independent read-only review and follow-up found no blocking issues. Preview4173 serves the final build.
+
+Remaining limits:7 repeated stock photos across32 fixtures, incomplete per-color/multi-angle media; all services remain mock; no actual-device frame-time/Safari/iOS/full screen-reader audit. See docs/visual-polish-2026-10-16.md and updated MASTER/COMPONENTS. No Git commits or external deployment performed.
+
+## Account and shopping continuity — 2026-10-16
+
+Added account-scoped address/style repository and AsyncNotifier, shared account navigation, address CRUD/default and explicit checkout selection, saved style application in Stylist, order search/status filter/current progress/detail, metadata-only Try-On history with confirmed removal, and contextual PDP→Stylist prompt. Fixed CartSummary narrow/enlarged-text overflow. Signout/identity-change completion guard prevents stale writes from restoring account data or reporting success.
+
+Verification:174 tests pass, analyzer clean, release build exit0;59 Chrome checks across6 suites have no JS errors or external requests.10 new screenshots at375/1440. Independent review had no blocking findings; added the suggested status-dropdown test and reran full suite. Details and remaining commercial gaps: docs/account-journeys-2026-10-16.md. Preview4173 serves current build; no real services or persistent personal storage added.

@@ -1,0 +1,40 @@
+- text: Giao miễn phí từ 1.500.000đ · Chính sách demo
+- button "Đóng thông báo"
+- button "Wearly — Tủ đồ đương đại wearly"
+- button "Cửa hàng"
+- button "Bộ sưu tập"
+- button "AI Stylist"
+- button "Phòng thử"
+- button "Tìm kiếm"
+- button "Yêu thích"
+- button "Tài khoản"
+- button "Giỏ hàng"
+- group:
+  - text: Phòng thử của bạn.
+  - button "Xem lịch sử thử đồ"
+  - text: Bản demo không kết nối AI. Ảnh chỉ nằm trong bộ nhớ của tab, không được tải lên mạng. Bước 1 / 4 · Chọn trang phục và size 1. Trang phục 2. Ảnh của bạn 3. Đồng ý 4. Xem bản demo
+  - button "Trang phục muốn thử Áo cotton không tay Essential"
+  - img "Áo cotton không tay Essential"
+  - text: Hình dung một cách phối mới. Chọn ảnh đứng rõ trang phục, đủ sáng, tối đa 8 MB / 12 MP. Chỉ dùng ảnh bạn có quyền sử dụng. Không cần ảnh để trò chuyện với Stylist.
+  - img "Ảnh đầu vào của bạn, chưa xử lý"
+  - button "Đổi ảnh"
+  - text: shirt.jpg
+  - button "Xóa ảnh & kết quả"
+  - button "Chọn màu và size"
+  - checkbox "Tôi có quyền sử dụng ảnh và đồng ý giữ ảnh trong bộ nhớ của phiên demo. Không gửi ảnh đến nhà cung cấp AI. Rời trang sẽ xóa ảnh."
+  - button "Xem sản phẩm & bảng size"
+  - button "Tạo bản thử đồ demo" [disabled]
+  - button "Kịch bản kiểm thử demo"
+  - text: Wearly — Tủ đồ đương đại wearly hello@wearly.example Ít hơn, nhưng đúng với bạn. Những món đồ ở lại cùng phong cách. Cùng bạn chọn đồ
+  - button "Bảng size"
+  - button "Câu hỏi thường gặp"
+  - button "Liên hệ hỗ trợ"
+  - button "Giao hàng & đổi trả"
+  - text: Một chút cảm hứng mới.
+  - textbox "Email của bạn"
+  - button "Đăng ký bản tin demo"
+  - button "Quyền riêng tư"
+  - button "Câu chuyện Wearly"
+  - text: © 2026 Wearly · Thương hiệu minh họa Catalog & ảnh minh họa. Chưa bán hàng thực tế.
+  - button "Quản trị demo"
+  - button "Design system"

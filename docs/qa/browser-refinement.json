@@ -1,0 +1,17 @@
+{
+  "results": [
+    "Mobile multi-filter apply",
+    "Filter dismiss preserves query",
+    "Quick add selected variant",
+    "Missing color image disclosure",
+    "Contact validation",
+    "Contact local success",
+    "FAQ expands privacy answer",
+    "Collection detail has curated products",
+    "Admin mobile exposes price",
+    "Completed result route retains metadata",
+    "Result deletion invalidates link"
+  ],
+  "errors": [],
+  "externalRequests": []
+}

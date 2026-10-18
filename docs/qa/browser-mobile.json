@@ -1,0 +1,12 @@
+{
+  "results": [
+    "Mobile keyboard search",
+    "Mobile filter sheet applies query",
+    "Store drawer accessible",
+    "Offline error state",
+    "Offline recovery restores catalog",
+    "Admin drawer on short mobile viewport"
+  ],
+  "errors": [],
+  "externalRequests": []
+}

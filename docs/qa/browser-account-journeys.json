@@ -1,0 +1,21 @@
+{
+  "results": [
+    "Address direct link offers login",
+    "Address form validates",
+    "First saved address is default",
+    "Address edit persists",
+    "Style profile saved",
+    "Stylist applies preferred color",
+    "Product CTA carries garment context",
+    "Checkout applies edited saved address",
+    "Customer order list includes new order",
+    "Order no-result state",
+    "Order detail has progress and recipient",
+    "Try-On appears in history",
+    "History opens saved result",
+    "History clear empties registry",
+    "Signout hides saved address book"
+  ],
+  "errors": [],
+  "externalRequests": []
+}
