@@ -31,10 +31,12 @@ Base URL: `http://localhost:3000/api/v1`. Swagger: `http://localhost:3000/api/do
 | PATCH | /admin/orders/:id/status | ADMIN; status,expectedVersion |
 | GET | /admin/users | ADMIN; không passwordHash |
 | POST, GET | /ai/try-on/jobs, /ai/try-on/jobs/:id | Owner; create trả503 khi provider Disabled |
+| POST, GET | /uploads/images | Bearer; multipart upload với consent=true / list ảnh của mình |
+| GET, DELETE | /uploads/images/:id | Owner; signed URL60s / 202 lên lịch purge |
 | GET | /health | Public liveness |
 | GET | /health/ready | Public; DB+Redis; 503 khi dependency chưa ready |
 
-Không có API reset password, upload, wishlist, reviews, promotions, AI Stylist hoặc online payments ở foundation này. Admin là các endpoint kể trên, chưa có toàn bộ workflow quản trị/audit.
+Không có API reset password, wishlist, reviews, promotions, AI Stylist hoặc online payments ở foundation này. Admin là các endpoint kể trên, chưa có toàn bộ workflow quản trị/audit.
 
 ## Auth
 
@@ -76,7 +78,11 @@ List orders/admin dùng page/limit. Hủy đơn hoặc sửa inventory có kiể
 
 POST jobs `{imageId,sku,consent:true}` được thiết kế trả `{id,status:"pending"}` sau transaction tạo AIJob+outbox. Hiện DisabledTryOnProvider trả503 AI_PROVIDER_NOT_CONFIGURED. GET job kiểm tra owner, trả status/errorCode và signed result URL có TTL60s khi có kết quả còn hạn. Không có ảnh giả.
 
-Worker process riêng dispatch outbox tới BullMQ jobId ổn định, retry3 lần, backoff exponential từ2s, provider timeout60s, concurrency2. Chưa có adapter thật, uploader, cancel/delete/retention cleanup; không bật dữ liệu ảnh người dùng thật.
+Worker process riêng dispatch outbox tới BullMQ jobId ổn định, retry3 lần, backoff exponential từ2s, provider timeout60s, concurrency2. Tối đa20 job/ảnh; provider thật chưa cấu hình. Xóa ảnh hủy job chưa hoàn tất; chưa có endpoint hủy riêng một job.
+
+## Ảnh riêng tư
+
+POST `/uploads/images` nhận multipart `file` (JPEG/PNG tối đa8MiB) và `consent=true`, trả metadata sau khi giải mã/làm sạch và ghi S3. GET list/read chỉ trả ảnh còn hạn thuộc user. DELETE trả202 sau thu hồi quyền đọc; worker purge ảnh/kết quả và retry nếu storage lỗi. Retention24h, URL60s,20 ảnh chưa purge và100 uploads/24h/user. Chi tiết contract, giới hạn pixels, tính nhất quán và cách chạy tại [private-images.md](private-images.md).
 
 ## Lỗi và bảo mật
 
@@ -84,4 +90,4 @@ Worker process riêng dispatch outbox tới BullMQ jobId ổn định, retry3 l�
 {"error":{"code":"STOCK_CHANGED","message":"Insufficient stock","retryable":false,"requestId":"uuid"},"path":"/api/v1/orders"}
 ```
 
-400 validation, 401 auth, 403 role, 404 missing/không thuộc owner, 409 stock/price/version/idempotency/state, 429 throttling, 503 disabled provider/dependency. 500 không trả stack, SQL hoặc secrets. X-Request-Id được tạo tại server. Các POST hiện dùng201 theo NestJS; GET/PATCH/DELETE200.
+400 validation, 401 auth, 403 role, 404 missing/không thuộc owner, 409 stock/price/version/idempotency/state, 413 file quá lớn, 429 throttling/quota, 503 disabled provider/dependency. 500 không trả stack, SQL hoặc secrets. X-Request-Id được tạo tại server. POST201; GET/PATCH/DELETE200, riêng DELETE ảnh202.

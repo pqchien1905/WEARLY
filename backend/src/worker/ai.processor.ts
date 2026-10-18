@@ -10,6 +10,7 @@ import { PrismaService } from '../database/prisma.service';
 import { TryOnProvider } from '../integrations/ai-providers/try-on.provider';
 import { StorageService } from '../integrations/storage/storage.service';
 import { AI_JOB_OPTIONS, AI_QUEUE } from '../queues/ai.queue';
+import { lockImage } from '../common/transaction';
 @Injectable()
 export class AiProcessor implements OnModuleInit, OnModuleDestroy {
   private queue!: Queue;
@@ -76,14 +77,15 @@ export class AiProcessor implements OnModuleInit, OnModuleDestroy {
       include: { image: true, variant: true },
     });
     if (!row || row.status === 'COMPLETED' || row.status === 'FAILED') return;
-    await this.db.aIJob.update({
-      where: { id: row.id },
+    const claimed = await this.db.aIJob.updateMany({
+      where: { id: row.id, status: { in: ['PENDING', 'PROCESSING'] } },
       data: {
         status: 'PROCESSING',
         attempts: { increment: 1 },
         errorCode: null,
       },
     });
+    if (!claimed.count) return;
     let timer: NodeJS.Timeout | undefined;
     const controller = new AbortController();
     try {
@@ -110,24 +112,43 @@ export class AiProcessor implements OnModuleInit, OnModuleDestroy {
           }, 60000);
         }),
       ]);
-      const latest = await this.db.imageAsset.findUniqueOrThrow({
-        where: { id: row.imageId },
-      });
-      if (latest.deletedAt || latest.expiresAt <= new Date())
-        throw new UnrecoverableError('IMAGE_UNAVAILABLE');
-      const objectKey = 'results/' + row.userId + '/' + row.id;
-      await this.storage.putResult(objectKey, output.bytes, output.contentType);
-      await this.db.$transaction(async (tx) => {
-        await tx.tryOnResult.upsert({
-          where: { jobId: row.id },
-          create: { jobId: row.id, objectKey, expiresAt: row.image.expiresAt },
-          update: {},
-        });
-        await tx.aIJob.update({
-          where: { id: row.id },
-          data: { status: 'COMPLETED', errorCode: null },
-        });
-      });
+      await this.db.$transaction(
+        async (tx) => {
+          await lockImage(tx, row.imageId);
+          const latest = await tx.imageAsset.findUniqueOrThrow({
+            where: { id: row.imageId },
+          });
+          const current = await tx.aIJob.findUniqueOrThrow({
+            where: { id: row.id },
+          });
+          if (current.status === 'COMPLETED') return;
+          if (
+            current.status === 'FAILED' ||
+            latest.deletedAt ||
+            !latest.verifiedAt ||
+            latest.expiresAt <= new Date()
+          )
+            throw new UnrecoverableError('IMAGE_UNAVAILABLE');
+          const objectKey = 'results/' + row.userId + '/' + row.id;
+          await this.storage.putResult(
+            objectKey,
+            output.bytes,
+            output.contentType,
+          );
+          if (latest.expiresAt <= new Date())
+            throw new UnrecoverableError('IMAGE_UNAVAILABLE');
+          await tx.tryOnResult.upsert({
+            where: { jobId: row.id },
+            create: { jobId: row.id, objectKey, expiresAt: latest.expiresAt },
+            update: {},
+          });
+          await tx.aIJob.update({
+            where: { id: row.id },
+            data: { status: 'COMPLETED', errorCode: null },
+          });
+        },
+        { timeout: 20000 },
+      );
     } catch (error) {
       const final =
         error instanceof UnrecoverableError ||
@@ -142,8 +163,8 @@ export class AiProcessor implements OnModuleInit, OnModuleDestroy {
         ].includes(error.message)
           ? error.message
           : 'AI_PROVIDER_ERROR';
-      await this.db.aIJob.update({
-        where: { id: row.id },
+      await this.db.aIJob.updateMany({
+        where: { id: row.id, status: { in: ['PENDING', 'PROCESSING'] } },
         data: { status: final ? 'FAILED' : 'PENDING', errorCode: known },
       });
       // BullMQ persists failedReason and stacktrace in Redis. Never forward a

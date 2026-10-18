@@ -25,3 +25,16 @@ All three test reliability findings were addressed:
 After fixes: unit5, commerce10 + worker6 E2E, lint passed; the production build passed after the provider-error fix. Flutter live catalog passed against native PostgreSQL17.11. Provider errors are sanitized in both PostgreSQL and Redis. Paid AI and storage test doubles are confined to tests.
 
 Host installation/permissions/pgAdmin/readiness were verified independently by the implementing agent, not the read-only reviewer. Docker/Linux Redis/container builds remain unverified because Windows has a pending repair restart. Real AI/uploads/payment and mobile builds remain outside the completed foundation scope. Existing BullMQ installations must retain their previous prefix until drained; this local installation had no previous real queued jobs.
+
+## Private-image lifecycle review
+
+Fresh read-only review found no Critical issue, three Important lifecycle findings and one Minor PNG validation discrepancy. The executor treated strict truncation rejection as an acceptance requirement and included it in the same fix pass. All four regressions were observed failing before correction:
+
+- Result signing now validates and signs under the image transaction lock, so DELETE cannot commit mid-signing and allow a new URL after revocation.
+- Cleanup has persisted retry scheduling and fair ordering; a failing full batch no longer starves later images. New fourth migration is additive; the applied third migration was not rewritten.
+- Upload re-reads its reservation under lock before S3 write; a process resuming after a stale reservation was purged cannot leave an orphan behind purgedAt.
+- PNG chunk boundaries/CRC/IEND are checked before Sharp; truncated termination and trailing bytes reject400.
+
+Final evidence: unit11, PostgreSQL/Memurai/MinIO E2E27, build/lint pass; compiled API smoke passes on a temporary loopback port and closes automatically. Flutter live catalog1 passes against the existing API; frontend unchanged. No reviewer findings remain deferred.
+
+Reviewer declined to judge versioned buckets/Object Lock, distributed throttling/commercial quotas, real AI quality/billing/connectivity, host runtime/restart/Flutter, and production storage choice. These remain explicit deployment/product boundaries: unversioned private bucket only; single-process throttle; provider Disabled; native services and bounded compiled smoke verified separately; Windows repair/reload pending; MinIO development-only.

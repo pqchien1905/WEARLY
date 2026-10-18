@@ -96,6 +96,8 @@ Indexes: email/SKU/slugs, product(active,createdAt,id), category/brand, variant(
 
 - `20261018000000_init`: tạo 22 bảng, enum, PK/FK/unique/index.
 - `20261018000100_constraints`: số lượng/giá/tổng đơn/rating và default address.
+- `20261018000200_private_images`: thêm width/height, SHA256, consentAt, purgedAt và index/constraint; không thay hoặc xóa dữ liệu cũ.
+- `20261018000300_image_cleanup_retry`: thêm purgeRetryAt và index để retry công bằng, không sửa migration đã áp dụng.
 - `npm run prisma:deploy`: áp dụng migration đã commit, không reset.
 - `npm run prisma:migrate -- --name descriptive_change`: tạo migration mới trong development.
 - `npm run prisma:generate`: generate client riêng; Prisma 7 không tự chạy generate/seed sau migrate.
@@ -103,6 +105,8 @@ Indexes: email/SKU/slugs, product(active,createdAt,id), category/brand, variant(
 - `npm run prisma:studio`: giao diện DB local. Không phơi Studio ra Internet.
 
 Seed không tạo admin với mật khẩu mặc định. Tạo tài khoản qua API, sau đó developer có quyền database đổi role trong Prisma Studio khi cần kiểm thử quản trị.
+
+ImageAsset giữ metadata reservation, verifiedAt sau ghi S3, deletedAt để thu hồi quyền truy cập và purgedAt sau xóa object thành công. Cột mới nullable để tương thích metadata cũ. Cleanup và công bố AI dùng lock theo image ID; quota upload dùng lock theo user. Xem [vòng đời ảnh](private-images.md).
 
 ## Tồn kho và đơn hàng
 

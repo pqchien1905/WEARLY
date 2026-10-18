@@ -7,5 +7,5 @@ flowchart LR
   W --> Q[("Redis / BullMQ")]
   Q --> W
   W -. "future provider adapter" .-> AI["AI provider / optional FastAPI"]
-  W -. "private objects" .-> S3["S3 / MinIO optional"]
-  API -. "owned signed URL" .-> S3
+  W -->|"results + retention cleanup"| S3["Private S3 / MinIO"]
+  API -->|"validated upload + owned signed URL"| S3

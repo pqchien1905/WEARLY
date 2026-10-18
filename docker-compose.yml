@@ -43,6 +43,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       S3_ENDPOINT: http://minio:9000
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:9000}
     command: ["sh", "-c", "npm run prisma:deploy && node dist/main.js"]
     ports: ["127.0.0.1:3000:3000"]
     healthcheck:
@@ -64,6 +65,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       S3_ENDPOINT: http://minio:9000
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:9000}
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}

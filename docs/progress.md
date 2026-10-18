@@ -69,3 +69,11 @@ Theo yêu cầu sau restart, đã cài PostgreSQL17.11 + psql + pgAdmin trực t
 Worker được kiểm chứng bằng PostgreSQL và Redis-compatible Memurai thật. Thêm6 worker integration tests, queue namespace độc lập và sửa lỗi provider exception có thể lộ dữ liệu trong Redis failedReason/stacktrace. Kết quả: unit5, commerce10 + worker6 E2E, build/lint và Flutter live catalog1 đều đạt. API readiness200 xác nhận cả database/Redis; Swagger200. Không gọi provider AI thật hay coi test doubles là kết quả AI sản phẩm.
 
 DISM RestoreHealth đã thành công, nhưng SFC báo hệ thống có repair pending cần restart tiếp; Docker Engine vẫn chưa chạy. Native backend không phụ thuộc Docker nên có thể sử dụng ngay. Compose dùng host ports5433/6380 trên máy này để tránh xung đột. Memurai Developer không dùng production, tự dừng sau10 ngày; các giới hạn AI/upload/payment/remote Flutter còn giữ nguyên trong migration-plan.md.
+
+## Private image lifecycle — 2026-10-18
+
+Thêm upload JPEG/PNG riêng tư, validation bytes/pixels, strip metadata, consent, ownership, quota; signed read60s, delete202 và cleanup24h có retry. Worker đồng bộ công bố kết quả với xóa ảnh bằng transaction lock. Migration thứ3 bổ sung metadata, không reset database. MinIO native local chạy trên loopback9000/9001, có bucket test riêng.
+
+Kiểm thử trước final review: unit9, commerce10 + worker9 + upload6 E2E đều đạt; build/lint đạt. Flutter source không thay đổi; provider AI vẫn Disabled. Chi tiết và giới hạn URL/versioning/storage production tại [private-images.md](private-images.md). Docker vẫn chờ Windows hoàn tất repair sau restart.
+
+Sau review: sửa bốn findings bằng regression RED→GREEN; thêm migration thứ4 cho retry cleanup công bằng. Final unit11/E2E27/build/lint/compiled smoke đạt, Flutter live catalog1 đạt. Không còn review finding bị hoãn. Runtime API/worker cũ chưa reload vì execution policy chặn thao tác tiến trình; hướng dẫn chạy bản mới tại setup.md. Không có thay đổi frontend hoặc gọi AI thật.

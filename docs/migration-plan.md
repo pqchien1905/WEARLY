@@ -18,7 +18,7 @@ Không đổi Riverpod, go_router hoặc tên feature. Mặc định vẫn dùng
 | AccountDetailsRepository.saveStyle | Chưa có model/API sở thích | Giai đoạn sau |
 | wishlistProvider.toggle/clear | WishlistItem schema | Chưa có API hoặc remote adapter |
 | StylistRepository.reply | Future /ai/stylist/messages | Chưa có API/provider/retrieval |
-| TryOnRepository.create/cancel | POST/GET /ai/try-on/jobs | Foundation có, provider Disabled; cancel/upload/delete chưa triển khai |
+| TryOnRepository.create/cancel | POST/GET /ai/try-on/jobs; POST/GET/DELETE /uploads/images | Upload/delete/retention/quota có; provider Disabled, Flutter chưa nối; hủy qua xóa ảnh, chưa cancel riêng job |
 | Admin state promotions/content/audit | Coupon schema, các endpoint admin có trong api.md | Nội dung, promotions, audit workflow chưa có backend |
 
 ## Contract mapping
@@ -34,6 +34,6 @@ Flutter query `max` → maxPrice; `stock` → inStock=true. Bộ lọc size/colo
 3. Cart adapter cache có async mutations; chuyển remove/clear sang Future và trạng thái pending/error.
 4. Checkout dùng cartVersion + expectedSubtotal + idempotency key lưu cho một lần retry; không gọi consumeStock. Chuyển OrderRepository, history và admin có auth cùng đợt.
 5. Wishlist/reviews/promotions/style preferences.
-6. Private upload → AI adapter thật → polling/cancel/delete/retention/quota.
+6. Nối private upload hiện có → AI adapter thật → polling/cancel riêng job; đưa consent/delete/quota vào UI hiện tại.
 
 Ở chế độ remote catalog, catalog đọc dữ liệu DB; các luồng khác vẫn là demo. Remote write/checkout bị từ chối rõ ràng, không tạo đơn giả trên DB. Để xem lại toàn bộ demo hiện có, bỏ USE_REMOTE_CATALOG. Không tự fallback sang mock khi API lỗi vì sẽ che giấu sự cố và làm sai giá/tồn.

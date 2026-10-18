@@ -32,8 +32,8 @@ flowchart LR
   W --> Q[("Redis / BullMQ")]
   Q --> W
   W -. "future provider adapter" .-> AI["AI provider / optional FastAPI"]
-  W -. "private objects" .-> S3["S3 / MinIO optional"]
-  API -. "owned signed URL" .-> S3
+  W -->|"results + retention cleanup"| S3["Private S3 / MinIO"]
+  API -->|"validated upload + owned signed URL"| S3
 ```
 
 Bắt buộc: Flutter, API, PostgreSQL. Redis bắt buộc cho worker/outbox; readiness báo lỗi khi Redis chưa hoạt động. Storage chỉ cần khi tích hợp ảnh, MinIO có profile `storage`. AI provider/FastAPI, pgvector, CDN và thanh toán online là tùy chọn chưa bật.
@@ -52,14 +52,19 @@ flowchart TD
   App --> Admin["AdminModule: guarded management"]
   App --> Health["HealthModule"]
   App --> AI["AiModule"]
-  Auth & Users & Catalog & Cart & Orders & Admin & Health & AI --> Prisma["PrismaModule / PrismaService"]
+  App --> Uploads["UploadsModule: consent + quotas + ownership"]
+  Auth & Users & Catalog & Cart & Orders & Admin & Health & AI & Uploads --> Prisma["PrismaModule / PrismaService"]
   AI --> Adapter["TryOnProvider: Disabled by default"]
   AI --> Storage["StorageService"]
+  Uploads --> Storage
   Worker["WorkerModule: separate process"] --> Prisma
   Worker --> Processor["AiProcessor + outbox dispatcher"]
   Processor --> Adapter
   Processor --> Storage
   Processor --> Queue["BullMQ"]
+  Worker --> Retention["RetentionWorker / ImageLifecycleService"]
+  Retention --> Prisma
+  Retention --> Storage
 ```
 
 Auth chịu trách nhiệm Argon2id, JWT, session hash, rotation/replay/logout. Users quản lý hồ sơ/địa chỉ theo owner. Products trả catalog active, filters cùng SKU và facets. Cart lấy giá/tồn hiện hành. Orders tính tiền, snapshot, transaction và hoàn kho. Admin có guard RBAC trên toàn controller. Health tách liveness/readiness. AI kiểm tra provider, consent và ownership; outbox tránh mất enqueue khi Redis lỗi.
@@ -70,6 +75,6 @@ Flutter screen → Riverpod → ProductRepository → ApiClient HTTP → control
 
 API mặc định không log body, token, password, query hoặc signed URL; chỉ requestId/method/status/duration. Exception filter không trả stack hoặc lỗi DB nội bộ. CORS allowlist không bật credentials; Swagger bị tắt trong production.
 
-Throttling hiện theo bộ nhớ một API process. Cần Redis-backed throttling, TLS, observability, backup/restore, upload lifecycle và security review trước production.
+Throttling hiện theo bộ nhớ một API process. Cần Redis-backed throttling, TLS, observability, backup/restore, chính sách metadata dài hạn và security review trước production.
 
-AI provider mặc định Disabled: POST jobs trả 503 đúng nghĩa. Chưa có public upload API hoặc adapter nhà cung cấp thật. Không nhận ảnh người dùng thật cho đến khi có validation bytes/resolution, consent/retention/delete và kiểm thử đầy đủ.
+AI provider mặc định Disabled: POST jobs trả503 đúng nghĩa. Upload API có validation bytes/resolution, metadata stripping, consent, ownership, quota và cleanup retry; đã kiểm thử với PostgreSQL/MinIO thật. Worker khóa theo ảnh khi công bố kết quả, đồng bộ với xóa. Chưa có adapter AI thật hoặc tích hợp Flutter Try-On remote. Xem [private-images.md](private-images.md).

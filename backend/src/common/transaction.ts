@@ -24,3 +24,7 @@ export async function transaction<T>(
 export async function lockUser(tx: Prisma.TransactionClient, userId: string) {
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${userId}, 0))::text`;
 }
+export async function lockImage(tx: Prisma.TransactionClient, imageId: string) {
+  const key = 'image:' + imageId;
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))::text`;
+}

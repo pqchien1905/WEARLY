@@ -51,7 +51,12 @@ const schema = z
         }),
       ),
     SWAGGER_ENABLED: z.enum(['true', 'false']).default('true'),
-    S3_ENDPOINT: z.string().default('http://localhost:9000'),
+    S3_ENDPOINT: z
+      .url({ protocol: /^https?$/ })
+      .default('http://localhost:9000'),
+    S3_PUBLIC_ENDPOINT: z
+      .union([z.url({ protocol: /^https?$/ }), z.literal('')])
+      .default(''),
     S3_REGION: z.string().default('us-east-1'),
     S3_BUCKET: z.string().default('wearly-private'),
     S3_ACCESS_KEY_ID: z.string().default(''),

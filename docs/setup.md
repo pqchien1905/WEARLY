@@ -38,6 +38,8 @@ npm run start:dev
 
 Swagger http://localhost:3000/api/docs, health http://localhost:3000/api/v1/health, readiness /api/v1/health/ready. Backend fail startup nếu DB không kết nối được. `npm run build; npm start` để chạy compiled code.
 
+**Sau cập nhật upload:** source/dist và4 migrations đã cập nhật, nhưng API/worker cũ chưa được reload vì execution policy chặn dừng/khởi chạy persistent process. Đóng tiến trình dev cũ của Wearly (trong Task Manager có thể xem command line `dist/main.js` và `dist/worker/main.js`), rồi chạy `npm start` và `npm run worker` trong hai terminal. Hoặc sau reboot chạy lại MinIO helper và các lệnh API/worker. PostgreSQL/Memurai là Windows services tự khởi động. `node tools/smoke-backend.cjs` từ root kiểm tra compiled API trên cổng tạm và tự đóng, không thay tiến trình đang chạy.
+
 Terminal riêng:
 
 ```powershell
@@ -85,6 +87,8 @@ Android emulator (sau khi bổ sung platform) dùng http://10.0.2.2:3000/api/v1.
 
 ## Containers và storage
 
+Kho ảnh native đã được cấu hình độc lập với Docker. Từ root chạy `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\start-storage.ps1` để khởi động MinIO local, kiểm checksum và chuẩn bị hai bucket private/unversioned. API9000, console9001 chỉ nghe loopback; credential lấy từ backend/.env. Binary/data/log/PID trong `.tools/minio`; chạy lại helper sau reboot. Release cố định chỉ dùng phát triển, không xem là storage production đã được thẩm định. Chi tiết [private-images.md](private-images.md).
+
 Sau khi Docker Engine hoạt động, có thể dùng môi trường Docker độc lập:
 
 ```powershell
@@ -103,7 +107,7 @@ docker compose --profile storage up -d minio
 
 API container tự deploy migrations sau PostgreSQL healthy; worker chờ API healthy. Root .env dùng localhost cho host. Compose override DATABASE_URL hostname postgres, REDIS_HOST=redis, storage=minio. Không copy DATABASE_URL container về cấu hình host.
 
-MinIO console http://localhost:9001, API9000. Tạo bucket theo S3_BUCKET, giữ private; không public ảnh người dùng. Chưa có upload API. Nếu triển khai signed URL cho browser ngoài Docker, cần public S3 endpoint và DNS phù hợp; cấu hình nội bộ minio không dùng trực tiếp cho browser.
+MinIO console http://localhost:9001, API9000. Dừng đúng process MinIO native trước khi chạy container cùng cổng; dữ liệu hai môi trường riêng biệt. Tạo bucket theo S3_BUCKET và bucket hậu tố -test bằng `node tools/prepare-storage.cjs` khi endpoint local đã sẵn sàng. Giữ private và không versioning. API upload đã triển khai. `S3_PUBLIC_ENDPOINT` dùng ký URL cho browser/provider, khác endpoint nội bộ `minio`; production cần HTTPS/DNS có thể truy cập từ client/provider.
 
 Named volumes giữ DB/Redis/MinIO. Không chạy `docker compose down -v` nếu muốn giữ dữ liệu.
 
@@ -112,7 +116,7 @@ Named volumes giữ DB/Redis/MinIO. Không chạy `docker compose down -v` nếu
 ```powershell
 cd 'D:\Fashion Shop'
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\backend.ps1 check
-powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\test-backend.ps1 -WithWorker
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\test-backend.ps1 -WithWorker -WithStorage
 cd frontend
 flutter analyze
 flutter test
@@ -123,6 +127,8 @@ flutter test test/live_catalog_test.dart --dart-define=LIVE_API_BASE_URL=http://
 test-backend dùng database riêng hậu tố _test, không reset/drop DB. Native `wearly_test` đã được tạo bằng tài khoản admin vì role ứng dụng không có CREATEDB. TEST_DATABASE_URL có thể override rõ ràng; script lưu vào backend/.env.test bị ignore. `-WithWorker` bật thêm test PostgreSQL + Redis/Memurai thật; chỉ provider AI và object storage dùng test doubles. Mỗi lượt dùng queue namespace UUID riêng, không FLUSHDB. Bỏ flag nếu chỉ muốn kiểm tra commerce; worker tests sẽ được báo skipped. TEST_REDIS_HOST/TEST_REDIS_PORT có thể trỏ một Redis test khác.
 
 Chỉ chạy một worker suite trên cùng test database: suite giữ PostgreSQL advisory lock và từ chối lượt chạy trùng. Nếu một lượt bị ngắt để lại AIJob pending/processing hoặc outbox chưa publish, suite tiếp theo dừng trước khi khởi động worker để người phát triển kiểm tra fixture đó; không tự xử lý job cũ bằng test provider.
+
+`-WithStorage` bật7 upload E2E với PostgreSQL và S3/MinIO thật, dùng bucket riêng kết thúc `-test`; mặc định cùng endpoint/credential backend/.env. TEST_S3_ENDPOINT/TEST_S3_BUCKET có thể override. Không bật flag thì suite đó skip. Worker suite vẫn dùng storage double để điều khiển race; không gọi provider AI trả phí.
 
 ## PostgreSQL portable của phiên trước
 

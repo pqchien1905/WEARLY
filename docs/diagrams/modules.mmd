@@ -9,11 +9,16 @@ flowchart TD
   App --> Admin["AdminModule: guarded management"]
   App --> Health["HealthModule"]
   App --> AI["AiModule"]
-  Auth & Users & Catalog & Cart & Orders & Admin & Health & AI --> Prisma["PrismaModule / PrismaService"]
+  App --> Uploads["UploadsModule: consent + quotas + ownership"]
+  Auth & Users & Catalog & Cart & Orders & Admin & Health & AI & Uploads --> Prisma["PrismaModule / PrismaService"]
   AI --> Adapter["TryOnProvider: Disabled by default"]
   AI --> Storage["StorageService"]
+  Uploads --> Storage
   Worker["WorkerModule: separate process"] --> Prisma
   Worker --> Processor["AiProcessor + outbox dispatcher"]
   Processor --> Adapter
   Processor --> Storage
   Processor --> Queue["BullMQ"]
+  Worker --> Retention["RetentionWorker / ImageLifecycleService"]
+  Retention --> Prisma
+  Retention --> Storage

@@ -5,12 +5,12 @@ import {
   DisabledTryOnProvider,
   TryOnProvider,
 } from '../../integrations/ai-providers/try-on.provider';
-import { StorageService } from '../../integrations/storage/storage.service';
+import { StorageModule } from '../../integrations/storage/storage.module';
 @Module({
+  imports: [StorageModule],
   controllers: [AiController],
   providers: [
     AiService,
-    StorageService,
     { provide: TryOnProvider, useClass: DisabledTryOnProvider },
   ],
 })

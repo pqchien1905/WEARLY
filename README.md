@@ -6,6 +6,7 @@
 - [Kiến trúc và quyết định thay đổi](docs/architecture.md)
 - [Database, migrations và tồn kho](docs/database.md)
 - [API thực tế và Swagger](docs/api.md)
+- [Upload ảnh riêng tư, quyền truy cập và cleanup](docs/private-images.md)
 - [Ánh xạ mock → API](docs/migration-plan.md)
 - [Báo cáo triển khai, kiểm thử và phần còn thiếu](docs/backend-report.md)
 - [Lịch sử frontend](README_FRONTEND.md)
@@ -23,6 +24,7 @@ Bắt đầu trên máy Windows đã cấu hình PostgreSQL và Memurai:
 
 ```powershell
 Get-Service postgresql-x64-17,Memurai
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\start-storage.ps1
 cd backend
 npm ci
 npm run prisma:generate

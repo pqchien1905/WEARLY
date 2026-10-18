@@ -16,6 +16,7 @@ import { StorageService } from '../src/integrations/storage/storage.service';
 import { AI_QUEUE } from '../src/queues/ai.queue';
 import { validateEnv } from '../src/config/env.validation';
 import { AiService } from '../src/modules/ai/ai.service';
+import { ImageLifecycleService } from '../src/modules/uploads/image-lifecycle.service';
 
 // PostgreSQL and Redis are real. Only paid AI and object storage are test doubles.
 const redisDescribe = process.env.TEST_REDIS_HOST ? describe : describe.skip;
@@ -39,6 +40,7 @@ redisDescribe('AI worker with PostgreSQL and Redis', () => {
   const storage = {
     signedRead: async (key: string) => 'https://storage.example.test/' + key,
     putResult: jest.fn(async () => undefined),
+    deleteObjects: jest.fn(async (_keys: string[]) => undefined),
   };
   beforeAll(async () => {
     if (
@@ -330,5 +332,205 @@ redisDescribe('AI worker with PostgreSQL and Redis', () => {
     expect((await service.get(userId, created.id)).resultUrl).toContain(
       'https://storage.example.test/',
     );
+  });
+  it('serializes deletion against result storage and purges all deterministic job keys', async () => {
+    provider.enabled = true;
+    provider.generate = async () => ({
+      bytes: new Uint8Array([1]),
+      contentType: 'image/png',
+    });
+    const lifecycle = new ImageLifecycleService(
+      db,
+      storage as unknown as StorageService,
+    );
+    let release!: () => void, entered!: () => void;
+    const waiting = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const writing = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    storage.putResult.mockImplementationOnce(async () => {
+      entered();
+      await waiting;
+    });
+    const job = await fixture();
+    await processor.dispatch();
+    await writing;
+    let deletionFinished = false;
+    const deletion = lifecycle.deleteOwned(userId, job.imageId).then(() => {
+      deletionFinished = true;
+    });
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      expect(deletionFinished).toBe(false);
+    } finally {
+      release();
+      await deletion;
+    }
+    await terminal(job.id);
+    const service = new AiService(
+      db,
+      provider,
+      storage as unknown as StorageService,
+    );
+    expect((await service.get(userId, job.id)).resultUrl).toBeNull();
+    expect(await lifecycle.purge(job.imageId)).toBe(true);
+    expect(storage.deleteObjects).toHaveBeenCalledWith(
+      expect.arrayContaining(['results/' + userId + '/' + job.id]),
+    );
+    expect(
+      (await db.imageAsset.findUniqueOrThrow({ where: { id: job.imageId } }))
+        .purgedAt,
+    ).not.toBeNull();
+  });
+  it('cancels pending jobs, purges unrecorded result keys and rejects new jobs on a deleted image', async () => {
+    provider.enabled = true;
+    const image = await db.imageAsset.create({
+      data: {
+        userId,
+        objectKey: 'test/' + randomUUID(),
+        mimeType: 'image/png',
+        size: 1,
+        verifiedAt: new Date(),
+        expiresAt: new Date(Date.now() + 3600000),
+      },
+    });
+    const job = await db.aIJob.create({
+      data: { userId, variantId, imageId: image.id, consentAt: new Date() },
+    });
+    const lifecycle = new ImageLifecycleService(
+      db,
+      storage as unknown as StorageService,
+    );
+    await lifecycle.deleteOwned(userId, image.id);
+    expect(
+      (await db.aIJob.findUniqueOrThrow({ where: { id: job.id } })).status,
+    ).toBe('FAILED');
+    await lifecycle.purge(image.id);
+    expect(storage.deleteObjects).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        image.objectKey,
+        'results/' + userId + '/' + job.id,
+      ]),
+    );
+    const service = new AiService(
+      db,
+      provider,
+      storage as unknown as StorageService,
+    );
+    const variant = await db.productVariant.findUniqueOrThrow({
+      where: { id: variantId },
+    });
+    await expect(
+      service.create(userId, {
+        imageId: image.id,
+        sku: variant.sku,
+        consent: true,
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+  it('bounds jobs per image so cleanup work stays finite', async () => {
+    provider.enabled = true;
+    const image = await db.imageAsset.create({
+      data: {
+        userId,
+        objectKey: 'test/' + randomUUID(),
+        mimeType: 'image/png',
+        size: 1,
+        verifiedAt: new Date(),
+        expiresAt: new Date(Date.now() + 3600000),
+      },
+    });
+    await db.aIJob.createMany({
+      data: Array.from({ length: 20 }, () => ({
+        userId,
+        variantId,
+        imageId: image.id,
+        consentAt: new Date(),
+        status: 'FAILED' as const,
+      })),
+    });
+    const service = new AiService(
+      db,
+      provider,
+      storage as unknown as StorageService,
+    );
+    const variant = await db.productVariant.findUniqueOrThrow({
+      where: { id: variantId },
+    });
+    await expect(
+      service.create(userId, {
+        imageId: image.id,
+        sku: variant.sku,
+        consent: true,
+      }),
+    ).rejects.toMatchObject({ status: 429 });
+    expect(await db.aIJob.count({ where: { imageId: image.id } })).toBe(20);
+  });
+  it('serializes result signing with deletion and prevents new reads after revocation', async () => {
+    const image = await db.imageAsset.create({
+      data: {
+        userId,
+        objectKey: 'test/' + randomUUID(),
+        mimeType: 'image/png',
+        size: 1,
+        verifiedAt: new Date(),
+        expiresAt: new Date(Date.now() + 3600000),
+      },
+    });
+    const job = await db.aIJob.create({
+      data: {
+        userId,
+        variantId,
+        imageId: image.id,
+        consentAt: new Date(),
+        status: 'COMPLETED',
+        result: {
+          create: {
+            objectKey: 'results/' + randomUUID(),
+            expiresAt: image.expiresAt,
+          },
+        },
+      },
+    });
+    let release!: () => void, entered!: () => void;
+    const waiting = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const signing = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const sign = jest
+      .spyOn(storage, 'signedRead')
+      .mockImplementationOnce(async () => {
+        entered();
+        await waiting;
+        return 'https://storage.example.test/signed';
+      });
+    const service = new AiService(
+      db,
+      provider,
+      storage as unknown as StorageService,
+    );
+    const lifecycle = new ImageLifecycleService(
+      db,
+      storage as unknown as StorageService,
+    );
+    const read = service.get(userId, job.id);
+    await signing;
+    let deleted = false;
+    const deletion = lifecycle.deleteOwned(userId, image.id).then(() => {
+      deleted = true;
+    });
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      expect(deleted).toBe(false);
+    } finally {
+      release();
+      await Promise.all([read, deletion]);
+      sign.mockRestore();
+    }
+    expect((await service.get(userId, job.id)).resultUrl).toBeNull();
   });
 });

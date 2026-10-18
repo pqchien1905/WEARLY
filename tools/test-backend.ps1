@@ -1,7 +1,7 @@
-param([switch]$WithWorker)
+param([switch]$WithWorker, [switch]$WithStorage)
 $ErrorActionPreference = 'Stop'
 $previousEnvironment = @{}
-foreach ($name in @('PATH','DATABASE_URL','TEST_DATABASE_URL','NODE_ENV','TEST_REDIS_HOST','TEST_REDIS_PORT')) {
+foreach ($name in @('PATH','DATABASE_URL','TEST_DATABASE_URL','NODE_ENV','TEST_REDIS_HOST','TEST_REDIS_PORT','TEST_S3_ENDPOINT','TEST_S3_BUCKET')) {
   $previousEnvironment[$name] = [Environment]::GetEnvironmentVariable($name,'Process')
 }
 $workspace = Split-Path -Parent $PSScriptRoot
@@ -19,6 +19,14 @@ try {
   if ($WithWorker) {
     if (!$env:TEST_REDIS_HOST) { $env:TEST_REDIS_HOST = '127.0.0.1' }
     if (!$env:TEST_REDIS_PORT) { $env:TEST_REDIS_PORT = '6379' }
+  }
+  if ($WithStorage) {
+    $storage = @{}
+    foreach ($entry in Get-Content '.env') {
+      if ($entry -match '^(S3_[A-Z_]+)=(.*)$') { $storage[$matches[1]] = $matches[2].Trim('"', "'") }
+    }
+    if (!$env:TEST_S3_ENDPOINT) { $env:TEST_S3_ENDPOINT = $storage['S3_ENDPOINT'] }
+    if (!$env:TEST_S3_BUCKET) { $env:TEST_S3_BUCKET = $storage['S3_BUCKET'] + '-test' }
   }
   & npm.cmd run prisma:deploy
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

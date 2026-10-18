@@ -32,6 +32,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
           403: 'FORBIDDEN',
           404: 'NOT_FOUND',
           409: 'CONFLICT',
+          413: 'PAYLOAD_TOO_LARGE',
           429: 'RATE_LIMITED',
           503: 'SERVICE_UNAVAILABLE',
         }[status] ??
@@ -63,16 +64,14 @@ export class ApiExceptionFilter implements ExceptionFilter {
           type: exception instanceof Error ? exception.name : 'UnknownError',
         }),
       );
-    response
-      .status(status)
-      .json({
-        error: {
-          code,
-          message,
-          retryable: status >= 500 || status === 429,
-          requestId,
-        },
-        path: request.path,
-      });
+    response.status(status).json({
+      error: {
+        code,
+        message,
+        retryable: status >= 500 || status === 429,
+        requestId,
+      },
+      path: request.path,
+    });
   }
 }
