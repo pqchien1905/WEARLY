@@ -74,6 +74,48 @@ class MyReview {
   late final ProductReview? review;
 }
 
+typedef ReviewedProduct = ({String name, String slug});
+
+class OwnedReview extends ProductReview {
+  OwnedReview.fromJson(Object? value) : super.fromJson(value) {
+    final json = value as Map;
+    productId = json['productId'] as String;
+    canEdit = json['canEdit'] as bool;
+    final detail = json['product'] as Map?;
+    product = detail == null
+        ? null
+        : (name: detail['name'] as String, slug: detail['slug'] as String);
+    if (productId.isEmpty ||
+        (canEdit && product == null) ||
+        (product != null && (product!.name.isEmpty || product!.slug.isEmpty))) {
+      throw invalidReview;
+    }
+  }
+  late final String productId;
+  late final bool canEdit;
+  late final ReviewedProduct? product;
+}
+
+class OwnedReviewPage {
+  OwnedReviewPage.fromJson(Object? value) {
+    final json = value as Map;
+    items = (json['items'] as List).map(OwnedReview.fromJson).toList();
+    total = json['total'] as int;
+    page = json['page'] as int;
+    limit = json['limit'] as int;
+    if (total < items.length ||
+        page < 1 ||
+        limit < 1 ||
+        limit > 20 ||
+        items.length > limit) {
+      throw invalidReview;
+    }
+  }
+  late final List<OwnedReview> items;
+  late final int total, page, limit;
+  bool get hasNext => page * limit < total;
+}
+
 String _path(String id) => 'products/${Uri.encodeComponent(id)}/reviews';
 
 class PublicReviewRepository {
@@ -107,6 +149,16 @@ class OwnerReviewRepository {
     final result = await api.get('${_path(id)}/me');
     _check();
     return _decode(() => MyReview.fromJson(result));
+  }
+
+  Future<OwnedReviewPage> history(int page) async {
+    _check();
+    final result = await api.get(
+      'users/me/reviews',
+      query: {'page': '$page', 'limit': '5'},
+    );
+    _check();
+    return _decode(() => OwnedReviewPage.fromJson(result));
   }
 
   Future<Object?> _write(

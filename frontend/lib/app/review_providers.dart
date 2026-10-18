@@ -43,3 +43,9 @@ final myReviewProvider = FutureProvider.autoDispose.family<MyReview?, String>((
   ref.watch(reviewRevisionProvider.select((state) => state[id]));
   return ref.watch(ownerReviewRepositoryProvider)?.mine(id);
 });
+
+final ownedReviewsProvider = FutureProvider.autoDispose
+    .family<OwnedReviewPage?, int>((ref, page) {
+      ref.watch(reviewRevisionProvider);
+      return ref.watch(ownerReviewRepositoryProvider)?.history(page);
+    });

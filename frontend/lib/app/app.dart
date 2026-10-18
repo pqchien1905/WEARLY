@@ -25,6 +25,7 @@ import '../features/virtual_tryon/tryon_page.dart';
 import '../features/virtual_tryon/tryon_results.dart';
 import '../features/account/account_page.dart';
 import '../features/account/orders_page.dart';
+import '../features/account/reviews_page.dart';
 import '../features/account/address_page.dart';
 import '../features/account/style_page.dart';
 import '../features/account/tryon_history_page.dart';
@@ -167,6 +168,10 @@ GoRouter createRouter({String initialLocation = '/'}) => GoRouter(
                 AuthPage(key: ValueKey(s.uri.path), mode: s.uri.path),
           ),
         appRoute(path: '/account', builder: (_, _) => const AccountPage()),
+        appRoute(
+          path: '/account/reviews',
+          builder: (_, _) => const CustomerReviewsPage(),
+        ),
         appRoute(
           path: '/account/addresses',
           builder: (_, _) => const AddressPage(),

@@ -8,17 +8,19 @@ import '../../core/network/api_client.dart';
 import '../../core/design/tokens.dart';
 import '../../core/widgets/primitives.dart';
 
-class AccountNavigation extends StatelessWidget {
+class AccountNavigation extends ConsumerWidget {
   const AccountNavigation({super.key, required this.current});
   final String current;
   @override
-  Widget build(BuildContext context) => Wrap(
+  Widget build(BuildContext context, WidgetRef ref) => Wrap(
     spacing: 8,
     runSpacing: 8,
     children: [
-      for (final item in const [
+      for (final item in [
         ('Hồ sơ', '/account'),
         ('Đơn hàng', '/account/orders'),
+        if (ref.watch(remoteApiProvider))
+          ('Đánh giá của tôi', '/account/reviews'),
         ('Sổ địa chỉ', '/account/addresses'),
         ('Phong cách của tôi', '/account/style'),
         ('Lịch sử thử đồ', '/account/try-ons'),
