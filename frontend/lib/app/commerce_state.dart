@@ -55,6 +55,7 @@ class CommerceController extends ChangeNotifier {
     this.remote = false,
     this.signedIn = false,
   }) {
+    cartState.loaded = historyState.loaded = !remote;
     if (remote && signedIn) {
       Future.microtask(() {
         if (!_disposed) refresh();
@@ -62,13 +63,18 @@ class CommerceController extends ChangeNotifier {
     }
   }
   final bool remote, signedIn;
-  bool loading = false;
-  int _loads = 0;
-  Object? error;
+  final cartState = CommerceLoadState(), historyState = CommerceLoadState();
+  final _details = <String, CommerceLoadState>{};
+  CommerceLoadState detailState(String id) =>
+      _details.putIfAbsent(id, () => CommerceLoadState()..loaded = !remote);
   bool get requiresLogin => remote && !signedIn;
   bool get checkoutPending =>
       orderRepository is RemoteOrderRepository &&
       (orderRepository as RemoteOrderRepository).hasPendingCheckout;
+  PendingCheckout? get pendingCheckout =>
+      orderRepository is RemoteOrderRepository
+      ? (orderRepository as RemoteOrderRepository).pendingCheckout
+      : null;
   bool get hasMoreOrders =>
       orderRepository is RemoteOrderRepository &&
       (orderRepository as RemoteOrderRepository).hasMore;
@@ -102,64 +108,87 @@ class CommerceController extends ChangeNotifier {
     }
   }
 
-  Future<void> _load(Future<void> Function() action) async {
+  Future<void> _load(
+    CommerceLoadState state,
+    Future<void> Function() action,
+  ) async {
     if (_disposed || requiresLogin) return;
-    _loads++;
-    loading = true;
-    error = null;
+    state.pending++;
+    state.error = null;
     notifyListeners();
     try {
       await action();
+      state.loaded = true;
+      state.error = null;
     } catch (e) {
-      error = e;
+      state.error = e;
     } finally {
-      loading = --_loads > 0;
+      state.pending--;
       notifyListeners();
     }
   }
 
-  Future<void> refresh() => _load(() async {
-    if (cart is RemoteCartRepository && !checkoutPending) {
-      await (cart as RemoteCartRepository).refresh();
-    }
+  Future<void> refresh() async {
+    await Future.wait([refreshCart(), refreshOrders()]);
+  }
+
+  Future<void> refreshCart() async {
+    if (checkoutPending) return;
+    await _load(cartState, () async {
+      if (cart is RemoteCartRepository) {
+        await (cart as RemoteCartRepository).refresh();
+      }
+    });
+  }
+
+  Future<void> refreshOrders() => _load(historyState, () async {
     if (orderRepository is RemoteOrderRepository) {
       await (orderRepository as RemoteOrderRepository).refresh();
     }
   });
-  Future<void> loadMoreOrders() => _load(() async {
+  Future<void> loadMoreOrders() => _load(historyState, () async {
     if (orderRepository is RemoteOrderRepository) {
       await (orderRepository as RemoteOrderRepository).loadMore();
     }
   });
-  Future<void> loadOrder(String id) => _load(() async {
+  Future<void> loadOrder(String id) => _load(detailState(id), () async {
     if (orderRepository is RemoteOrderRepository) {
       await (orderRepository as RemoteOrderRepository).loadOrder(id);
     }
   });
-  Future<void> _mutate(Future<void> Function() action) async {
+  Future<void> _mutate(
+    Future<void> Function() action, {
+    CommerceLoadState? state,
+  }) async {
     _requireAccount();
     final pending = action();
     notifyListeners();
     try {
       await pending;
-      error = null;
+      if (state != null) {
+        state.loaded = true;
+        state.error = null;
+      }
     } finally {
       notifyListeners();
     }
   }
 
   Future<void> add(String slug, String sku, int quantity) async {
-    await _mutate(() => cart.add(slug, sku, quantity));
+    await _mutate(() => cart.add(slug, sku, quantity), state: cartState);
   }
 
   Future<void> update(String sku, int quantity) async {
-    await _mutate(() => cart.update(sku, quantity));
+    await _mutate(() => cart.update(sku, quantity), state: cartState);
   }
 
-  Future<void> remove(String sku) =>
-      _mutate(() => Future<void>.sync(() => cart.remove(sku)));
+  Future<void> remove(String sku) => _mutate(
+    () => Future<void>.sync(() => cart.remove(sku)),
+    state: cartState,
+  );
 
-  Future<void> clear() => _mutate(() => Future<void>.sync(cart.clear));
+  Future<void> clear() =>
+      _mutate(() => Future<void>.sync(cart.clear), state: cartState);
 
   Future<Order> checkout(CheckoutDraft draft) async {
     _requireAccount();
@@ -167,6 +196,8 @@ class CommerceController extends ChangeNotifier {
     notifyListeners();
     try {
       final o = await pending;
+      cartState.loaded = true;
+      cartState.error = null;
       if (!_disposed) {
         onCatalogChanged?.call();
       }
@@ -179,5 +210,13 @@ class CommerceController extends ChangeNotifier {
   Future<void> setStatus(String id, String status) => _mutate(() async {
     await Future<void>.sync(() => orderRepository.setStatus(id, status));
     if (!_disposed) onCatalogChanged?.call();
-  });
+  }, state: detailState(id));
+}
+
+class CommerceLoadState {
+  bool loaded = false;
+  int pending = 0;
+  Object? error;
+  bool get loading => pending > 0 || (!loaded && error == null);
+  bool get needsFeedback => loading || error != null;
 }

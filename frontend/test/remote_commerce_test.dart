@@ -79,6 +79,42 @@ const draft = CheckoutDraft(
 
 void main() {
   test(
+    'lost checkout response followed by rate limit preserves the original request',
+    () async {
+      final keys = <String?>[], bodies = <String>[];
+      final api = ApiClient(
+        baseUrl: 'http://localhost/api/v1',
+        client: MockClient((request) async {
+          if (request.method == 'POST') {
+            keys.add(request.headers['Idempotency-Key']);
+            bodies.add(request.body);
+            if (keys.length == 1) {
+              throw http.ClientException('response lost after commit');
+            }
+            if (keys.length == 2) return jsonResponse({}, 429);
+            return jsonResponse(orderJson(), 201);
+          }
+          return jsonResponse(cartJson());
+        }),
+      );
+      addTearDown(api.close);
+      final cart = RemoteCartRepository(api);
+      final orders = RemoteOrderRepository(api, cart);
+      await cart.refresh();
+      await expectLater(orders.checkout(draft), throwsA(isA<ApiException>()));
+      await expectLater(
+        orders.checkout(draft),
+        throwsA(isA<ApiException>().having((e) => e.status, 'status', 429)),
+      );
+      expect(orders.hasPendingCheckout, isTrue);
+      expect(cart.locked, isTrue);
+      await orders.checkout(draft);
+      expect(keys.toSet(), hasLength(1));
+      expect(bodies.toSet(), hasLength(1));
+      expect(orders.orders, hasLength(1));
+    },
+  );
+  test(
     'logout replaces personal caches and rejects old controller writes',
     () async {
       var cartWrites = 0;

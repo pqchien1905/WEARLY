@@ -1,4 +1,4 @@
-# Flutter API shopping implementation plan
+﻿# Flutter API shopping implementation plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans inline, task by task. Steps use checkbox syntax for tracking.
 
@@ -32,38 +32,39 @@
 
 **Files:** core/network/session_tokens.dart, api_client.dart; new app/api_providers.dart, data/remote_account.dart, test/remote_session_test.dart; domain/account.dart, app/config.dart, app/account_state.dart, app/providers.dart.
 **Interfaces:** ApiClient.request(method,path,{query,body,headers,authenticated,refresh}) returns Future<Object?>; SessionTokens tracks session generation and token rotation separately; RemoteAccountRepository implements AccountRepository. UserProfile gains optional id and role. apiClientProvider/sessionTokensProvider/remoteApiProvider are shared.
-- [ ] RED: tests for concurrent refresh, late401/session switch, logout versus pending login/refresh, profile mapping, failed login and unavailable reset.
-- [ ] Implement request guards, one refresh/retry, memory-only session clear notifications and real auth repository; keep public calls independent of auth retries.
-- [ ] Run targeted tests, existing remote catalog and account regressions; commit.
+- [x] RED: tests for concurrent refresh, late401/session switch, logout versus pending login/refresh, profile mapping, failed login and unavailable reset.
+- [x] Implement request guards, one refresh/retry, memory-only session clear notifications and real auth repository; keep public calls independent of auth retries.
+- [x] Run targeted tests, existing remote catalog and account regressions; commit.
 
 ### Task 2: Profile and addresses
 
 **Files:** new data/remote_account_details.dart, test/remote_account_details_test.dart; app/account_details.dart; features/account/account_page.dart, address_page.dart, account_navigation.dart.
 **Interfaces:** RemoteAccountDetailsRepository(ApiClient) implements existing AccountDetailsRepository; maps address UUID/default and calls GET/POST/PATCH/DELETE users/me/addresses. Unsupported style save throws a useful ApiException.
-- [ ] RED: round-trip Vietnamese address fields/default, update/delete errors, nullable profile phone, real UI validation and identity-switch late-result guard.
-- [ ] Wire repositories and mode-appropriate account/address copy; retain layout and mock labels in demo. Password registration follows API12..128, profile save only supported name/phone fields.
-- [ ] Run focused tests and commit.
+- [x] RED: round-trip Vietnamese address fields/default, update/delete errors, nullable profile phone, real UI validation and identity-switch late-result guard.
+- [x] Wire repositories and mode-appropriate account/address copy; retain layout and mock labels in demo. Password registration follows API12..128, profile save only supported name/phone fields.
+- [x] Run focused tests and commit.
 
 ### Task 3: Cart and order repositories
 
 **Files:** domain/commerce.dart, app/commerce_state.dart, data/mock_commerce.dart; new data/remote_commerce.dart, test/remote_commerce_test.dart.
 **Interfaces:** CartRepository.remove/clear and OrderRepository.setStatus become FutureOr<void> to preserve synchronous mock behavior; remote implementations return Future<void>. Cached remote repositories expose refresh/dispose methods, cart version/item UUIDs, paginated order loading and owned detail loading. CheckoutDraft gains optional addressId. CommerceController awaits async mutations and exposes loading/error/retry.
-- [ ] RED: server monetary strings/UUID mapping, mutations serialized, failed removal retains cache, auth change prevents late data, paginated orders, pending cancellation, timeout retry uses identical idempotency key/body, successful retry clears cart exactly once.
-- [ ] Implement real adapters, bounded validation, server snapshots/status mapping and session-bound cache lifecycle; no local stock mutation.
-- [ ] Run adapter/controller and existing commerce tests; commit.
+- [x] RED: server monetary strings/UUID mapping, mutations serialized, failed removal retains cache, auth change prevents late data, paginated orders, pending cancellation, timeout retry uses identical idempotency key/body, successful retry clears cart exactly once.
+- [x] Implement real adapters, bounded validation, server snapshots/status mapping and session-bound cache lifecycle; no local stock mutation.
+- [x] Run adapter/controller and existing commerce tests; commit.
 
 ### Task 4: Customer UI integration
 
 **Files:** cart_page.dart, checkout_page.dart, orders_page.dart, account_navigation.dart, app/app.dart, core/widgets/store_shell.dart, relevant feature guards; test/remote_shopping_test.dart.
 **Interfaces:** Existing routes and widgets consume the shared providers. Explicit login gate for private pages, pending/error/retry states for API data, saved address selection and COD checkout, persisted order details/cancel.
-- [ ] RED: widget journey login/address/cart/order/cancel using controlled HTTP responses; failed checkout actionable; signout clears data; remote unavailable features cannot claim saved/purchased data.
-- [ ] Preserve layouts while changing data wiring and copy. Avoid demo notices on real saved account/order flows; COD remains unpaid. Guard unsupported remote admin/AI/style paths clearly.
-- [ ] Run widget tests and whole Flutter suite; commit.
+- [x] RED: widget journey login/address/cart/order/cancel using controlled HTTP responses; failed checkout actionable; signout clears data; remote unavailable features cannot claim saved/purchased data.
+- [x] Preserve layouts while changing data wiring and copy. Avoid demo notices on real saved account/order flows; COD remains unpaid. Guard unsupported remote admin/AI/style paths clearly.
+- [x] Run widget tests and whole Flutter suite; commit.
 
 ### Task 5: Live verification and handoff
 
 **Files:** tools/frontend.ps1, docs/setup.md, migration-plan.md, progress.md; new frontend/test/live_shopping_test.dart and bounded tools helper if required.
 **Interfaces:** Frontend helper action api starts Flutter with USE_REMOTE_API and configured local base URL. Live test is opt-in against a dedicated test API/database.
-- [ ] Run live register/login/profile/address/cart/COD/order history/cancel/logout against NestJS + real PostgreSQL test DB, including a new client login restoring persisted data.
-- [ ] Run analyze, full Flutter tests, Web release build, relevant backend E2E if backend changed, and Chrome mobile/desktop checks.
-- [ ] Request one independent final review; fix findings with regression tests, update docs/status honestly, integrate and push under existing authorization.
+- [x] Run live register/login/profile/address/cart/COD/order history/cancel/logout against NestJS + real PostgreSQL test DB, including a new client login restoring persisted data.
+- [x] Run analyze, full Flutter tests, Web release build, relevant backend E2E if backend changed, and Chrome mobile/desktop checks.
+- [x] Request one independent final review; fix findings with regression tests, update docs/status honestly, integrate and push under existing authorization.
+

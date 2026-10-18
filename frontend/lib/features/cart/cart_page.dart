@@ -24,7 +24,9 @@ class CartPage extends ConsumerWidget {
         beforeNavigate: compact ? () => Navigator.pop(context) : null,
       );
     }
-    if (cart.loading || cart.error != null) return CommerceFeedback(cart);
+    if (cart.cartState.needsFeedback) {
+      return CommerceFeedback(cart.cartState, onRetry: cart.refreshCart);
+    }
     final total = cart.cart.subtotal;
     if (cart.items.isEmpty) {
       return StatePanel(
@@ -176,7 +178,7 @@ class CartPage extends ConsumerWidget {
         const SizedBox(height: 32),
         if (cart.remote)
           TextButton.icon(
-            onPressed: cart.cart.locked ? null : cart.refresh,
+            onPressed: cart.cart.locked ? null : cart.refreshCart,
             icon: const Icon(Icons.refresh),
             label: const Text('Cập nhật giỏ hàng'),
           ),

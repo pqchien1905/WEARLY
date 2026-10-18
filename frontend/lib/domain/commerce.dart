@@ -71,6 +71,17 @@ class Order {
   );
 }
 
+/// Exact information shown when a checkout attempt was first confirmed.
+class PendingCheckout {
+  const PendingCheckout({
+    required this.draft,
+    required this.subtotal,
+    required this.shipping,
+  });
+  final CheckoutDraft draft;
+  final int subtotal, shipping;
+}
+
 abstract interface class CartRepository {
   bool get locked;
   void setLocked(bool value);

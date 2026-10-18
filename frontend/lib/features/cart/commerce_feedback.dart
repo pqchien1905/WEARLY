@@ -3,12 +3,12 @@ import '../../app/commerce_state.dart';
 import '../../core/widgets/primitives.dart';
 
 class CommerceFeedback extends StatelessWidget {
-  const CommerceFeedback(this.store, {super.key, this.onRetry});
-  final CommerceController store;
-  final VoidCallback? onRetry;
+  const CommerceFeedback(this.state, {super.key, required this.onRetry});
+  final CommerceLoadState state;
+  final VoidCallback onRetry;
   @override
   Widget build(BuildContext context) {
-    if (store.loading) {
+    if (state.loading) {
       return const Padding(
         padding: EdgeInsets.all(32),
         child: Center(
@@ -16,11 +16,11 @@ class CommerceFeedback extends StatelessWidget {
         ),
       );
     }
-    if (store.error != null) {
+    if (state.error != null) {
       return StatePanel(
         title: 'Chưa tải được dữ liệu',
-        message: '${store.error}',
-        action: AppButton('Thử tải lại', onPressed: onRetry ?? store.refresh),
+        message: '${state.error}',
+        action: AppButton('Thử tải lại', onPressed: onRetry),
       );
     }
     return const SizedBox.shrink();

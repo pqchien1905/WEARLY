@@ -42,7 +42,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
     if (widget.id != null) {
       store.loadOrder(widget.id!);
     } else {
-      store.refresh();
+      store.refreshOrders();
     }
   }
 
@@ -55,8 +55,11 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
   @override
   Widget build(BuildContext context) {
     final store = ref.watch(commerceProvider);
-    if (store.loading || store.error != null) {
-      return CommerceFeedback(store, onRetry: _refresh);
+    final loadState = widget.id == null
+        ? store.historyState
+        : store.detailState(widget.id!);
+    if (loadState.needsFeedback) {
+      return CommerceFeedback(loadState, onRetry: _refresh);
     }
     final orders = store.orders;
     final query = search.text.trim().toLowerCase();

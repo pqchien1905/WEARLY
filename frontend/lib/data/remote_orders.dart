@@ -1,4 +1,5 @@
 import 'dart:math';
+import '../app/config.dart';
 import '../core/network/api_client.dart';
 import '../domain/commerce.dart';
 import 'commerce_json.dart';
@@ -15,11 +16,12 @@ class RemoteOrderRepository implements OrderRepository {
   List<Order> _orders = [];
   int _page = 0, _loaded = 0, _total = 0;
   Future<void> _tail = Future<void>.value();
-  ({String key, Map<String, Object?> body})? _attempt;
+  ({String key, Map<String, Object?> body, PendingCheckout snapshot})? _attempt;
   @override
   List<Order> get orders => List.unmodifiable(_orders);
   bool get hasMore => _loaded < _total;
   bool get hasPendingCheckout => _attempt != null;
+  PendingCheckout? get pendingCheckout => _attempt?.snapshot;
 
   void _check() {
     if (_disposed || api.tokens.generation != _generation) throw sessionChanged;
@@ -117,6 +119,15 @@ class RemoteOrderRepository implements OrderRepository {
       }
       final random = Random.secure();
       _attempt = (
+        snapshot: PendingCheckout(
+          draft: draft,
+          subtotal: cart.subtotal,
+          shipping: draft.express
+              ? BrandConfig.expressFee
+              : cart.subtotal >= BrandConfig.freeShippingAt
+              ? 0
+              : BrandConfig.shippingFee,
+        ),
         key: List.generate(
           24,
           (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
@@ -153,7 +164,7 @@ class RemoteOrderRepository implements OrderRepository {
     } on ApiException catch (error) {
       // A lost/invalid success response may already have committed. Reuse the
       // original body and key until the server gives a definitive answer.
-      if (error.status != null && error.status! >= 400 && error.status! < 500) {
+      if ([400, 404, 409, 422].contains(error.status)) {
         _attempt = null;
         cart.setLocked(false);
       }

@@ -46,7 +46,7 @@ Register `{name,email,password}`; password 12..128 ký tự, email normalize low
 {"user":{"id":"uuid","email":"customer@example.com","name":"An","phone":"","role":"CUSTOMER"},"accessToken":"JWT","refreshToken":"JWT","expiresIn":900}
 ```
 
-POST refresh `{refreshToken}` xoay token và vô hiệu hóa session cũ. Replay token cũ revoke toàn family. Logout cần access token, revoke family. Tokens không được log hoặc lưu vào URL. API hiện dành cho bearer clients; Flutter auth chưa tích hợp.
+POST refresh `{refreshToken}` xoay token và vô hiệu hóa session cũ. Replay token cũ revoke toàn family. Logout cần access token, revoke family. Tokens không được log hoặc lưu vào URL. Flutter đã tích hợp bearer auth khi bật `USE_REMOTE_API=true`; access/refresh token chỉ ở RAM, refresh đồng thời được gộp, logout/đổi tài khoản loại cache cá nhân. Sau reload cần đăng nhập lại, dữ liệu trên PostgreSQL vẫn được giữ.
 
 ## Catalog
 

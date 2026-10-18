@@ -27,19 +27,27 @@ module.exports = async function verify({ root, fixture }) {
     async function semantics() { await page.waitForTimeout(700); await page.evaluate(() => document.querySelector('flt-semantics-placeholder')?.click()); }
     async function route(value) { await page.evaluate(value => { location.hash = value; }, value); await page.waitForTimeout(400); }
     async function button(name) { const node = page.getByRole('button', { name, exact: true }); await node.scrollIntoViewIfNeeded(); await node.click(); }
+    async function fill(name, value) {
+      const field = page.getByRole('textbox', { name, exact: true });
+      await field.fill(value);
+      // Flutter synchronizes the HTML editing element with Dart on the next
+      // frame. Do not immediately move focus and race that synchronization.
+      await page.waitForTimeout(120);
+      assert.equal(await field.inputValue(), value, 'Field did not retain input: ' + name);
+    }
     const email = 'browser-' + fixture + '@example.com';
     await page.goto('http://127.0.0.1:4183/#/register'); await semantics();
-    await page.getByRole('textbox', { name: 'Tên của bạn', exact: true }).fill('Nguyễn Trình Duyệt');
-    await page.getByRole('textbox', { name: 'Email', exact: true }).fill(email);
-    await page.getByRole('textbox', { name: 'Mật khẩu', exact: true }).fill('Browser-only-Password-2026');
+    await fill('Tên của bạn', 'Nguyễn Trình Duyệt');
+    await fill('Email', email);
+    await fill('Mật khẩu', 'Browser-only-Password-2026');
     await button('Tạo tài khoản');
     await page.getByText('Chào Nguyễn Trình Duyệt.', { exact: true }).waitFor();
     console.log('Chrome: registration persisted.');
     await route('/account/addresses'); await button('Thêm địa chỉ');
-    await page.getByRole('textbox', { name: 'Tên gợi nhớ', exact: true }).fill('Nhà');
-    await page.getByRole('textbox', { name: 'Người nhận', exact: true }).fill('Nguyễn Trình Duyệt');
-    await page.getByRole('textbox', { name: 'Điện thoại nhận hàng', exact: true }).fill('0901234567');
-    await page.getByRole('textbox', { name: 'Địa chỉ nhận hàng', exact: true }).fill('12 Nguyễn Huệ, TP.HCM');
+    await fill('Tên gợi nhớ', 'Nhà');
+    await fill('Người nhận', 'Nguyễn Trình Duyệt');
+    await fill('Điện thoại nhận hàng', '0901234567');
+    await fill('Địa chỉ nhận hàng', '12 Nguyễn Huệ, TP.HCM');
     await button('Lưu địa chỉ');
     await page.getByText('12 Nguyễn Huệ, TP.HCM', { exact: true }).waitFor();
     console.log('Chrome: address saved.');
@@ -67,8 +75,8 @@ module.exports = async function verify({ root, fixture }) {
     await page.reload(); await semantics();
     await page.getByText('Đăng nhập để tiếp tục', { exact: true }).waitFor();
     await button('Đăng nhập');
-    await page.getByRole('textbox', { name: 'Email', exact: true }).fill(email);
-    await page.getByRole('textbox', { name: 'Mật khẩu', exact: true }).fill('Browser-only-Password-2026');
+    await fill('Email', email);
+    await fill('Mật khẩu', 'Browser-only-Password-2026');
     await button('Đăng nhập');
     await page.getByText('Đơn đã hủy', { exact: true }).waitFor();
     await route('/faq');

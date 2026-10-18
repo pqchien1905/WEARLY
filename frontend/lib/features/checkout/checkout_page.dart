@@ -27,6 +27,22 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   String payment = 'COD demo';
   String? error, addressId;
   @override
+  void initState() {
+    super.initState();
+    final pending = ref.read(commerceProvider).pendingCheckout;
+    if (pending != null) {
+      name.text = pending.draft.name;
+      email.text = pending.draft.email;
+      phone.text = pending.draft.phone;
+      address.text = pending.draft.address;
+      addressId = pending.draft.addressId;
+      express = pending.draft.express;
+      payment = pending.draft.payment;
+      confirmed = true;
+    }
+  }
+
+  @override
   void dispose() {
     for (final c in [name, email, phone, address]) {
       c.dispose();
@@ -96,7 +112,9 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   @override
   Widget build(BuildContext context) {
     final cart = ref.watch(commerceProvider);
-    if (cart.loading || cart.error != null) return CommerceFeedback(cart);
+    if (cart.cartState.needsFeedback) {
+      return CommerceFeedback(cart.cartState, onRetry: cart.refreshCart);
+    }
     final remote = cart.remote;
     final locked = busy || cart.checkoutPending;
     final profile = ref.watch(accountProvider);
@@ -110,12 +128,14 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         action: AppButton('Về cửa hàng', onPressed: () => context.go('/shop')),
       );
     }
-    final subtotal = cart.cart.subtotal;
-    final shipping = express
-        ? BrandConfig.expressFee
-        : subtotal >= BrandConfig.freeShippingAt
-        ? 0
-        : BrandConfig.shippingFee;
+    final subtotal = cart.pendingCheckout?.subtotal ?? cart.cart.subtotal;
+    final shipping =
+        cart.pendingCheckout?.shipping ??
+        (express
+            ? BrandConfig.expressFee
+            : subtotal >= BrandConfig.freeShippingAt
+            ? 0
+            : BrandConfig.shippingFee);
     final fields = Form(
       key: form,
       child: Column(
@@ -376,8 +396,9 @@ class _OrderSuccessPageState extends ConsumerState<OrderSuccessPage> {
   Widget build(BuildContext context) {
     final store = ref.watch(commerceProvider);
     final id = widget.id;
-    if (store.loading || store.error != null) {
-      return CommerceFeedback(store, onRetry: () => store.loadOrder(id));
+    final loadState = store.detailState(id);
+    if (loadState.needsFeedback) {
+      return CommerceFeedback(loadState, onRetry: () => store.loadOrder(id));
     }
     final order = store.orders.where((o) => o.id == id).firstOrNull;
     return PageBody(
