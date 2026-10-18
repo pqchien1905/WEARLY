@@ -37,4 +37,10 @@ Mở terminal riêng trong `backend` và chạy `npm run build` rồi `npm run w
 
 Swagger: http://localhost:3000/api/docs. Catalog API: http://localhost:3000/api/v1/products.
 
-Frontend mặc định vẫn là demo. Chỉ bật catalog từ API bằng `USE_REMOTE_CATALOG=true` và `API_BASE_URL`; đăng nhập/checkout/admin Flutter chưa chuyển sang API. Không có thanh toán online hoặc ảnh AI giả được trình bày như kết quả thật.
+Mở terminal thứ hai tại `D:\Fashion Shop`, chạy giao diện Flutter kết nối API:
+
+```powershell
+.\tools\frontend.ps1 api
+```
+
+Mở Chrome tại `http://localhost:8080`: đăng ký/đăng nhập, hồ sơ, địa chỉ, giỏ hàng, đặt COD, lịch sử và hủy đơn dùng dữ liệu PostgreSQL. Sau khi tải lại trang cần đăng nhập lại; dữ liệu vẫn được lưu trên máy chủ. Chạy `.\tools\frontend.ps1 run` để xem demo độc lập. Admin, yêu thích, AI và khôi phục mật khẩu chưa nối vào chế độ API; chưa có thanh toán online.

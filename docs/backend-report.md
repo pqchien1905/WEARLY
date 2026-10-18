@@ -1,5 +1,7 @@
 # Báo cáo nền tảng backend Wearly — 18/10/2026
 
+**Cập nhật Flutter API shopping:** Đã nối đăng ký/đăng nhập/refresh/logout, hồ sơ, CRUD địa chỉ, giỏ hàng, COD, lịch sử phân trang/chi tiết và hủy đơn. UI Flutter được giữ, remote mode dùng `tools/frontend.ps1 api`. Kiểm thử PostgreSQL thật và Chrome bao gồm đăng nhập lại để khôi phục dữ liệu, hủy đơn trả kho và resize375/1440px. Không thay backend/schema trong đợt này. Các số liệu foundation bên dưới là lịch sử; kết quả mới tại [progress.md](progress.md).
+
 ## A. Cấu trúc thực tế
 
 ```text
@@ -167,7 +169,7 @@ Nền tảng local đã đáp ứng các tiêu chí chạy API/database/Prisma/a
 ## H. Việc tiếp theo
 
 1. Docker đã phục hồi; tiếp theo kiểm chứng container build/runtime API/worker/MinIO và migrations/seed trên DB container riêng. Worker native đã được kiểm thử.
-2. Nối Flutter auth → địa chỉ → cart → orders cùng cache async và idempotency, bảo toàn UI.
+2. Luồng Flutter auth → địa chỉ → cart → COD/orders đã nối. Tiếp tục remote admin, wishlist/style/reviews và khôi phục mật khẩu; xem [migration-plan.md](migration-plan.md).
 3. Nối private upload hiện có vào Flutter, triển khai TryOnProvider thật, bổ sung cancel riêng job và kiểm thử provider thực.
 4. Payment gateway/webhook và reservation expiry; COD settlement; không tự đánh dấu đã thanh toán.
 5. Hoàn thiện admin audit/concurrency, wishlist/reviews/promotions/style profile, CI, backup/restore và hardening production.

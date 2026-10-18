@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/config.dart';
+import '../../app/api_providers.dart';
 import '../../app/providers.dart';
 import '../design/tokens.dart';
 import '../design/motion.dart';
@@ -10,14 +11,14 @@ import '../../app/commerce_state.dart';
 import '../../features/cart/cart_page.dart';
 import '../../features/product_detail/product_page.dart';
 
-class StoreShell extends StatefulWidget {
+class StoreShell extends ConsumerStatefulWidget {
   const StoreShell({super.key, required this.child});
   final Widget child;
   @override
-  State<StoreShell> createState() => _StoreShellState();
+  ConsumerState<StoreShell> createState() => _StoreShellState();
 }
 
-class _StoreShellState extends State<StoreShell> {
+class _StoreShellState extends ConsumerState<StoreShell> {
   bool announcement = true;
   @override
   Widget build(BuildContext context) {
@@ -101,7 +102,9 @@ class _StoreShellState extends State<StoreShell> {
                   Flexible(
                     flex: 12,
                     child: Text(
-                      'Giao miễn phí từ 1.500.000đ · Chính sách demo',
+                      ref.watch(remoteApiProvider)
+                          ? 'Giao miễn phí từ 1.500.000đ · Thanh toán COD'
+                          : 'Giao miễn phí từ 1.500.000đ · Chính sách demo',
                       textAlign: TextAlign.center,
                       style: T.small.copyWith(
                         color: T.surface,

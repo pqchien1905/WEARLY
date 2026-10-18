@@ -32,6 +32,32 @@ Map<String, Object?> productJson() => {
   ],
 };
 void main() {
+  test(
+    'public catalog reads do not send tokens or refresh a private session',
+    () async {
+      final tokens = SessionTokens()
+        ..set(accessToken: 'private-access', refreshToken: 'private-refresh');
+      final paths = <String>[], authorizations = <String?>[];
+      final api = ApiClient(
+        baseUrl: 'http://localhost/api/v1',
+        tokens: tokens,
+        client: MockClient((request) async {
+          paths.add(request.url.path);
+          authorizations.add(request.headers['authorization']);
+          return http.Response('{}', 401);
+        }),
+      );
+      final repo = RemoteProductRepository(api);
+      await expectLater(
+        repo.list(const ProductQuery()),
+        throwsA(isA<ApiException>()),
+      );
+      expect(paths, ['/api/v1/products']);
+      expect(authorizations, [null]);
+      expect(tokens.accessToken, 'private-access');
+      api.close();
+    },
+  );
   test('maps exact VND, images, variants and existing query filters', () async {
     final repo = RemoteProductRepository(
       ApiClient(

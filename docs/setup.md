@@ -69,6 +69,18 @@ Redis cần sẵn sàng. Provider mặc định Disabled; AI_PROVIDER_URL/API_KE
 
 ## Flutter
 
+Từ root dự án, khi backend đã chạy:
+
+```powershell
+.\tools\frontend.ps1 api
+```
+
+Lệnh mở Flutter trên Chrome, cổng8080, bật `USE_REMOTE_API=true` và API `http://localhost:3000/api/v1`. CORS hiện tại đã cho phép `http://localhost:8080`. Đăng ký tài khoản mới với mật khẩu12–128 ký tự, thêm địa chỉ, chọn size sản phẩm rồi đặt COD. Lịch sử đơn và giỏ hàng lưu theo tài khoản trong PostgreSQL; tải lại trang cần đăng nhập lại vì token chỉ ở RAM. Không cần Docker cho luồng native này.
+
+`./tools/frontend.ps1 build-api` tạo Web release cho API mặc định. `-ApiUrl http://host:port/api/v1` đổi đích kết nối; cấu hình CORS của backend phải khớp origin frontend. Nếu cổng8080 đang chạy Flutter cũ, dùng `Ctrl+C` trong terminal đó rồi chạy lại lệnh trên.
+
+Chạy demo độc lập bằng `.\tools\frontend.ps1 run`, hoặc:
+
 ```powershell
 cd 'D:\Fashion Shop\frontend'
 flutter pub get
@@ -81,7 +93,16 @@ Catalog API opt-in:
 flutter run -d chrome --web-port 5173 --dart-define=USE_REMOTE_CATALOG=true --dart-define=API_BASE_URL=http://localhost:3000/api/v1
 ```
 
-Giữ CORS_ORIGINS khớp origin Flutter. Các chức năng account/checkout/admin vẫn demo, catalog remote chỉ đọc; xem migration-plan.md. Bỏ flag để trở lại demo đầy đủ.
+`USE_REMOTE_CATALOG` chỉ đọc catalog API, các chức năng khác giữ chế độ demo. Dùng `USE_REMOTE_API` cho toàn bộ luồng mua hàng đã nối; không bật chức năng chưa hỗ trợ bằng dữ liệu mô phỏng. Xem [migration-plan.md](migration-plan.md).
+
+Kiểm thử luồng mua hàng với database test riêng (cần backend đã build và migrate `wearly_test`):
+
+```powershell
+node tools/test-frontend-api.cjs
+node tools/test-frontend-api.cjs --browser
+```
+
+Helper xác minh tên database kết thúc `_test`, tạo API trên cổng tạm, tạo fixture riêng rồi dọn đúng dữ liệu của lần chạy. Tùy chọn browser cần Playwright trong `.tools/browser`, Chrome cài sẵn và cổng4183 trống; tự build Web với URL API tạm. Sau kiểm thử browser, chạy `build-api` nếu muốn bản release dùng backend thường. Test không sửa dữ liệu trong `wearly`.
 
 Android emulator (sau khi bổ sung platform) dùng http://10.0.2.2:3000/api/v1. iOS simulator trên macOS thường dùng localhost; thiết bị thật dùng IP LAN của máy host và firewall phù hợp. Web production dùng HTTPS domain, không hardcode localhost. Dự án hiện chỉ có Flutter Web; chưa xác nhận mobile build.
 

@@ -10,8 +10,10 @@ class RemoteProductRepository implements ProductRepository {
     if (query.includeInactive) {
       throw UnsupportedError('Danh mục quản trị chưa được kết nối API.');
     }
-    final response = await api.get(
+    final response = await api.request(
+      'GET',
       'products',
+      authenticated: false,
       query: {
         if (query.search.isNotEmpty) 'q': query.search,
         if (query.category.isNotEmpty) 'category': query.category,
@@ -43,7 +45,11 @@ class RemoteProductRepository implements ProductRepository {
   @override
   Future<Product?> bySlug(String slug) async {
     try {
-      final data = await api.get('products/${Uri.encodeComponent(slug)}');
+      final data = await api.request(
+        'GET',
+        'products/${Uri.encodeComponent(slug)}',
+        authenticated: false,
+      );
       return _product(data as Map<String, dynamic>);
     } on ApiException catch (e) {
       if (e.status == 404) return null;
@@ -55,7 +61,11 @@ class RemoteProductRepository implements ProductRepository {
 
   @override
   Future<List<String>> availableColors() async {
-    final response = await api.get('products/facets');
+    final response = await api.request(
+      'GET',
+      'products/facets',
+      authenticated: false,
+    );
     try {
       return List<String>.from((response as Map)['colors'] as List);
     } catch (_) {
