@@ -27,11 +27,12 @@ class RemoteCartRepository implements CartRepository {
   Future<void> _queue(Future<void> Function() action) {
     try {
       _check();
-      if (_checkoutLocked)
+      if (_checkoutLocked) {
         throw const ApiException(
           'CART_LOCKED',
           'Đang xác nhận đơn hàng. Hãy thử lại yêu cầu đặt hàng trước khi sửa giỏ.',
         );
+      }
     } catch (error, stack) {
       return Future<void>.error(error, stack);
     }
@@ -41,7 +42,7 @@ class RemoteCartRepository implements CartRepository {
       await action();
     });
     final result = future.whenComplete(() => _pending--);
-    _tail = result.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    _tail = result.then<void>((_) {}, onError: (Object _, StackTrace _) {});
     return result;
   }
 
@@ -57,26 +58,29 @@ class RemoteCartRepository implements CartRepository {
     if (data['currency'] != 'VND' ||
         data['items'] is! List ||
         version is! int ||
-        version < 0)
+        version < 0) {
       throw invalidCommerce;
+    }
     final items = (data['items'] as List)
         .map((item) => commerceItem(item, cart: true))
         .toList();
     if (items.fold<int>(0, (sum, item) => sum + item.total) !=
             vnd(data['subtotal']) ||
-        items.map((item) => item.sku).toSet().length != items.length)
+        items.map((item) => item.sku).toSet().length != items.length) {
       throw invalidCommerce;
+    }
     _items = items;
     _version = version;
   }
 
   String _itemPath(String sku) {
     final item = _items.where((item) => item.sku == sku).firstOrNull;
-    if (item == null)
+    if (item == null) {
       throw const ApiException(
         'ITEM_MISSING',
         'Sản phẩm không còn trong giỏ. Hãy tải lại.',
       );
+    }
     return 'cart/items/${Uri.encodeComponent(item.id)}';
   }
 

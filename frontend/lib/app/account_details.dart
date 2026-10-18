@@ -11,8 +11,9 @@ final accountDetailsRepositoryProvider = Provider<AccountDetailsRepository>((
   ref,
 ) {
   ref.watch(accountProvider.select((user) => user?.email));
-  if (ref.watch(remoteApiProvider))
+  if (ref.watch(remoteApiProvider)) {
     return RemoteAccountDetailsRepository(ref.watch(apiClientProvider));
+  }
   return MockAccountDetailsRepository();
 });
 

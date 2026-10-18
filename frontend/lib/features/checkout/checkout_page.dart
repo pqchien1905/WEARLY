@@ -9,6 +9,7 @@ import '../../core/design/tokens.dart';
 import '../../core/widgets/primitives.dart';
 import '../../domain/commerce.dart';
 import '../cart/cart_page.dart';
+import '../cart/commerce_feedback.dart';
 
 class CheckoutPage extends ConsumerStatefulWidget {
   const CheckoutPage({super.key});
@@ -24,7 +25,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       address = TextEditingController();
   bool express = false, busy = false, confirmed = false;
   String payment = 'COD demo';
-  String? error;
+  String? error, addressId;
   @override
   void dispose() {
     for (final c in [name, email, phone, address]) {
@@ -34,12 +35,29 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   }
 
   Future<void> submit() async {
-    if (!form.currentState!.validate()) {
+    if (busy) return;
+    final store = ref.read(commerceProvider);
+    final retry = store.checkoutPending;
+    if (!retry && !form.currentState!.validate()) {
       return;
     }
-    if (!confirmed) {
+    if (!retry &&
+        store.remote &&
+        !(ref
+                .read(accountDetailsProvider)
+                .asData
+                ?.value
+                .addresses
+                .any((a) => a.id == addressId) ??
+            false)) {
+      setState(() => error = 'Hãy chọn một địa chỉ đã lưu trước khi đặt hàng.');
+      return;
+    }
+    if (!retry && !confirmed) {
       setState(
-        () => error = 'Xác nhận đây là đơn hàng mô phỏng trước khi tiếp tục.',
+        () => error = store.remote
+            ? 'Vui lòng xác nhận thông tin nhận hàng và đặt đơn COD.'
+            : 'Xác nhận đây là đơn hàng mô phỏng trước khi tiếp tục.',
       );
       return;
     }
@@ -56,8 +74,9 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               email: email.text.trim(),
               phone: phone.text.trim(),
               address: address.text.trim(),
+              addressId: addressId,
               express: express,
-              payment: payment,
+              payment: store.remote ? 'COD' : payment,
             ),
           );
       if (mounted) {
@@ -77,6 +96,9 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   @override
   Widget build(BuildContext context) {
     final cart = ref.watch(commerceProvider);
+    if (cart.loading || cart.error != null) return CommerceFeedback(cart);
+    final remote = cart.remote;
+    final locked = busy || cart.checkoutPending;
     final profile = ref.watch(accountProvider);
     final savedAddresses = profile == null
         ? null
@@ -99,10 +121,19 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const DemoNotice(
-            text:
-                'Đặt hàng demo. Không có thanh toán hoặc giao hàng thật. Bạn có thể dùng thông tin minh họa.',
+          DemoNotice(
+            text: remote
+                ? 'Chọn địa chỉ đã lưu. Đơn hàng sẽ được gửi đến cửa hàng; thanh toán COD khi nhận hàng.'
+                : 'Đặt hàng demo. Không có thanh toán hoặc giao hàng thật. Bạn có thể dùng thông tin minh họa.',
           ),
+          if (cart.checkoutPending)
+            const Padding(
+              padding: EdgeInsets.only(top: 16),
+              child: DemoNotice(
+                text:
+                    'Chưa xác định được kết quả đặt hàng. Bấm “Kiểm tra lại đơn vừa đặt” để xác nhận yêu cầu cũ, tránh tạo đơn trùng.',
+              ),
+            ),
           const SizedBox(height: 28),
           Text('Thông tin nhận hàng', style: T.display(26)),
           const SizedBox(height: 24),
@@ -124,6 +155,10 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                             .join('|'),
                       ),
                       isExpanded: true,
+                      initialValue:
+                          details.addresses.any((a) => a.id == addressId)
+                          ? addressId
+                          : null,
                       decoration: const InputDecoration(
                         labelText: 'Chọn địa chỉ đã lưu',
                       ),
@@ -139,13 +174,14 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                             ),
                           )
                           .toList(),
-                      onChanged: busy
+                      onChanged: locked
                           ? null
                           : (id) {
                               final selected = details.addresses.firstWhere(
                                 (a) => a.id == id,
                               );
                               name.text = selected.recipient;
+                              addressId = selected.id;
                               phone.text = selected.phone;
                               address.text = selected.address;
                               if (email.text.isEmpty) {
@@ -164,12 +200,14 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
           ],
           AppField(
             label: 'Họ và tên',
+            readOnly: remote || locked,
             controller: name,
             validator: requiredValue,
           ),
           const SizedBox(height: 16),
           AppField(
             label: 'Email',
+            readOnly: remote || locked,
             controller: email,
             validator: emailValidator,
             keyboardType: TextInputType.emailAddress,
@@ -177,6 +215,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
           const SizedBox(height: 16),
           AppField(
             label: 'Số điện thoại',
+            readOnly: remote || locked,
             controller: phone,
             keyboardType: TextInputType.phone,
             validator: (v) => RegExp(r'^0\d{9}$').hasMatch(v?.trim() ?? '')
@@ -186,6 +225,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
           const SizedBox(height: 16),
           AppField(
             label: 'Địa chỉ đầy đủ',
+            readOnly: remote || locked,
             controller: address,
             maxLines: 2,
             validator: (v) => (v?.trim().length ?? 0) >= 8
@@ -196,37 +236,42 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
           CheckboxListTile(
             contentPadding: EdgeInsets.zero,
             value: express,
-            onChanged: busy
+            onChanged: locked
                 ? null
                 : (v) => setState(() => express = v ?? false),
             title: const Text('Giao nhanh · 50.000đ'),
-            subtitle: const Text(
-              'Thời gian giao minh họa: 1–2 ngày',
+            subtitle: Text(
+              remote
+                  ? 'Cửa hàng sẽ xác nhận lịch giao sau khi tiếp nhận đơn.'
+                  : 'Thời gian giao minh họa: 1–2 ngày',
               style: T.small,
             ),
           ),
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(
             isExpanded: true,
-            initialValue: payment,
+            initialValue: remote ? 'COD' : payment,
             decoration: const InputDecoration(
               labelText: 'Phương thức thanh toán',
             ),
-            items: [
-              'COD demo',
-              'Thẻ / ví điện tử demo',
-            ].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
-            onChanged: busy ? null : (v) => setState(() => payment = v!),
+            items: (remote ? ['COD'] : ['COD demo', 'Thẻ / ví điện tử demo'])
+                .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+                .toList(),
+            onChanged: locked || remote
+                ? null
+                : (v) => setState(() => payment = v!),
           ),
           const SizedBox(height: 20),
           CheckboxListTile(
             contentPadding: EdgeInsets.zero,
             value: confirmed,
-            onChanged: busy
+            onChanged: locked
                 ? null
                 : (v) => setState(() => confirmed = v ?? false),
-            title: const Text(
-              'Tôi hiểu đây là đơn mô phỏng, không thanh toán thật.',
+            title: Text(
+              remote
+                  ? 'Tôi xác nhận thông tin nhận hàng và đặt đơn COD.'
+                  : 'Tôi hiểu đây là đơn mô phỏng, không thanh toán thật.',
               style: T.body,
             ),
           ),
@@ -239,9 +284,18 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       ),
     );
     final summary = CartSummary(
+      remote: remote,
       subtotal: subtotal,
       shipping: shipping,
-      action: AppButton('Tạo đơn hàng demo', busy: busy, onPressed: submit),
+      action: AppButton(
+        cart.checkoutPending
+            ? 'Kiểm tra lại đơn vừa đặt'
+            : remote
+            ? 'Đặt hàng COD'
+            : 'Tạo đơn hàng demo',
+        busy: busy,
+        onPressed: cart.cart.locked && !cart.checkoutPending ? null : submit,
+      ),
     );
     return PageBody(
       child: Center(
@@ -302,26 +356,48 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   }
 }
 
-class OrderSuccessPage extends ConsumerWidget {
+class OrderSuccessPage extends ConsumerStatefulWidget {
   const OrderSuccessPage({super.key, required this.id});
   final String id;
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final order = ref
-        .watch(commerceProvider)
-        .orders
-        .where((o) => o.id == id)
-        .firstOrNull;
+  ConsumerState<OrderSuccessPage> createState() => _OrderSuccessPageState();
+}
+
+class _OrderSuccessPageState extends ConsumerState<OrderSuccessPage> {
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() {
+      if (mounted) ref.read(commerceProvider).loadOrder(widget.id);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final store = ref.watch(commerceProvider);
+    final id = widget.id;
+    if (store.loading || store.error != null) {
+      return CommerceFeedback(store, onRetry: () => store.loadOrder(id));
+    }
+    final order = store.orders.where((o) => o.id == id).firstOrNull;
     return PageBody(
       child: Column(
         children: [
           StatePanel(
             title: order == null
-                ? 'Không tìm thấy đơn trong phiên này'
-                : 'Đã tạo đơn demo $id',
+                ? (store.remote
+                      ? 'Không tìm thấy đơn hàng'
+                      : 'Không tìm thấy đơn trong phiên này')
+                : (store.remote
+                      ? 'Đã tiếp nhận đơn hàng'
+                      : 'Đã tạo đơn demo $id'),
             message: order == null
-                ? 'Dữ liệu demo được xóa khi tải lại trang.'
-                : 'Đơn hàng mô phỏng – chưa thanh toán thật',
+                ? (store.remote
+                      ? 'Kiểm tra lại mã đơn trong lịch sử tài khoản.'
+                      : 'Dữ liệu demo được xóa khi tải lại trang.')
+                : (store.remote
+                      ? '$id · ${order.status}\n${order.draft.payment}'
+                      : 'Đơn hàng mô phỏng – chưa thanh toán thật'),
             icon: Icons.check_circle_outline,
             action: AppButton(
               'Tiếp tục khám phá',
@@ -332,6 +408,7 @@ class OrderSuccessPage extends ConsumerWidget {
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 520),
               child: CartSummary(
+                remote: store.remote,
                 subtotal: order.subtotal,
                 shipping: order.shipping,
                 action: AppButton(

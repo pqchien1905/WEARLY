@@ -7,6 +7,7 @@ import '../../core/design/tokens.dart';
 import '../../core/format.dart';
 import '../../core/widgets/primitives.dart';
 import '../cart/cart_page.dart';
+import '../cart/commerce_feedback.dart';
 import 'account_navigation.dart';
 
 const orderStages = [
@@ -28,6 +29,24 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
   final search = TextEditingController();
   String status = '';
   @override
+  void initState() {
+    super.initState();
+    Future.microtask(() {
+      if (mounted) _refresh();
+    });
+  }
+
+  void _refresh() {
+    final store = ref.read(commerceProvider);
+    if (!store.remote) return;
+    if (widget.id != null) {
+      store.loadOrder(widget.id!);
+    } else {
+      store.refresh();
+    }
+  }
+
+  @override
   void dispose() {
     search.dispose();
     super.dispose();
@@ -35,7 +54,11 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
 
   @override
   Widget build(BuildContext context) {
-    final orders = ref.watch(commerceProvider).orders;
+    final store = ref.watch(commerceProvider);
+    if (store.loading || store.error != null) {
+      return CommerceFeedback(store, onRetry: _refresh);
+    }
+    final orders = store.orders;
     final query = search.text.trim().toLowerCase();
     final selected = orders.where((o) => o.id == widget.id).firstOrNull;
     final filtered =
@@ -57,10 +80,17 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const DemoNotice(
-            text:
-                'Đơn hàng mô phỏng – chưa thanh toán thật. Lịch sử của tab hiện tại, không phải dữ liệu tài khoản đã xác thực. Tải lại trang sẽ xóa đơn.',
+          DemoNotice(
+            text: store.remote
+                ? 'Đơn hàng được lưu theo tài khoản. Đơn COD chỉ được thanh toán khi bạn nhận hàng.'
+                : 'Đơn hàng mô phỏng – chưa thanh toán thật. Lịch sử của tab hiện tại, không phải dữ liệu tài khoản đã xác thực. Tải lại trang sẽ xóa đơn.',
           ),
+          if (store.remote)
+            TextButton.icon(
+              onPressed: _refresh,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Cập nhật đơn hàng'),
+            ),
           const SizedBox(height: 24),
           if (widget.id != null) ...[
             TextButton.icon(
@@ -72,15 +102,16 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
             if (selected == null)
               StatePanel(
                 title: 'Không tìm thấy đơn hàng',
-                message:
-                    'Mã đơn không có trong tab này hoặc dữ liệu đã mất khi tải lại trang.',
+                message: store.remote
+                    ? 'Không tìm thấy đơn hàng trong tài khoản của bạn.'
+                    : 'Mã đơn không có trong tab này hoặc dữ liệu đã mất khi tải lại trang.',
                 action: AppButton(
-                  'Xem đơn trong phiên',
+                  store.remote ? 'Xem lịch sử đơn hàng' : 'Xem đơn trong phiên',
                   onPressed: () => context.go('/account/orders'),
                 ),
               )
             else
-              _OrderDetail(order: selected),
+              _OrderDetail(order: selected, remote: store.remote),
           ] else ...[
             LayoutBuilder(
               builder: (_, c) => Wrap(
@@ -107,14 +138,23 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                       decoration: const InputDecoration(
                         labelText: 'Trạng thái',
                       ),
-                      items: ['', ...orderStages, 'Đã hủy']
-                          .map(
-                            (s) => DropdownMenuItem(
-                              value: s,
-                              child: Text(s.isEmpty ? 'Tất cả trạng thái' : s),
-                            ),
-                          )
-                          .toList(),
+                      items:
+                          [
+                                '',
+                                ...orderStages.where(
+                                  (s) => !store.remote || s != 'Đang đóng gói',
+                                ),
+                                'Đã hủy',
+                              ]
+                              .map(
+                                (s) => DropdownMenuItem(
+                                  value: s,
+                                  child: Text(
+                                    s.isEmpty ? 'Tất cả trạng thái' : s,
+                                  ),
+                                ),
+                              )
+                              .toList(),
                       onChanged: (v) => setState(() => status = v!),
                     ),
                   ),
@@ -141,10 +181,14 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
             if (filtered.isEmpty)
               StatePanel(
                 title: orders.isEmpty
-                    ? 'Chưa có đơn trong phiên này'
+                    ? (store.remote
+                          ? 'Bạn chưa có đơn hàng'
+                          : 'Chưa có đơn trong phiên này')
                     : 'Không có đơn phù hợp',
                 message: orders.isEmpty
-                    ? 'Đơn được tạo từ checkout demo sẽ xuất hiện ở đây.'
+                    ? (store.remote
+                          ? 'Đơn bạn đặt sẽ xuất hiện tại đây.'
+                          : 'Đơn được tạo từ checkout demo sẽ xuất hiện ở đây.')
                     : 'Thử mã đơn khác hoặc bỏ bộ lọc trạng thái.',
                 action: AppButton(
                   orders.isEmpty ? 'Khám phá cửa hàng' : 'Bỏ bộ lọc',
@@ -161,6 +205,12 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                 ),
               ),
             for (final order in filtered) _OrderCard(order: order),
+            if (store.hasMoreOrders)
+              AppButton(
+                'Tải thêm đơn hàng',
+                outlined: true,
+                onPressed: store.loadMoreOrders,
+              ),
           ],
         ],
       ),
@@ -262,16 +312,21 @@ class OrderStatusLabel extends StatelessWidget {
 }
 
 class OrderProgress extends StatelessWidget {
-  const OrderProgress({super.key, required this.status});
+  const OrderProgress({super.key, required this.status, this.remote = false});
   final String status;
+  final bool remote;
   @override
   Widget build(BuildContext context) {
-    final current = orderStages.indexOf(status);
+    final stages = orderStages
+        .where((s) => !remote || s != 'Đang đóng gói')
+        .toList();
+    final current = stages.indexOf(status);
     if (status == 'Đã hủy') {
-      return const StatePanel(
+      return StatePanel(
         title: 'Đơn đã hủy',
-        message:
-            'Đây là thay đổi trạng thái mô phỏng; không thực hiện hoàn tiền hoặc vận chuyển thật.',
+        message: remote
+            ? 'Đơn hàng đã được hủy. Số lượng sản phẩm đã được trả lại kho.'
+            : 'Đây là thay đổi trạng thái mô phỏng; không thực hiện hoàn tiền hoặc vận chuyển thật.',
         icon: Icons.cancel_outlined,
       );
     }
@@ -285,8 +340,10 @@ class OrderProgress extends StatelessWidget {
       children: [
         Text('Tiến trình đơn hàng', style: T.display(26)),
         const SizedBox(height: 12),
-        const Text(
-          'Minh họa theo trạng thái hiện tại; chưa có vận đơn hay mốc giao hàng thực tế.',
+        Text(
+          remote
+              ? 'Trạng thái do cửa hàng cập nhật. Chưa có thông tin vận đơn.'
+              : 'Minh họa theo trạng thái hiện tại; chưa có vận đơn hay mốc giao hàng thực tế.',
           style: T.small,
         ),
         const SizedBox(height: 24),
@@ -295,7 +352,7 @@ class OrderProgress extends StatelessWidget {
             spacing: 16,
             runSpacing: 16,
             children: [
-              for (var i = 0; i < orderStages.length; i++)
+              for (var i = 0; i < stages.length; i++)
                 SizedBox(
                   width: c.maxWidth < 700 ? c.maxWidth : (c.maxWidth - 64) / 5,
                   child: Semantics(
@@ -313,7 +370,7 @@ class OrderProgress extends StatelessWidget {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            orderStages[i],
+                            stages[i],
                             style: T.small.copyWith(
                               color: i == current ? T.accent : T.muted,
                               fontWeight: i == current
@@ -335,8 +392,9 @@ class OrderProgress extends StatelessWidget {
 }
 
 class _OrderDetail extends StatelessWidget {
-  const _OrderDetail({required this.order});
+  const _OrderDetail({required this.order, this.remote = false});
   final Order order;
+  final bool remote;
   @override
   Widget build(BuildContext context) => ConstrainedBox(
     constraints: const BoxConstraints(maxWidth: 1120),
@@ -352,7 +410,8 @@ class _OrderDetail extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 28),
-        OrderProgress(status: order.status),
+        OrderProgress(status: order.status, remote: remote),
+        if (remote && order.status == 'Chờ xác nhận') _CancelOrder(order.id),
         const Divider(height: 64),
         Text('Thông tin nhận hàng', style: T.display(26)),
         const SizedBox(height: 16),
@@ -365,7 +424,9 @@ class _OrderDetail extends StatelessWidget {
         Text(order.draft.address),
         const SizedBox(height: 12),
         Text(
-          '${order.draft.express ? 'Giao nhanh' : 'Giao tiêu chuẩn'} · ${order.draft.payment}',
+          remote
+              ? order.draft.payment
+              : '${order.draft.express ? 'Giao nhanh' : 'Giao tiêu chuẩn'} · ${order.draft.payment}',
           style: T.small,
         ),
         const Divider(height: 48),
@@ -406,6 +467,7 @@ class _OrderDetail extends StatelessWidget {
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 480),
           child: CartSummary(
+            remote: remote,
             subtotal: order.subtotal,
             shipping: order.shipping,
           ),
@@ -430,3 +492,56 @@ class _OrderDetail extends StatelessWidget {
 
 String orderDate(DateTime date) =>
     '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+
+class _CancelOrder extends ConsumerStatefulWidget {
+  const _CancelOrder(this.id);
+  final String id;
+  @override
+  ConsumerState<_CancelOrder> createState() => _CancelOrderState();
+}
+
+class _CancelOrderState extends ConsumerState<_CancelOrder> {
+  bool busy = false;
+  Future<void> cancel() async {
+    final store = ref.read(commerceProvider);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hủy đơn hàng này?'),
+        content: const Text(
+          'Đơn đang chờ xác nhận sẽ được hủy và sản phẩm được trả lại kho.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Giữ đơn'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xác nhận hủy'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    setState(() => busy = true);
+    try {
+      await store.setStatus(widget.id, 'Đã hủy');
+    } catch (error) {
+      if (mounted) toast(context, '$error');
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 24),
+    child: AppButton(
+      'Hủy đơn hàng',
+      outlined: true,
+      busy: busy,
+      onPressed: cancel,
+    ),
+  );
+}

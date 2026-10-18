@@ -12,6 +12,7 @@ import '../features/info/info_page.dart';
 import '../features/info/support_pages.dart';
 import '../features/info/collection_page.dart';
 import 'config.dart';
+import 'remote_route_gate.dart';
 import '../features/cart/cart_page.dart';
 import '../features/checkout/checkout_page.dart';
 import '../features/ai_stylist/stylist_page.dart';
@@ -40,8 +41,13 @@ GoRoute appRoute({
           : EdgeInsets.zero,
       child: PageReveal(
         child: path.startsWith('/admin')
-            ? builder(c, s)
-            : Column(children: [builder(c, s), const StoreFooter()]),
+            ? RemoteRouteGate(path: s.uri.path, child: builder(c, s))
+            : Column(
+                children: [
+                  RemoteRouteGate(path: s.uri.path, child: builder(c, s)),
+                  const StoreFooter(),
+                ],
+              ),
       ),
     ),
   ),

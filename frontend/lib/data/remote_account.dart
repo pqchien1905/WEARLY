@@ -42,8 +42,9 @@ class RemoteAccountRepository implements AccountRepository {
             )
             as Map<String, dynamic>;
     final profile = userFromJson(value['user']);
-    if (operation != _operation || api.tokens.generation != generation)
+    if (operation != _operation || api.tokens.generation != generation) {
       throw sessionChanged;
+    }
     api.tokens.set(
       accessToken: value['accessToken'] as String,
       refreshToken: value['refreshToken'] as String,

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/commerce_state.dart';
+import '../../app/remote_route_gate.dart';
+import 'commerce_feedback.dart';
 import '../../app/config.dart';
 import '../../app/providers.dart';
 import '../../core/design/tokens.dart';
@@ -16,6 +18,13 @@ class CartPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cart = ref.watch(commerceProvider);
+    if (cart.requiresLogin) {
+      return LoginRequired(
+        next: '/cart',
+        beforeNavigate: compact ? () => Navigator.pop(context) : null,
+      );
+    }
+    if (cart.loading || cart.error != null) return CommerceFeedback(cart);
     final total = cart.cart.subtotal;
     if (cart.items.isEmpty) {
       return StatePanel(
@@ -82,7 +91,13 @@ class CartPage extends ConsumerWidget {
                       tooltip: 'Xóa ${item.name}',
                       onPressed: cart.cart.locked
                           ? null
-                          : () => cart.remove(item.sku),
+                          : () async {
+                              try {
+                                await cart.remove(item.sku);
+                              } catch (e) {
+                                if (context.mounted) toast(context, '$e');
+                              }
+                            },
                       icon: const Icon(Icons.close, size: 18),
                     ),
                   ],
@@ -109,6 +124,11 @@ class CartPage extends ConsumerWidget {
                     ),
                     TextButton(
                       onPressed: () {
+                        if (cart.remote) {
+                          if (compact) Navigator.pop(context);
+                          context.go('/wishlist');
+                          return;
+                        }
                         ref
                             .read(wishlistProvider.notifier)
                             .toggle(item.slug.replaceFirst('nep-', 'p'));
@@ -129,6 +149,7 @@ class CartPage extends ConsumerWidget {
       ],
     );
     final summary = CartSummary(
+      remote: cart.remote,
       subtotal: total,
       shipping: total >= BrandConfig.freeShippingAt
           ? 0
@@ -149,10 +170,21 @@ class CartPage extends ConsumerWidget {
         Text('Giỏ hàng của bạn', style: T.display(compact ? 28 : 40)),
         const SizedBox(height: 12),
         Text(
-          '${cart.count} sản phẩm · Dữ liệu trong phiên demo',
+          '${cart.count} sản phẩm · ${cart.remote ? 'Đã lưu vào tài khoản' : 'Dữ liệu trong phiên demo'}',
           style: T.small,
         ),
         const SizedBox(height: 32),
+        if (cart.remote)
+          TextButton.icon(
+            onPressed: cart.cart.locked ? null : cart.refresh,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Cập nhật giỏ hàng'),
+          ),
+        if (cart.checkoutPending)
+          const DemoNotice(
+            text:
+                'Đơn vừa đặt đang chờ xác nhận kết quả. Tiếp tục đặt hàng để kiểm tra lại, tránh tạo thêm đơn.',
+          ),
         LayoutBuilder(
           builder: (_, c) => c.maxWidth < 850
               ? Column(children: [lines, const SizedBox(height: 24), summary])
@@ -179,9 +211,11 @@ class CartSummary extends StatelessWidget {
     required this.subtotal,
     required this.shipping,
     this.action,
+    this.remote = false,
   });
   final int subtotal, shipping;
   final Widget? action;
+  final bool remote;
   @override
   Widget build(BuildContext context) => Container(
     width: double.infinity,
@@ -202,8 +236,10 @@ class CartSummary extends StatelessWidget {
         const Divider(),
         _line('Tổng cộng', money(subtotal + shipping), strong: true),
         const SizedBox(height: 12),
-        const Text(
-          'Giá và phí vận chuyển mô phỏng, không thu tiền.',
+        Text(
+          remote
+              ? 'Thanh toán COD khi nhận hàng. Tổng tiền được xác nhận khi tạo đơn.'
+              : 'Giá và phí vận chuyển mô phỏng, không thu tiền.',
           style: T.small,
         ),
         if (action != null) ...[

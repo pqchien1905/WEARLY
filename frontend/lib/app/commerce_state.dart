@@ -10,19 +10,21 @@ import 'api_providers.dart';
 import 'providers.dart';
 
 final cartRepositoryProvider = Provider<CartRepository>((ref) {
-  if (!ref.watch(remoteApiProvider))
+  if (!ref.watch(remoteApiProvider)) {
     return MockCartRepository(ref.watch(productRepositoryProvider));
+  }
   ref.watch(accountProvider.select((user) => (user?.id, user?.email)));
   final cart = RemoteCartRepository(ref.watch(apiClientProvider));
   ref.onDispose(cart.dispose);
   return cart;
 });
 final orderRepositoryProvider = Provider<OrderRepository>((ref) {
-  if (!ref.watch(remoteApiProvider))
+  if (!ref.watch(remoteApiProvider)) {
     return MockOrderRepository(
       ref.watch(productRepositoryProvider),
       ref.watch(cartRepositoryProvider),
     );
+  }
   final identity = ref.watch(
     accountProvider.select((user) => (user?.id, user?.email)),
   );
@@ -53,10 +55,11 @@ class CommerceController extends ChangeNotifier {
     this.remote = false,
     this.signedIn = false,
   }) {
-    if (remote && signedIn)
+    if (remote && signedIn) {
       Future.microtask(() {
         if (!_disposed) refresh();
       });
+    }
   }
   final bool remote, signedIn;
   bool loading = false;
@@ -91,11 +94,12 @@ class CommerceController extends ChangeNotifier {
   int get count => items.fold(0, (sum, i) => sum + i.quantity);
   void _requireAccount() {
     if (_disposed) throw sessionChanged;
-    if (requiresLogin)
+    if (requiresLogin) {
       throw const ApiException(
         'LOGIN_REQUIRED',
         'Vui lòng đăng nhập để sử dụng giỏ hàng.',
       );
+    }
   }
 
   Future<void> _load(Future<void> Function() action) async {
@@ -115,18 +119,22 @@ class CommerceController extends ChangeNotifier {
   }
 
   Future<void> refresh() => _load(() async {
-    if (cart is RemoteCartRepository && !checkoutPending)
+    if (cart is RemoteCartRepository && !checkoutPending) {
       await (cart as RemoteCartRepository).refresh();
-    if (orderRepository is RemoteOrderRepository)
+    }
+    if (orderRepository is RemoteOrderRepository) {
       await (orderRepository as RemoteOrderRepository).refresh();
+    }
   });
   Future<void> loadMoreOrders() => _load(() async {
-    if (orderRepository is RemoteOrderRepository)
+    if (orderRepository is RemoteOrderRepository) {
       await (orderRepository as RemoteOrderRepository).loadMore();
+    }
   });
   Future<void> loadOrder(String id) => _load(() async {
-    if (orderRepository is RemoteOrderRepository)
+    if (orderRepository is RemoteOrderRepository) {
       await (orderRepository as RemoteOrderRepository).loadOrder(id);
+    }
   });
   Future<void> _mutate(Future<void> Function() action) async {
     _requireAccount();

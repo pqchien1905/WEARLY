@@ -6,8 +6,9 @@ import 'config.dart';
 import 'api_providers.dart';
 
 final productRepositoryProvider = Provider<ProductRepository>((ref) {
-  if (!ref.watch(remoteApiProvider) && !BrandConfig.useRemoteCatalog)
+  if (!ref.watch(remoteApiProvider) && !BrandConfig.useRemoteCatalog) {
     return MockProductRepository();
+  }
   return RemoteProductRepository(ref.watch(apiClientProvider));
 });
 final catalogColorsProvider = FutureProvider<List<String>>((ref) {

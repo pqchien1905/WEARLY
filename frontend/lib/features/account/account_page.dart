@@ -54,7 +54,15 @@ class _AuthPageState extends ConsumerState<AuthPage> {
         );
         if (mounted) {
           password.clear();
-          context.go('/account');
+          final next = GoRouterState.of(context).uri.queryParameters['next'];
+          context.go(
+            next != null &&
+                    next.startsWith('/') &&
+                    !next.startsWith('//') &&
+                    !next.contains('\\')
+                ? next
+                : '/account',
+          );
         }
       }
     } catch (e) {
@@ -359,19 +367,21 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                     : () async {
                         try {
                           await ref.read(accountProvider.notifier).signOut();
-                          if (context.mounted)
+                          if (context.mounted) {
                             toast(
                               context,
                               remote
                                   ? 'Đã đăng xuất.'
                                   : 'Đã kết thúc phiên tài khoản demo.',
                             );
+                          }
                         } catch (_) {
-                          if (context.mounted)
+                          if (context.mounted) {
                             toast(
                               context,
                               'Đã xóa phiên trên thiết bị. Máy chủ chưa xác nhận thu hồi phiên; vui lòng đăng nhập và đăng xuất lại khi có mạng.',
                             );
+                          }
                         }
                       },
                 child: const Text('Đăng xuất'),

@@ -30,7 +30,7 @@ class RemoteOrderRepository implements OrderRepository {
       _check();
       await action();
     });
-    _tail = result.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    _tail = result.then<void>((_) {}, onError: (Object _, StackTrace _) {});
     return result;
   }
 
@@ -48,8 +48,11 @@ class RemoteOrderRepository implements OrderRepository {
       await api.get('orders', query: {'page': '$page', 'limit': '100'}),
     );
     _check();
-    if (data['items'] is! List || data['total'] is! int || data['page'] != page)
+    if (data['items'] is! List ||
+        data['total'] is! int ||
+        data['page'] != page) {
       throw invalidCommerce;
+    }
     final items = (data['items'] as List)
         .map((item) => commerceOrder(item, email: email))
         .toList();
@@ -80,11 +83,12 @@ class RemoteOrderRepository implements OrderRepository {
   });
   @override
   Future<void> setStatus(String id, String status) => _queue(() async {
-    if (status != 'Đã hủy')
+    if (status != 'Đã hủy') {
       throw const ApiException(
         'NOT_ALLOWED',
         'Chỉ có thể hủy đơn đang chờ xác nhận.',
       );
+    }
     final order = commerceOrder(
       await api.request('POST', 'orders/${Uri.encodeComponent(id)}/cancel'),
       email: email,
@@ -96,11 +100,12 @@ class RemoteOrderRepository implements OrderRepository {
   @override
   Future<Order> checkout(CheckoutDraft draft) async {
     _check();
-    if (_checkingOut || (_attempt == null && cart.locked))
+    if (_checkingOut || (_attempt == null && cart.locked)) {
       throw const ApiException(
         'BUSY',
         'Vui lòng chờ cập nhật giỏ hàng hoàn tất.',
       );
+    }
     if (_attempt == null) {
       if (draft.addressId == null ||
           draft.addressId!.isEmpty ||

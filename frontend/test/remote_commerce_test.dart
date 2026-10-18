@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -86,16 +85,18 @@ void main() {
       final api = ApiClient(
         baseUrl: 'http://localhost/api/v1',
         client: MockClient((r) async {
-          if (r.url.path.endsWith('/auth/login'))
+          if (r.url.path.endsWith('/auth/login')) {
             return jsonResponse(sessionJson());
+          }
           if (r.url.path.endsWith('/auth/logout')) return jsonResponse({});
-          if (r.url.path.endsWith('/orders'))
+          if (r.url.path.endsWith('/orders')) {
             return jsonResponse({
               'items': [orderJson()],
               'total': 1,
               'page': 1,
               'limit': 100,
             });
+          }
           if (r.method == 'POST') cartWrites++;
           return jsonResponse(cartJson());
         }),
@@ -295,8 +296,9 @@ void main() {
       final api = ApiClient(
         baseUrl: 'http://localhost/api/v1',
         client: MockClient((r) async {
-          if (r.url.path.endsWith('/cancel'))
+          if (r.url.path.endsWith('/cancel')) {
             return jsonResponse(orderJson(status: 'CANCELLED'));
+          }
           final page = int.parse(r.url.queryParameters['page']!);
           return jsonResponse({
             'items': [orderJson(id: 'order-$page')],

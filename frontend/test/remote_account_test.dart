@@ -6,7 +6,6 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:nep_storefront/core/network/api_client.dart';
 import 'package:nep_storefront/data/remote_account.dart';
-import 'package:nep_storefront/domain/account.dart';
 import 'package:nep_storefront/app/account_state.dart';
 import 'package:nep_storefront/app/api_providers.dart';
 import 'remote_session_test.dart' show jsonResponse;

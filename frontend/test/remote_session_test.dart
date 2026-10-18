@@ -37,8 +37,9 @@ void main() {
         final rejection = expectLater(pending, throwsA(isA<ApiException>()));
         await started.future;
         tokens.clear();
-        if (newerUser)
+        if (newerUser) {
           tokens.set(accessToken: 'new-user', refreshToken: 'new-user-refresh');
+        }
         response.complete(
           jsonResponse({
             'accessToken': 'rotated-old',

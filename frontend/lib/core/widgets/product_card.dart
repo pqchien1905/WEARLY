@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/providers.dart';
+import '../../app/api_providers.dart';
 import '../../domain/catalog.dart';
 import '../design/tokens.dart';
 import '../format.dart';
@@ -40,8 +41,9 @@ class ProductCard extends ConsumerWidget {
                   tooltip: saved
                       ? 'Bỏ yêu thích ${product.name}'
                       : 'Yêu thích ${product.name}',
-                  onPressed: () =>
-                      ref.read(wishlistProvider.notifier).toggle(product.id),
+                  onPressed: () => ref.read(remoteApiProvider)
+                      ? context.go('/wishlist')
+                      : ref.read(wishlistProvider.notifier).toggle(product.id),
                   icon: Icon(
                     saved ? Icons.favorite : Icons.favorite_border,
                     size: 20,

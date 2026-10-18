@@ -7,8 +7,9 @@ const invalidCommerce = ApiException(
 );
 
 int vnd(Object? value) {
-  if (value is! String || !RegExp(r'^\d{1,14}$').hasMatch(value))
+  if (value is! String || !RegExp(r'^\d{1,14}$').hasMatch(value)) {
     throw invalidCommerce;
+  }
   return int.parse(value);
 }
 
@@ -24,8 +25,9 @@ CartItem commerceItem(Object? value, {bool cart = false}) {
   }
   final quantity = data['quantity'];
   final stock = cart ? data['available'] : quantity;
-  if (quantity is! int || quantity < 1 || stock is! int || stock < 0)
+  if (quantity is! int || quantity < 1 || stock is! int || stock < 0) {
     throw invalidCommerce;
+  }
   return CartItem(
     id: data['id'],
     slug: data['slug'],
@@ -49,8 +51,9 @@ Order commerceOrder(Object? value, {required String email}) {
       data['items'] is! List ||
       address['recipient'] is! String ||
       address['phone'] is! String ||
-      address['address'] is! String)
+      address['address'] is! String) {
     throw invalidCommerce;
+  }
   final status = switch (data['status']) {
     'PENDING' => 'Chờ xác nhận',
     'CONFIRMED' => 'Đã xác nhận',
@@ -88,7 +91,8 @@ Order commerceOrder(Object? value, {required String email}) {
   );
   if (order.items.isEmpty ||
       order.subtotal != vnd(data['subtotal']) ||
-      order.total != vnd(data['total']))
+      order.total != vnd(data['total'])) {
     throw invalidCommerce;
+  }
   return order;
 }

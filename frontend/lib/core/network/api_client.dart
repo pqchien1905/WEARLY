@@ -131,8 +131,9 @@ class ApiClient {
   }
 
   Future<void> _refresh(int generation) async {
-    if (_refreshing != null && _refreshGeneration == generation)
+    if (_refreshing != null && _refreshGeneration == generation) {
       return _refreshing;
+    }
     final future = _rotate(generation);
     _refreshGeneration = generation;
     _refreshing = future;

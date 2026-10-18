@@ -85,17 +85,20 @@ class AppField extends StatelessWidget {
     this.maxLines = 1,
     this.onSubmitted,
     this.hint,
+    this.readOnly = false,
   });
   final String label;
   final String? hint;
   final TextEditingController? controller;
   final String? Function(String?)? validator;
   final bool obscure;
+  final bool readOnly;
   final TextInputType? keyboardType;
   final int maxLines;
   final ValueChanged<String>? onSubmitted;
   @override
   Widget build(BuildContext context) => TextFormField(
+    readOnly: readOnly,
     controller: controller,
     validator: validator,
     obscureText: obscure,

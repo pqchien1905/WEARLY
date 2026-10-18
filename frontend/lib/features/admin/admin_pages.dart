@@ -332,7 +332,8 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
                             );
                             if (!mounted || !confirmed) return;
                           }
-                          store.setStatus(order.id, v!);
+                          await store.setStatus(order.id, v!);
+                          if (!mounted) return;
                           ref
                               .read(adminStateProvider)
                               .log('Đơn ${order.id}: $v');

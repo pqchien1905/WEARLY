@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../app/api_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/providers.dart';
@@ -214,7 +215,9 @@ class _ProductDetailState extends ConsumerState<ProductDetail> {
               ),
             IconButton(
               tooltip: saved ? 'Bỏ yêu thích' : 'Lưu yêu thích',
-              onPressed: () => ref.read(wishlistProvider.notifier).toggle(p.id),
+              onPressed: () => ref.read(remoteApiProvider)
+                  ? context.go('/wishlist')
+                  : ref.read(wishlistProvider.notifier).toggle(p.id),
               icon: Icon(
                 saved ? Icons.favorite : Icons.favorite_border,
                 color: T.accent,

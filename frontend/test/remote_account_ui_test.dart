@@ -22,7 +22,7 @@ void main() {
             expect((jsonDecode(r.body) as Map)['password'], 'example-password');
             return jsonResponse(sessionJson(), 201);
           }
-          if (r.url.path.endsWith('/cart'))
+          if (r.url.path.endsWith('/cart')) {
             return jsonResponse({
               'id': 'cart-1',
               'version': 0,
@@ -30,13 +30,15 @@ void main() {
               'subtotal': '0',
               'currency': 'VND',
             });
-          if (r.url.path.endsWith('/orders'))
+          }
+          if (r.url.path.endsWith('/orders')) {
             return jsonResponse({
               'items': [],
               'total': 0,
               'page': 1,
               'limit': 100,
             });
+          }
           return jsonResponse([]);
         }),
       );
