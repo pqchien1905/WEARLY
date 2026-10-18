@@ -54,4 +54,6 @@ Files: modules/uploads/image-lifecycle.service.ts; worker/{retention.worker,ai.p
 - [x] Add regressions for deletion vs generation, expired/pending upload cleanup, failed S3 purge retry and completed-job idempotency.
 - [x] Implement durable cleanup and image-lock publication; never overwrite terminal job states.
 - [x] Run unit, commerce, worker and uploads E2E, build/lint, live Flutter catalog.
-- [ ] Update API/schema/architecture/setup/report/ledger, fresh read-only final review, fix findings, commit and push.
+- [x] Update API/schema/architecture/setup/report/ledger, fresh read-only final review, fix findings, commit and push.
+
+Implementation published as `cc32acc` to origin/main; remote SHA verified. Final unit11/E2E27/build/lint/compiled smoke/live catalog passed. Persistent runtime reload remains blocked by execution policy; see setup.md for restart instructions.
