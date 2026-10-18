@@ -1,3 +1,5 @@
+import 'dart:async';
+
 class CartItem {
   const CartItem({
     required this.slug,
@@ -9,11 +11,13 @@ class CartItem {
     required this.unitPrice,
     required this.quantity,
     required this.stock,
+    this.id = '',
   });
-  final String slug, sku, name, image, color, size;
+  final String id, slug, sku, name, image, color, size;
   final int unitPrice, quantity, stock;
   int get total => unitPrice * quantity;
   CartItem withQuantity(int value) => CartItem(
+    id: id,
     slug: slug,
     sku: sku,
     name: name,
@@ -34,9 +38,11 @@ class CheckoutDraft {
     required this.address,
     this.express = false,
     this.payment = 'COD demo',
+    this.addressId,
   });
   final String name, email, phone, address, payment;
   final bool express;
+  final String? addressId;
 }
 
 class Order {
@@ -72,12 +78,12 @@ abstract interface class CartRepository {
   int get subtotal;
   Future<void> add(String slug, String sku, int quantity);
   Future<void> update(String sku, int quantity);
-  void remove(String sku);
-  void clear();
+  FutureOr<void> remove(String sku);
+  FutureOr<void> clear();
 }
 
 abstract interface class OrderRepository {
   List<Order> get orders;
   Future<Order> checkout(CheckoutDraft draft);
-  void setStatus(String id, String status);
+  FutureOr<void> setStatus(String id, String status);
 }
