@@ -19,6 +19,7 @@ Chạy từ root. Script dùng cấu hình PostgreSQL của backend, chỉ cập
 ## Các thao tác đã nối
 
 - Tổng quan: số sản phẩm, đơn, đơn chờ xác nhận, khách hàng và tổng số lượng kho từ toàn database.
+- Danh mục (`/#/admin/categories`) và thương hiệu (`/#/admin/brands`): danh sách phân trang 20 mục, số sản phẩm liên quan, thêm mới và đổi tên. Tên tối đa 100 ký tự; đường dẫn gồm chữ thường không dấu, số và dấu gạch nối, không trùng trong cùng loại. Đường dẫn được giữ cố định sau khi tạo, chưa có thao tác xóa. Khi người khác đã đổi tên, tải lại trước khi sửa tiếp. Danh mục mới xuất hiện ở cửa hàng và cả hai loại đều chọn được khi thêm/sửa sản phẩm.
 - Sản phẩm: danh sách phân trang, thêm/sửa metadata, chọn danh mục/thương hiệu có sẵn, bộ ảnh tối đa 20 ảnh và ẩn/hiện. Ảnh dùng URL HTTPS công khai hoặc asset bundled; chưa có trình tải ảnh catalog.
 - Biến thể: tạo SKU với size/màu/giá; sửa giá và trạng thái bán. SKU/size/màu đã tạo không đổi định danh. SKU mới có tồn kho 0; nhập kho ở thao tác riêng.
 - Tồn kho: tăng/giảm bằng số nguyên và lý do; gửi phiên bản đã đọc. Khi xung đột hoặc không xác định kết quả, tải lại trước khi thao tác tiếp; không tự gửi lặp lệnh tăng kho.

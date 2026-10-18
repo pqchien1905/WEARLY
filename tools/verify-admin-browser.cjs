@@ -65,14 +65,38 @@ module.exports = async function verify({ root, fixture, email, customerEmail, pa
     await page.screenshot({ path: path.join(output, 'dashboard-desktop.png'), fullPage: true });
     console.log('Chrome admin: authenticated dashboard.');
     assert(!requests.some(r => r.path.endsWith('/auth/login') || r.path.endsWith('/cart') || r.path.includes('/users/me')), 'Admin login must not initialize shopper data');
+    for (const [kind, label, initial, renamed] of [
+      ['categories', 'danh mục', 'BST mới kiểm thử', 'BST thu đông kiểm thử'],
+      ['brands', 'thương hiệu', 'Studio mới kiểm thử', 'Studio thu đông kiểm thử'],
+    ]) {
+      await route('/admin/' + kind);
+      await button('Thêm ' + label);
+      await fill('Tên hiển thị', initial);
+      await fill('Đường dẫn', fixture + '-taxonomy');
+      await button('Lưu thay đổi');
+      await page.getByText(initial, { exact: true }).waitFor();
+      await button('Đổi tên ' + initial);
+      await fill('Tên hiển thị', renamed);
+      await button('Lưu thay đổi');
+      await page.mouse.move(12, 125); await page.waitForTimeout(500);
+      await page.getByText(renamed, { exact: true }).waitFor();
+      await page.screenshot({ path: path.join(output, kind + '-desktop.png') });
+      await page.setViewportSize({ width: 375, height: 812 }); await page.waitForTimeout(400);
+      await page.screenshot({ path: path.join(output, kind + '-mobile.png') });
+      await button('Đổi tên ' + renamed);
+      await page.screenshot({ path: path.join(output, kind + '-dialog-mobile.png') });
+      await button('Đóng');
+      await page.setViewportSize({ width: 1440, height: 900 }); await page.waitForTimeout(400);
+    }
+    console.log('Chrome admin: created and renamed category/brand, responsive lists and dialogs.');
     await route('/admin/products/new');
     await fill('Tên sản phẩm', 'Áo quản trị trình duyệt');
     await fill('Đường dẫn sản phẩm', fixture + '-admin');
-    await page.getByText('Danh mục', { exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Áo kiểm thử', exact: true }).click();
+    await page.getByText('Danh mục', { exact: true }).last().click();
+    await page.getByRole('menuitem', { name: 'BST thu đông kiểm thử', exact: true }).click();
     await page.waitForTimeout(300);
-    await page.getByText('Thương hiệu', { exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Wearly kiểm thử', exact: true }).click();
+    await page.getByText('Thương hiệu', { exact: true }).last().click();
+    await page.getByRole('menuitem', { name: 'Studio thu đông kiểm thử', exact: true }).click();
     await page.waitForTimeout(300);
     await fill('Mô tả', 'Sản phẩm kiểm thử quản trị.');
     await fill('Chất liệu', 'Cotton');
@@ -100,7 +124,16 @@ module.exports = async function verify({ root, fixture, email, customerEmail, pa
     await page.getByText('Đang bán · Tồn kho: 8', { exact: true }).waitFor();
     assert((await page.locator('body').ariaSnapshot()).includes('700.000'));
     console.log('Chrome admin: product, gallery, SKU price and stock persisted across reload/login.');
+    await route('/shop');
+    const categoryChip = page.getByRole('checkbox', { name: 'BST thu đông kiểm thử', exact: true });
+    await reveal(categoryChip); await categoryChip.click(); await page.waitForTimeout(400);
+    await page.getByText('Áo quản trị trình duyệt', { exact: true }).waitFor();
+    assert(page.url().includes('category=' + fixture + '-taxonomy'));
+    await page.screenshot({ path: path.join(output, 'category-storefront-desktop.png') });
+    console.log('Chrome storefront: new category filters the published product.');
     await page.setViewportSize({ width: 375, height: 812 });
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: path.join(output, 'category-storefront-mobile.png') });
     await route('/admin/inventory'); await page.getByText(fixture + '-admin-M · Trắng / M', { exact: true }).waitFor();
     await page.screenshot({ path: path.join(output, 'inventory-mobile.png'), fullPage: true });
     await route('/admin/orders/' + orderId);

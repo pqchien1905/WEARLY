@@ -129,3 +129,15 @@ PUT/DELETE idempotent, khóa theo user bảo đảm quota200 và không tạo tr
 Kiểm chứng: backend19 PostgreSQL E2E đạt (17 worker/storage opt-in bỏ qua), build/lint đạt. Flutter246 tests đạt (2 live opt-in bỏ qua), analyze sạch. Chrome/PostgreSQL thật đã lưu/bỏ từ card, chi tiết, giỏ, xác nhận lưu lặp trong giỏ không bỏ mục; reload/login giữ danh sách; tài khoản thứ hai rỗng; viewport375/600/1440 không exception. Helper `node tools/test-frontend-api.cjs --wishlist` dùng fixture riêng trên database `_test`, dọn đúng dữ liệu lượt chạy. Ảnh/log nằm tại `.tools/api-wishlist-verification` (ignored).
 
 Tiếp theo: đánh giá sản phẩm, danh mục/thương hiệu trong quản trị, audit, promotions/style; email/reset password, AI/provider và payment thật vẫn chưa hoàn tất.
+
+## Quản lý danh mục và thương hiệu — 2026-10-18
+
+Thêm API và hai trang quản trị `/#/admin/categories`, `/#/admin/brands`: phân trang 20 mục, đếm sản phẩm, tạo tên/slug và đổi tên. Slug và liên kết sản phẩm giữ nguyên; đổi tên dùng expectedName để từ chối ghi đè từ form cũ. Tên được trim/giới hạn 100 ký tự, slug trùng trả409, mọi thao tác yêu cầu ADMIN. Không thêm migration hoặc dependency, chưa có xóa taxonomy.
+
+Flutter cập nhật lựa chọn trong biểu mẫu sản phẩm và danh mục công khai ở trang chủ/cửa hàng. API lỗi có trạng thái tải lại, không lấy danh mục demo thay thế. Dialog xử lý validation, xung đột, kết quả chưa rõ và mất phiên quản trị; phiên khách hàng vẫn độc lập.
+
+Kiểm chứng tự động: 21 PostgreSQL E2E, 11 backend unit và 252 Flutter tests đạt; 17 worker/storage và 2 Flutter live tests opt-in được bỏ qua. Backend build/lint đạt, Flutter analyze sạch. Kiểm thử trình duyệt mở rộng dùng `node tools/test-frontend-api.cjs --admin`, chỉ tạo/dọn fixture của lượt chạy trên database `_test`.
+
+Chrome/PostgreSQL thật đạt: tạo và đổi tên cả hai loại, chọn chúng khi tạo sản phẩm, lưu SKU/kho, tải lại và đăng nhập lại vẫn giữ dữ liệu; danh mục công khai lọc đúng sản phẩm. Đã xem ảnh 375/1440 px của danh sách, dialog và cửa hàng; không overflow hoặc exception. Luồng đơn/COD và đăng xuất độc lập ở hai khu vực vẫn đạt. API native đã reload, health ready; release bình thường khôi phục về localhost:3000.
+
+Còn lại: reviews, promotions/style preferences, email/reset password, uploads catalog, audit/đối soát COD, AI/provider và payment thật. Chưa tuyên bố hoàn tất toàn bộ dự án hoặc sẵn sàng production.

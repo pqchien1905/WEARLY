@@ -48,7 +48,9 @@ Nếu terminal đang ở `D:\Fashion Shop\frontend`, chạy `..\tools\frontend.p
 Mở Chrome tại `http://localhost:8080`: đăng ký/đăng nhập, hồ sơ, địa chỉ, giỏ hàng, đặt COD, lịch sử và hủy đơn dùng dữ liệu PostgreSQL.
 
 - Khách hàng: `http://localhost:8080/#/login`.
-- Quản trị: `http://localhost:8080/#/admin/login`, dành cho tài khoản ADMIN để quản lý sản phẩm, biến thể, tồn kho, đơn hàng và xem khách hàng.
+- Quản trị: `http://localhost:8080/#/admin/login`, dành cho tài khoản ADMIN để quản lý sản phẩm, danh mục, thương hiệu, biến thể, tồn kho, đơn hàng và xem khách hàng.
+
+Trong quản trị, mở **Danh mục** hoặc **Thương hiệu** để thêm mới và đổi tên. Sau đó chọn chúng trong biểu mẫu sản phẩm. Danh mục ở trang chủ/cửa hàng lấy từ API; đổi tên giữ nguyên đường dẫn và sản phẩm đã liên kết.
 
 Hai khu vực có giao diện và phiên đăng nhập riêng; đăng xuất một bên giữ nguyên phiên bên kia. ADMIN có thể đăng nhập riêng ở cửa hàng để mua sắm. Sau khi tải lại trang cần đăng nhập lại; dữ liệu vẫn được lưu trên máy chủ. Yêu thích lưu theo tài khoản trên PostgreSQL: bấm trái tim ở sản phẩm hoặc **Lưu yêu thích** trong giỏ; mở `http://localhost:8080/#/wishlist` để xem/bỏ. Danh sách tối đa200 mục, sản phẩm không còn mở bán được báo rõ và vẫn bỏ được.
 

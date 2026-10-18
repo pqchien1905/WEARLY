@@ -69,8 +69,9 @@ async function main() {
       const order = await post('orders', { addressId: address.id, shippingMethod: 'standard', expectedSubtotal: '490000' }, customer.accessToken, { 'Idempotency-Key': randomUUID() });
       await flutter(['build', 'web', '--release', '--dart-define=USE_REMOTE_API=true', '--dart-define=API_BASE_URL=' + url]);
       await require('./verify-admin-browser.cjs')({ root, fixture, email, customerEmail, password, orderId: order.id });
-      const saved = await db.product.findUniqueOrThrow({ where: { slug: fixture + '-admin' }, include: { variants: { include: { inventory: true } }, images: true } });
+      const saved = await db.product.findUniqueOrThrow({ where: { slug: fixture + '-admin' }, include: { variants: { include: { inventory: true } }, images: true, category: true, brand: true } });
       if (!saved.active || saved.variants.length !== 1 || saved.variants[0].inventory.quantity !== 8 || saved.variants[0].price.toString() !== '700000' || saved.images.length !== 1) throw new Error('Persisted admin product does not match browser operations');
+      if (saved.category.slug !== fixture + '-taxonomy' || saved.category.name !== 'BST thu đông kiểm thử' || saved.brand.slug !== fixture + '-taxonomy' || saved.brand.name !== 'Studio thu đông kiểm thử') throw new Error('Product taxonomy assignment did not persist');
       const delivered = await db.order.findUniqueOrThrow({ where: { id: order.id }, include: { payment: true } });
       if (delivered.status !== 'DELIVERED' || delivered.payment.status !== 'PENDING') throw new Error('Persisted order/COD state mismatch');
       console.log('PASS database assertions: product, SKU, gallery, stock, order delivered with COD pending.');
@@ -107,6 +108,8 @@ async function main() {
         await tx.product.deleteMany({ where: { id: productIds } });
         if (category) await tx.category.delete({ where: { id: category.id } });
         if (brand) await tx.brand.delete({ where: { id: brand.id } });
+        await tx.category.deleteMany({ where: { slug: fixture + '-taxonomy' } });
+        await tx.brand.deleteMany({ where: { slug: fixture + '-taxonomy' } });
       });
     } finally { await app.close(); }
   }

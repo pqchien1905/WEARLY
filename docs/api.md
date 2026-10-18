@@ -28,7 +28,8 @@ Base URL: `http://localhost:3000/api/v1`. Swagger: `http://localhost:3000/api/do
 | GET | /admin/summary | ADMIN; products, inventoryUnits, orders, pendingOrders, customers |
 | POST | /admin/skus | ADMIN; inventory ban đầu 0 |
 | PATCH | /admin/skus/:id | ADMIN; price/active |
-| POST | /admin/categories | ADMIN |
+| GET, POST | /admin/categories, /admin/brands | ADMIN; list phân trang kèm _count.products; tạo {name,slug} |
+| PATCH | /admin/categories/:id, /admin/brands/:id | ADMIN; đổi tên {name,expectedName}; giữ nguyên slug, xung đột 409 |
 | GET | /admin/inventory | ADMIN |
 | POST | /admin/inventory/:id/adjust | ADMIN; delta,expectedVersion,reason |
 | GET | /admin/orders, /admin/orders/:id | ADMIN; gồm snapshots, version, payment và user.email/name |
