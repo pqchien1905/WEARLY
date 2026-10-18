@@ -96,13 +96,13 @@ Backend gồm22 model,4 migrations,seed,PrismaService,10 feature modules, common
 
 ## D. Database
 
-22 model có PK/FK/unique/index, Decimal VND, snapshot, enum và CHECK constraints. Đã cài PostgreSQL **17.11** trực tiếp trên Windows, tạo `wearly`/`wearly_test` UTF8 và áp dụng bốn migrations. Seed có32 sản phẩm/256SKU; migration ảnh chỉ bổ sung cột/index, không reset dữ liệu. PostgreSQL18.4 portable không còn được dùng. Compose PostgreSQL17 chưa chạy do Windows virtualization chưa phục hồi.
+22 model có PK/FK/unique/index, Decimal VND, snapshot, enum và CHECK constraints. Đã cài PostgreSQL **17.11** trực tiếp trên Windows, tạo `wearly`/`wearly_test` UTF8 và áp dụng bốn migrations. Seed có32 sản phẩm/256SKU; migration ảnh chỉ bổ sung cột/index, không reset dữ liệu. PostgreSQL18.4 portable không còn được dùng. Compose PostgreSQL17.11 đã chạy Healthy sau lần restart lúc20:39; DB container riêng ở5433, chưa migrate/seed, không thay database native5432.
 
 ## E. API
 
 Auth, users/addresses, public catalog, cart, orders, các endpoint admin được liệt kê tại [api.md](api.md) có implementation database thật. Swagger http://localhost:3000/api/docs đã trả OpenAPI khi smoke/E2E.
 
-GET health và readiness trả200; readiness xác nhận PostgreSQL và Memurai. AI job create trả503 vì provider Disabled. Worker/outbox đã kiểm thử trên PostgreSQL + Memurai thật; AI và storage trong worker tests là doubles để điều khiển race. Upload E2E riêng dùng MinIO thật: upload/owned read/delete/retention/quota đã có. Chưa có real Try-On.
+Trong lần kiểm thử backend trước restart, GET health/readiness trả200 và xác nhận PostgreSQL/Memurai; AI job create trả503 vì provider Disabled. Worker/outbox đã kiểm thử trên PostgreSQL + Memurai thật; AI và storage trong worker tests là doubles để điều khiển race. Upload E2E riêng dùng MinIO thật: upload/owned read/delete/retention/quota đã có. Chưa có real Try-On. Sau Windows restart, chạy lại API/worker theo setup.md.
 
 ## F. Công cụ và cách chạy
 
@@ -112,15 +112,16 @@ GET health và readiness trả200; readiness xác nhận PostgreSQL và Memurai.
 | Flutter/Dart | Flutter3.47.7 / Dart3.13.5 portable, thêm user PATH |
 | Git | Git for Windows2.55.0.5 cài xong; origin pqchien1905/WEARLY |
 | WSL | 3.0.3 cài xong |
-| Docker Desktop | 4.95.0 cài xong; CLI29.8.2, Compose5.6.0 |
-| Windows virtualization features | Enabled nhưng thiếu vmcompute/HNS; DISM repair exit0, SFC yêu cầu restart tiếp |
+| Docker Desktop | 4.95.0/Engine29.8.2 Running; hello-world exit0 |
+| Windows virtualization features | vmcompute/HNS đã phục hồi và Running; WSL2 hoạt động, CBS RebootPending=false sau restart20:39 |
 | PostgreSQL | 17.11 Windows Service tự khởi động, localhost5432, psql và pgAdmin đã cài |
 | Redis local | Memurai Developer4.1.2, Redis API7.2.5, localhost6379, AOF/noeviction |
 | MinIO native | RELEASE.2025-09-07T16-13-09Z, loopback9000/9001, private buckets; chỉ phát triển local |
-| Docker Redis/MinIO | Cấu hình Compose có; runtime vẫn chưa xác minh |
+| Docker PostgreSQL/Redis | Healthy, host5433/6380; query PostgreSQL17.11 và Redis PONG đạt |
+| Docker API/worker/MinIO | Chưa build/chạy; cấu hình Compose có |
 | Prisma/Studio, NestJS, Jest, ESLint/Prettier | Cài local trong backend, có npm scripts |
 
-Luồng native hiện chạy được theo [setup.md](setup.md): kiểm tra service Windows → generate/deploy/seed → API/worker → Flutter. pgAdmin đã có kết nối WEARLY; credential nằm trong file local bị Git ignore. Docker publish5433/6380 trên máy này để tránh tranh cổng với native5432/6379. Không tự restart Windows. Memurai Developer không dùng production và tự dừng sau10 ngày.
+Luồng native chạy theo [setup.md](setup.md): kiểm tra service Windows → MinIO → generate/deploy/seed → API/worker → Flutter. pgAdmin đã có kết nối WEARLY; credential nằm trong file local bị Git ignore. Docker publish5433/6380 tránh tranh cổng native5432/6379. Windows đã restart sau khi người dùng xác nhận lưu công việc. Memurai Developer không dùng production và tự dừng sau10 ngày.
 
 ## G. Kiểm thử thực tế
 
@@ -148,7 +149,8 @@ Luồng native hiện chạy được theo [setup.md](setup.md): kiểm tra serv
 | Flutter analyze | Không issues |
 | Flutter build web --release | Đạt |
 | docker compose config --quiet | Đạt |
-| docker compose up postgres redis | Chưa chạy được; Windows repair còn pending reboot |
+| docker run --rm hello-world | Đạt sau restart; pull và chạy Linux container thành công |
+| docker compose up -d --wait postgres redis | Đạt; hai container Healthy, query PostgreSQL và Redis PONG thành công |
 | Native service/pgAdmin | PostgreSQL và Memurai Running; pgAdmin driver đọc được32 sản phẩm |
 | API readiness | 200, database=true và redis=true |
 | Compiled API smoke | Cổng loopback tạm: readiness/catalog200, upload401 khi chưa auth, Swagger có upload/delete; tự đóng app |
@@ -158,13 +160,13 @@ Luồng native hiện chạy được theo [setup.md](setup.md): kiểm tra serv
 
 Lần tiếp tục này phát hiện lỗi provider exception có thể được BullMQ lưu nguyên văn trong Redis; test đã tái hiện lỗi rồi xác nhận bản sửa chỉ lưu mã an toàn. Test namespace độc lập tránh xử lý nhầm hàng đợi phát triển.
 
-Review upload phát hiện ba race/cleanup defects và một validation discrepancy; cả bốn có regression RED→GREEN. Final11 unit/27 E2E, build/lint và compiled smoke đạt. Flutter live catalog1 đạt với API đang chạy, frontend source không đổi. Lệnh reload API/worker cũ và khởi chạy persistent API mới bị execution policy chặn; bản đang chạy vẫn là bản trước, source/dist/migrations đã cập nhật. Cần đóng tiến trình cũ và chạy lại theo setup.md; không coi transient smoke là bằng chứng runtime lâu dài đã reload.
+Review upload phát hiện ba race/cleanup defects và một validation discrepancy; cả bốn có regression RED→GREEN. Final11 unit/27 E2E, build/lint và compiled smoke đạt. Flutter live catalog1 đạt trước restart, frontend source không đổi. Reload API/worker từng bị execution policy chặn; các tiến trình cũ đã kết thúc khi Windows restart. Source/dist/migrations đã cập nhật; chạy lại API/worker theo setup.md. Lần sửa Docker chỉ xác minh Engine, hello-world và Compose PostgreSQL/Redis.
 
-Nền tảng local đã đáp ứng các tiêu chí chạy API/database/Prisma/auth/catalog/cart/orders, kết nối catalog Flutter, worker và private upload lifecycle trong phạm vi kiểm thử. Chưa kiểm chứng: container build/runtime PostgreSQL17/Redis, Android/iOS/desktop, provider/payment thật. Không coi native runtime là bằng chứng container hoặc hệ thống production đã sẵn sàng.
+Nền tảng local đã đáp ứng các tiêu chí chạy API/database/Prisma/auth/catalog/cart/orders, kết nối catalog Flutter, worker và private upload lifecycle trong phạm vi kiểm thử. Docker Engine và container PostgreSQL/Redis đã được xác minh. Chưa kiểm chứng: container build/runtime API/worker/MinIO, Android/iOS/desktop, provider/payment thật. Chưa tuyên bố production-ready.
 
 ## H. Việc tiếp theo
 
-1. Hoàn tất Windows repair sau lần restart tiếp theo, chạy lại SFC/WSL/Docker; sau đó kiểm chứng container build và Redis Linux. Worker native đã được kiểm thử.
+1. Docker đã phục hồi; tiếp theo kiểm chứng container build/runtime API/worker/MinIO và migrations/seed trên DB container riêng. Worker native đã được kiểm thử.
 2. Nối Flutter auth → địa chỉ → cart → orders cùng cache async và idempotency, bảo toàn UI.
 3. Nối private upload hiện có vào Flutter, triển khai TryOnProvider thật, bổ sung cancel riêng job và kiểm thử provider thực.
 4. Payment gateway/webhook và reservation expiry; COD settlement; không tự đánh dấu đã thanh toán.

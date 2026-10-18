@@ -46,4 +46,4 @@ Release MinIO này chỉ dùng phát triển local; repository chính thức đ�
 
 E2E upload dùng PostgreSQL thật và MinIO thật: upload, strip metadata, anonymous403, signed GET200, ownership404, consent/format/size, xóa idempotent, storage outage, quota đồng thời, expiry/stale reservation, retry purge. Worker E2E dùng PostgreSQL và Memurai thật, provider/storage doubles để điều khiển race chính xác. Suite không reset DB hoặc xóa cả bucket.
 
-Trước khi nối Flutter Web, cấu hình S3 CORS theo origin ứng dụng; chưa có remote Try-On UI ở phiên này. Thay đổi source/build đã được kiểm thử, nhưng API/worker cũ đang chạy trên máy chưa nạp bản mới vì lệnh dừng/khởi chạy tiến trình bị execution policy từ chối. Sau khi đóng tiến trình dev cũ hoặc reboot, chạy lại API/worker theo setup.md để bật cleanup và routes mới.
+Trước khi nối Flutter Web, cấu hình S3 CORS theo origin ứng dụng; chưa có remote Try-On UI ở phiên này. Source/build đã được kiểm thử. Lần trước execution policy từ chối reload API/worker; Windows đã restart lúc20:39 và Docker đã phục hồi. Chạy lại MinIO và API/worker theo setup.md để bật cleanup và routes mới.

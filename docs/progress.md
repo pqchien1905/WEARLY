@@ -77,3 +77,7 @@ Thêm upload JPEG/PNG riêng tư, validation bytes/pixels, strip metadata, conse
 Kiểm thử trước final review: unit9, commerce10 + worker9 + upload6 E2E đều đạt; build/lint đạt. Flutter source không thay đổi; provider AI vẫn Disabled. Chi tiết và giới hạn URL/versioning/storage production tại [private-images.md](private-images.md). Docker vẫn chờ Windows hoàn tất repair sau restart.
 
 Sau review: sửa bốn findings bằng regression RED→GREEN; thêm migration thứ4 cho retry cleanup công bằng. Final unit11/E2E27/build/lint/compiled smoke đạt, Flutter live catalog1 đạt. Không còn review finding bị hoãn. Runtime API/worker cũ chưa reload vì execution policy chặn thao tác tiến trình; hướng dẫn chạy bản mới tại setup.md. Không có thay đổi frontend hoặc gọi AI thật.
+
+## Docker restored — 2026-10-18, sau restart20:39
+
+Người dùng xác nhận lưu công việc và cho phép restart. Windows đã áp dụng bản sửa đang pending: vmcompute/hns phục hồi và Running; WSL2 không còn báo lỗi; CBS RebootPending=false. Docker Desktop4.95.0/Engine29.8.2 đã chạy, hello-world pull/run exit0. Compose PostgreSQL17.11 và Redis7 Healthy tại127.0.0.1:5433/6380; SQL query/PONG đạt. Native PostgreSQL/Memurai vẫn Running, không đổi dữ liệu hoặc env. API/worker/MinIO container chưa build/chạy; dev processes cần chạy lại sau reboot. Setup/report đã cập nhật, lỗi Docker về Virtual Machine Platform đã được xử lý.

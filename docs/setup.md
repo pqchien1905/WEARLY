@@ -8,7 +8,7 @@ Node 24.22.0 LTS, Flutter/Dart portable đã có trong .tools; đã thêm vào u
 
 **Hàng đợi local:** Memurai Developer 4.1.2 chạy dưới service `Memurai`, chỉ nghe 127.0.0.1:6379, AOF và `noeviction`. Đây là [Redis-compatible runtime trên Windows](https://redis.io/partners/memurai/). Bản Developer chỉ dành cho phát triển/test và tự dừng sau 10 ngày; khởi động lại service khi cần. Docker Redis vẫn là cấu hình triển khai dự kiến.
 
-**Docker chưa sẵn sàng:** người dùng đã khởi động lại Windows. Các feature VMP/WSL/Hyper-V báo Enabled nhưng thiếu `vmcompute`/HNS; Docker vẫn báo không đủ điều kiện ảo hóa. `DISM /Online /Cleanup-Image /RestoreHealth` đã hoàn tất (exit 0). SFC báo một đợt sửa hệ thống đang chờ khởi động lại, nên chưa thể kiểm chứng việc phục hồi các dịch vụ. Sau lần restart tiếp theo chạy SFC và kiểm tra lại WSL/Docker. Không cần Docker để chạy luồng phát triển native dưới đây. Không kết luận BIOS bị tắt vì `HypervisorPresent=true`.
+**Docker đã hoạt động sau restart lúc20:39 ngày18/10/2026:** bản sửa DISM hoàn tất lúc19:18 chỉ được áp dụng sau lần khởi động lại này. `vmcompute` và `hns` đã có đủ binary/service và đang Running; Windows không còn cờ CBS RebootPending. WSL2 chạy distro docker-desktop; Docker Desktop4.95.0/Engine29.8.2 khởi động thành công. `docker run --rm hello-world` tải image và chạy thành công (exit0). Không cần đổi BIOS hoặc reset dữ liệu Docker.
 
 ## Chạy bằng PostgreSQL và Memurai đã cài
 
@@ -38,7 +38,7 @@ npm run start:dev
 
 Swagger http://localhost:3000/api/docs, health http://localhost:3000/api/v1/health, readiness /api/v1/health/ready. Backend fail startup nếu DB không kết nối được. `npm run build; npm start` để chạy compiled code.
 
-**Sau cập nhật upload:** source/dist và4 migrations đã cập nhật, nhưng API/worker cũ chưa được reload vì execution policy chặn dừng/khởi chạy persistent process. Đóng tiến trình dev cũ của Wearly (trong Task Manager có thể xem command line `dist/main.js` và `dist/worker/main.js`), rồi chạy `npm start` và `npm run worker` trong hai terminal. Hoặc sau reboot chạy lại MinIO helper và các lệnh API/worker. PostgreSQL/Memurai là Windows services tự khởi động. `node tools/smoke-backend.cjs` từ root kiểm tra compiled API trên cổng tạm và tự đóng, không thay tiến trình đang chạy.
+**Sau cập nhật upload và restart:** source/dist và4 migrations đã cập nhật. Lần trước execution policy chặn reload API/worker; các tiến trình dev đó đã kết thúc khi Windows restart. Chạy lại MinIO helper, `npm start` và `npm run worker` trong hai terminal để dùng bản mới. PostgreSQL/Memurai là Windows services tự khởi động. `node tools/smoke-backend.cjs` từ root kiểm tra compiled API trên cổng tạm và tự đóng.
 
 Terminal riêng:
 
@@ -89,7 +89,7 @@ Android emulator (sau khi bổ sung platform) dùng http://10.0.2.2:3000/api/v1.
 
 Kho ảnh native đã được cấu hình độc lập với Docker. Từ root chạy `powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\start-storage.ps1` để khởi động MinIO local, kiểm checksum và chuẩn bị hai bucket private/unversioned. API9000, console9001 chỉ nghe loopback; credential lấy từ backend/.env. Binary/data/log/PID trong `.tools/minio`; chạy lại helper sau reboot. Release cố định chỉ dùng phát triển, không xem là storage production đã được thẩm định. Chi tiết [private-images.md](private-images.md).
 
-Sau khi Docker Engine hoạt động, có thể dùng môi trường Docker độc lập:
+Docker Engine đã hoạt động. Có thể dùng môi trường Docker độc lập:
 
 ```powershell
 cd 'D:\Fashion Shop'
@@ -99,6 +99,8 @@ docker compose up -d --wait postgres redis
 ```
 
 Trên máy này `.env` đặt `POSTGRES_PUBLISHED_PORT=5433`, `REDIS_PUBLISHED_PORT=6380` để không tranh cổng với service Windows. Bản `.env.example` mặc định 5432/6379 dành cho máy chỉ dùng Docker. Hai PostgreSQL có volume/dữ liệu riêng; chạy migration/seed cho đúng database, không kỳ vọng dữ liệu native tự xuất hiện trong container. Khi chạy backend trên host với database Docker, đặt DATABASE_URL port 5433 và REDIS_PORT=6380 trong process/backend env. Container API/worker luôn dùng hostname postgres:5432 và redis:6379.
+
+Đã chạy thực tế `docker compose up -d --wait postgres redis`: cả hai container Healthy; PostgreSQL17.11 trả query version thành công, Redis trả PONG. Cổng host127.0.0.1:5433/6380 đã xác nhận; Windows PostgreSQL/Memurai vẫn Running ở5432/6379. Đây là DB Docker mới, chưa migrate/seed; backend/.env vẫn dùng database native đã có dữ liệu. API/worker/MinIO container chưa build/chạy trong lần sửa Docker này.
 
 ```powershell
 docker compose --profile app up -d --build
@@ -132,13 +134,13 @@ Chỉ chạy một worker suite trên cùng test database: suite giữ PostgreSQ
 
 ## PostgreSQL portable của phiên trước
 
-Do Docker Engine còn chờ reboot, phiên này dùng PostgreSQL thật18.4 tại 127.0.0.1:55432 trong .tools/test-services để chạy migrations/seed/E2E. Không cài thành Windows service. Credentials chỉ nằm trong .tools bị ignore. DB UTF8: wearly_utf8 và wearly_utf8_test. Hai DB WIN1252 từ thử nghiệm đầu không bị xóa; chúng không chứa dữ liệu kinh doanh.
+Ở phiên đầu, khi Docker chưa chạy được, PostgreSQL thật18.4 tại127.0.0.1:55432 trong .tools/test-services được dùng cho migrations/seed/E2E. Không cài thành Windows service. Credentials chỉ nằm trong .tools bị ignore. DB UTF8: wearly_utf8 và wearly_utf8_test. Hai DB WIN1252 từ thử nghiệm đầu không bị xóa; chúng không chứa dữ liệu kinh doanh.
 
 PostgreSQL tạm không còn được dùng sau reboot. Backend hiện dùng PostgreSQL 17 Windows tại 5432 với cấu hình sẵn có trong backend/.env. Dữ liệu demo đã seed lại; không xóa các database thử nghiệm cũ trong .tools.
 
 ## Xử lý lỗi
 
-- Docker500 hoặc WSL virtualization: xem kết quả chẩn đoán thành phần Windows; việc reboot lần đầu chưa giải quyết được. Luồng native vẫn chạy độc lập.
+- Docker500 hoặc WSL virtualization: kiểm tra vmcompute/hns, `wsl --status` và trạng thái Windows pending restart. Lỗi trên máy này đã hết sau khi Restart áp dụng bản sửa DISM; không chạy reset/unregister distro để xử lý lỗi này.
 - P1001/connect refused: kiểm tra port/host/container health và DATABASE_URL.
 - Invalid environment: thay placeholder, secrets khác nhau dài≥32, durations tính theo giây.
 - UTF8/22P05: DB phải UTF8; không đổi dữ liệu tiếng Việt thành ASCII để né lỗi.
