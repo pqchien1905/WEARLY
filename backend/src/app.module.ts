@@ -15,6 +15,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { HealthModule } from './modules/health/health.module';
 import { AiModule } from './modules/ai/ai.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
+import { WishlistModule } from './modules/wishlist/wishlist.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
@@ -30,6 +31,7 @@ import { UploadsModule } from './modules/uploads/uploads.module';
     HealthModule,
     AiModule,
     UploadsModule,
+    WishlistModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
