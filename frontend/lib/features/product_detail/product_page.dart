@@ -11,6 +11,8 @@ import '../../domain/catalog.dart';
 import '../../app/commerce_state.dart';
 import '../cart/cart_page.dart';
 import 'product_gallery.dart';
+import 'product_reviews.dart';
+import '../../app/api_providers.dart';
 
 final purchaseAnchor = GlobalKey();
 
@@ -53,6 +55,7 @@ class ProductDetail extends ConsumerStatefulWidget {
 }
 
 class _ProductDetailState extends ConsumerState<ProductDetail> {
+  final reviewsAnchor = GlobalKey();
   late String color = widget.product.colors.first;
   String? size, error;
   int quantity = 1;
@@ -98,6 +101,20 @@ class _ProductDetailState extends ConsumerState<ProductDetail> {
         ),
         const SizedBox(height: 20),
         Text(p.description, style: T.body.copyWith(color: T.muted)),
+        if (ref.watch(remoteApiProvider))
+          TextButton.icon(
+            onPressed: () {
+              final target = reviewsAnchor.currentContext;
+              if (target != null) {
+                Scrollable.ensureVisible(
+                  target,
+                  duration: const Duration(milliseconds: 250),
+                );
+              }
+            },
+            icon: const Icon(Icons.star_outline_rounded, size: 18),
+            label: const Text('Xem đánh giá'),
+          ),
         const Divider(height: 48),
         Text(
           'Màu sắc: $color',
@@ -333,6 +350,8 @@ class _ProductDetailState extends ConsumerState<ProductDetail> {
           ),
         ),
         const SizedBox(height: 64),
+        if (ref.watch(remoteApiProvider))
+          ProductReviews(key: reviewsAnchor, productId: p.id, slug: p.slug),
         Text('Có thể bạn cũng thích', style: T.display(30)),
         const SizedBox(height: 28),
         ref

@@ -4,7 +4,7 @@
 
 **Goal:** Customers who received a product can publish, edit and delete their own review; shoppers can read real ratings/comments on product pages.
 **Architecture:** Existing Review table and shopper identity; Nest module with public paginated read and private owner endpoints. Flutter repositories/providers separate public reads from shopper eligibility and mutations. No new dependencies; add a product/date index only.
-**Spec:** Original WEARLY master prompt reviews backlog, continuation authorization, and implementation choices below. Optional question about pre-moderation was asked; default is immediate publication unless user steers otherwise.
+**Spec:** Original WEARLY master prompt reviews backlog, continuation authorization, and implementation choices below. User explicitly confirmed immediate publication after submission.
 **Tech stack:** Existing NestJS, Prisma/PostgreSQL, Flutter/Riverpod.
 
 ## Design and constraints
