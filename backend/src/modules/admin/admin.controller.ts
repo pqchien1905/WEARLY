@@ -12,9 +12,11 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Admin } from '../../common/decorators/auth';
 import { PageDto } from '../products/dto/query-products.dto';
 import { AdminService } from './admin.service';
+import { TaxonomyService } from './taxonomy.service';
 import {
   AdjustInventoryDto,
   CategoryDto,
+  RenameTaxonomyDto,
   CreateProductDto,
   CreateSkuDto,
   OrderStatusDto,
@@ -26,7 +28,10 @@ import {
 @ApiBearerAuth()
 @Controller('admin')
 export class AdminController {
-  constructor(private readonly service: AdminService) {}
+  constructor(
+    private readonly service: AdminService,
+    private readonly taxonomy: TaxonomyService,
+  ) {}
   @Get('summary') summary() {
     return this.service.summary();
   }
@@ -58,7 +63,28 @@ export class AdminController {
     return this.service.updateSku(id, dto);
   }
   @Post('categories') category(@Body() dto: CategoryDto) {
-    return this.service.category(dto);
+    return this.taxonomy.create('categories', dto);
+  }
+  @Get('categories') categories(@Query() q: PageDto) {
+    return this.taxonomy.list('categories', q);
+  }
+  @Patch('categories/:id') renameCategory(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RenameTaxonomyDto,
+  ) {
+    return this.taxonomy.rename('categories', id, dto);
+  }
+  @Post('brands') brand(@Body() dto: CategoryDto) {
+    return this.taxonomy.create('brands', dto);
+  }
+  @Get('brands') brands(@Query() q: PageDto) {
+    return this.taxonomy.list('brands', q);
+  }
+  @Patch('brands/:id') renameBrand(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RenameTaxonomyDto,
+  ) {
+    return this.taxonomy.rename('brands', id, dto);
   }
   @Get('inventory') inventory(@Query() q: PageDto) {
     return this.service.list('inventory', q);

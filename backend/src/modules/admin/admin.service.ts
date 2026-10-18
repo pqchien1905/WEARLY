@@ -6,7 +6,6 @@ import { PageDto } from '../products/dto/query-products.dto';
 import { publicUser } from '../auth/auth.service';
 import {
   AdjustInventoryDto,
-  CategoryDto,
   CreateProductDto,
   CreateSkuDto,
   OrderStatusDto,
@@ -154,9 +153,6 @@ export class AdminService {
   }
   updateSku(id: string, dto: UpdateSkuDto) {
     return this.db.productVariant.update({ where: { id }, data: dto });
-  }
-  category(dto: CategoryDto) {
-    return this.db.category.create({ data: dto });
   }
   adjust(id: string, dto: AdjustInventoryDto) {
     return transaction(this.db, async (tx) => {

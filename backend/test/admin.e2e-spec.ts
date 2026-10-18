@@ -13,6 +13,7 @@ describe('Administration with PostgreSQL', () => {
   const suffix = randomUUID();
   let categoryId: string, brandId: string;
   const users: string[] = [];
+  const taxonomies: { kind: 'categories' | 'brands'; id: string }[] = [];
   const call = (method: 'get' | 'post' | 'patch', path: string, auth = token) =>
     request(app.getHttpServer())
       [method]('/api/v1/' + path)
@@ -108,9 +109,94 @@ describe('Administration with PostgreSQL', () => {
       if (productId) await db.product.delete({ where: { id: productId } });
       if (categoryId) await db.category.delete({ where: { id: categoryId } });
       if (brandId) await db.brand.delete({ where: { id: brandId } });
+      for (const row of taxonomies) {
+        if (row.kind === 'categories')
+          await db.category.delete({ where: { id: row.id } });
+        else await db.brand.delete({ where: { id: row.id } });
+      }
     }
     if (app) await app.close();
   });
+  for (const kind of ['categories', 'brands'] as const) {
+    it(`protects, validates, creates and safely renames ${kind}`, async () => {
+      const path = `admin/${kind}`;
+      for (const [method, route] of [
+        ['get', path],
+        ['post', path],
+        ['patch', `${path}/${randomUUID()}`],
+      ] as const) {
+        await request(app.getHttpServer())
+          [method]('/api/v1/' + route)
+          .expect(401);
+        await call(method, route, customer).expect(403);
+      }
+      const first = await call('get', path + '?limit=1').expect(200);
+      expect(first.body).toMatchObject({ page: 1, limit: 1 });
+      expect(first.body.total).toBeGreaterThan(0);
+      expect(first.body.items[0]._count.products).toEqual(expect.any(Number));
+      for (const body of [
+        { name: ' ', slug: 'valid' },
+        { name: 'Valid', slug: 'Invalid Slug' },
+        { name: 'Valid', slug: 'a'.repeat(101) },
+      ]) {
+        await call('post', path).send(body).expect(400);
+      }
+      const slug = `taxonomy-${suffix}`;
+      const created = await call('post', path)
+        .send({ name: '  New name  ', slug })
+        .expect(201);
+      const id = created.body.id;
+      taxonomies.push({ kind, id });
+      expect(created.body).toMatchObject({ name: 'New name', slug });
+      await call('post', path).send({ name: 'Duplicate', slug }).expect(409);
+      await call('patch', `${path}/${id}`)
+        .send({ name: ' ', expectedName: 'New name' })
+        .expect(400);
+      await call('patch', `${path}/${id}`)
+        .send({ name: 'New', expectedName: 'New name', slug: 'changed' })
+        .expect(400);
+      await call('patch', `${path}/${id}`).send({ name: 'New' }).expect(400);
+      await call('patch', `${path}/${randomUUID()}`)
+        .send({ name: 'New', expectedName: 'Old' })
+        .expect(404);
+      const results = await Promise.all(
+        ['First rename', 'Second rename'].map((name) =>
+          call('patch', `${path}/${id}`).send({
+            name,
+            expectedName: 'New name',
+          }),
+        ),
+      );
+      expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+      const winner = results.find((r) => r.status === 200)!.body;
+      expect(winner).toMatchObject({ id, slug });
+      const publicList = await request(app.getHttpServer())
+        .get('/api/v1/' + kind)
+        .expect(200);
+      expect(publicList.body).toContainEqual(
+        expect.objectContaining({ id, slug, name: winner.name }),
+      );
+      // Existing products retain IDs and slug links when their taxonomy is renamed.
+      const existingId = kind === 'categories' ? categoryId : brandId;
+      await call('patch', `${path}/${existingId}`)
+        .send({ name: 'Renamed existing', expectedName: 'Admin test' })
+        .expect(200);
+      const product = await call('get', `admin/products/${productId}`).expect(
+        200,
+      );
+      expect(
+        product.body[kind === 'categories' ? 'category' : 'brand'],
+      ).toMatchObject({
+        id: existingId,
+        slug: 'admin-' + suffix,
+        name: 'Renamed existing',
+      });
+      const list = await call('get', path + '?limit=1&page=2').expect(200);
+      const refreshedFirst = await call('get', path + '?limit=1').expect(200);
+      expect(list.body.total).toBe(first.body.total + 1);
+      expect(list.body.items[0].id).not.toBe(refreshedFirst.body.items[0].id);
+    });
+  }
   it('protects every admin read and returns full totals without credentials', async () => {
     for (const path of [
       'admin/summary',
@@ -133,19 +219,34 @@ describe('Administration with PostgreSQL', () => {
     expect(list.body.items[0].passwordHash).toBeUndefined();
   });
   it('separates staff login and keeps independent sessions alive after counterpart logout', async () => {
-    const credentials = { email: `admin-${suffix}@example.test`, password: 'Wearly-admin-test-2026' };
+    const credentials = {
+      email: `admin-${suffix}@example.test`,
+      password: 'Wearly-admin-test-2026',
+    };
     const before = await db.refreshToken.count({ where: { userId: users[1] } });
-    await call('post', 'auth/admin/login').send({ ...credentials, email: `customer-${suffix}@example.test` }).expect(403);
-    expect(await db.refreshToken.count({ where: { userId: users[1] } })).toBe(before);
-    await call('post', 'auth/admin/login').send({ ...credentials, password: 'Incorrect-password-2026' }).expect(401);
-    const staff = await call('post', 'auth/admin/login').send(credentials).expect(201);
-    const shopper = await call('post', 'auth/login').send(credentials).expect(201);
+    await call('post', 'auth/admin/login')
+      .send({ ...credentials, email: `customer-${suffix}@example.test` })
+      .expect(403);
+    expect(await db.refreshToken.count({ where: { userId: users[1] } })).toBe(
+      before,
+    );
+    await call('post', 'auth/admin/login')
+      .send({ ...credentials, password: 'Incorrect-password-2026' })
+      .expect(401);
+    const staff = await call('post', 'auth/admin/login')
+      .send(credentials)
+      .expect(201);
+    const shopper = await call('post', 'auth/login')
+      .send(credentials)
+      .expect(201);
     expect(staff.body.user.role).toBe('ADMIN');
     expect(staff.body.refreshToken).not.toBe(shopper.body.refreshToken);
     await call('post', 'auth/logout', staff.body.accessToken).expect(201);
     await call('get', 'auth/me', staff.body.accessToken).expect(401);
     await call('get', 'auth/me', shopper.body.accessToken).expect(200);
-    const staffAgain = await call('post', 'auth/admin/login').send(credentials).expect(201);
+    const staffAgain = await call('post', 'auth/admin/login')
+      .send(credentials)
+      .expect(201);
     await call('post', 'auth/logout', shopper.body.accessToken).expect(201);
     await call('get', 'admin/summary', staffAgain.body.accessToken).expect(200);
   });

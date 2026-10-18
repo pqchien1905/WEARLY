@@ -1,5 +1,5 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
   ArrayMaxSize,
@@ -82,7 +82,29 @@ export class CategoryDto {
   @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
   @MaxLength(100)
   slug!: string;
-  @ApiProperty() @IsString() @MinLength(1) @MaxLength(100) name!: string;
+  @ApiProperty()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  name!: string;
+}
+export class RenameTaxonomyDto {
+  @ApiProperty()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  name!: string;
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  expectedName!: string;
 }
 export class AdjustInventoryDto {
   @ApiProperty() @IsInt() @Min(-1000000) @Max(1000000) delta!: number;
