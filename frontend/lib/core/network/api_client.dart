@@ -93,7 +93,10 @@ class ApiClient {
       );
     }
     if (response.statusCode == 401 && authenticated) tokens.clear();
-    return _decode(response, login: path == 'auth/login');
+    return _decode(
+      response,
+      login: path == 'auth/login' || path == 'auth/admin/login',
+    );
   }
 
   Future<http.Response> _send(

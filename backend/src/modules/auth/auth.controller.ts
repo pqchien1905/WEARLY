@@ -15,6 +15,9 @@ export class AuthController {
   @Public() @Post('login') login(@Body() dto: LoginDto) {
     return this.service.login(dto);
   }
+  @Public() @Post('admin/login') adminLogin(@Body() dto: LoginDto) {
+    return this.service.login(dto, true);
+  }
   @Public() @Post('refresh') refresh(@Body() dto: RefreshDto) {
     return this.service.refresh(dto.refreshToken);
   }

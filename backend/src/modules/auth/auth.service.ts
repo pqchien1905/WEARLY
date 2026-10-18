@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomUUID } from 'node:crypto';
@@ -37,7 +37,7 @@ export class AuthService {
       return this.issue(tx, user, randomUUID());
     });
   }
-  async login(dto: LoginDto) {
+  async login(dto: LoginDto, adminOnly = false) {
     const user = await this.db.user.findUnique({ where: { email: dto.email } });
     if (
       !user ||
@@ -45,6 +45,8 @@ export class AuthService {
       !(await argon2.verify(user.passwordHash, dto.password))
     )
       throw new UnauthorizedException('Invalid email or password');
+    if (adminOnly && user.role !== 'ADMIN')
+      throw new ForbiddenException('Administrator access is required');
     return this.db.$transaction((tx) => this.issue(tx, user, randomUUID()));
   }
   private async issue(

@@ -132,6 +132,23 @@ describe('Administration with PostgreSQL', () => {
     expect(list.body.total).toBeGreaterThan(1);
     expect(list.body.items[0].passwordHash).toBeUndefined();
   });
+  it('separates staff login and keeps independent sessions alive after counterpart logout', async () => {
+    const credentials = { email: `admin-${suffix}@example.test`, password: 'Wearly-admin-test-2026' };
+    const before = await db.refreshToken.count({ where: { userId: users[1] } });
+    await call('post', 'auth/admin/login').send({ ...credentials, email: `customer-${suffix}@example.test` }).expect(403);
+    expect(await db.refreshToken.count({ where: { userId: users[1] } })).toBe(before);
+    await call('post', 'auth/admin/login').send({ ...credentials, password: 'Incorrect-password-2026' }).expect(401);
+    const staff = await call('post', 'auth/admin/login').send(credentials).expect(201);
+    const shopper = await call('post', 'auth/login').send(credentials).expect(201);
+    expect(staff.body.user.role).toBe('ADMIN');
+    expect(staff.body.refreshToken).not.toBe(shopper.body.refreshToken);
+    await call('post', 'auth/logout', staff.body.accessToken).expect(201);
+    await call('get', 'auth/me', staff.body.accessToken).expect(401);
+    await call('get', 'auth/me', shopper.body.accessToken).expect(200);
+    const staffAgain = await call('post', 'auth/admin/login').send(credentials).expect(201);
+    await call('post', 'auth/logout', shopper.body.accessToken).expect(201);
+    await call('get', 'admin/summary', staffAgain.body.accessToken).expect(200);
+  });
   it('retains disabled variants in private details and hides them publicly', async () => {
     const detail = await call('get', `admin/products/${productId}`).expect(200);
     expect(detail.body.variants[0]).toMatchObject({

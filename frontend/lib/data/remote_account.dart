@@ -13,8 +13,9 @@ UserProfile userFromJson(Object? value) {
 }
 
 class RemoteAccountRepository implements AccountRepository {
-  RemoteAccountRepository(this.api);
+  RemoteAccountRepository(this.api, {this.admin = false});
   final ApiClient api;
+  final bool admin;
   int _operation = 0;
   void dispose() {
     _operation++;
@@ -27,12 +28,22 @@ class RemoteAccountRepository implements AccountRepository {
     required String password,
     bool register = false,
   }) async {
+    if (admin && register) {
+      throw const ApiException(
+        'FORBIDDEN',
+        'Tài khoản quản trị cần được cấp quyền bởi cửa hàng.',
+      );
+    }
     final operation = ++_operation;
     final generation = api.tokens.generation;
     final value =
         await api.request(
               'POST',
-              register ? 'auth/register' : 'auth/login',
+              admin
+                  ? 'auth/admin/login'
+                  : register
+                  ? 'auth/register'
+                  : 'auth/login',
               authenticated: false,
               body: {
                 if (register) 'name': name.trim(),
@@ -44,6 +55,12 @@ class RemoteAccountRepository implements AccountRepository {
     final profile = userFromJson(value['user']);
     if (operation != _operation || api.tokens.generation != generation) {
       throw sessionChanged;
+    }
+    if (admin && profile.role != 'ADMIN') {
+      throw const ApiException(
+        'FORBIDDEN',
+        'Tài khoản này chưa có quyền quản trị.',
+      );
     }
     api.tokens.set(
       accessToken: value['accessToken'] as String,
