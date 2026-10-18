@@ -169,3 +169,5 @@ Kiểm chứng: 29 PostgreSQL E2E +11 backend unit đạt (17 worker/storage opt
 Chrome/PostgreSQL thật đạt: đi từ tài khoản vào lịch sử, sửa đánh giá và kiểm tra điểm công khai, ẩn đúng sản phẩm fixture rồi xóa từ lịch sử, viết lại, reload/đăng nhập trở về đúng trang, tài khoản khác không thấy nội dung riêng. Đã xem ảnh375/1440 của trang thường và sản phẩm ẩn, không overflow/exception. Harness chỉ tạo/ẩn/khôi phục/dọn fixture của lượt chạy trên `_test`.
 
 Các phần chưa triển khai vẫn gồm promotions/style preferences, khôi phục mật khẩu/email, uploads catalog, audit/đối soát COD, AI/provider/payment thật; ảnh/phản hồi/kiểm duyệt đánh giá là các phần mở rộng riêng. Không đánh dấu toàn bộ dự án đã hoàn tất.
+
+Rà soát cuối sửa một lỗi thông báo: xác nhận xóa không còn hứa có thể viết lại đối với đánh giá của sản phẩm ẩn hoặc legacy chưa đủ điều kiện. Thông báo nêu rõ không thể hoàn tác. Hai kiểm thử giao diện375/1440 đã tái hiện lỗi trước sửa. Phạm vi tiếp tục yêu cầu tải lại ở trình duyệt khác; không tự sửa dữ liệu lịch sử sai định dạng hoặc triển khai ảnh/phản hồi/kiểm duyệt trong đợt này.

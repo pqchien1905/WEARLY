@@ -242,6 +242,8 @@ void main() {
         matching: find.text('Xóa đánh giá'),
       );
       await tapVisible(tester, hiddenDelete);
+      expect(find.textContaining('Bạn vẫn có thể viết lại sau'), findsNothing);
+      expect(find.textContaining('không thể hoàn tác'), findsOneWidget);
       await tapVisible(tester, find.text('Đóng'));
       expect(writes, 1);
       await tapVisible(tester, hiddenDelete);

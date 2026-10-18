@@ -105,7 +105,7 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
                 children: [
                   if (widget.deleting)
                     const Text(
-                      'Đánh giá sẽ được gỡ khỏi sản phẩm. Bạn vẫn có thể viết lại sau.',
+                      'Đánh giá sẽ được xóa khỏi sản phẩm và danh sách của bạn. Thao tác này không thể hoàn tác.',
                     )
                   else ...[
                     const Text(
