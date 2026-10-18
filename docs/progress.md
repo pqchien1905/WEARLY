@@ -61,3 +61,11 @@ Node/Flutter portable đã thêm PATH; Git,WSL,Docker Desktop đã cài. Windows
 Backend build/lint/unit4 và PostgreSQL E2E10 đạt; Flutter180 test đạt,1 live API test đạt riêng, analyze sạch, Web release build đạt. Independent review không có Critical/Important; hai lỗi nhỏ về null-validation và khôi phục env test đã sửa. npm production dependency audit0 findings. Chi tiết, các lệnh và phạm vi chưa hoàn tất tại [backend-report.md](backend-report.md).
 
 Chưa hoàn tất: Docker/Redis runtime sau reboot, real AI/private upload lifecycle/payment, remote Flutter auth/cart/orders/admin. Không tuyên bố production-ready hoặc toàn bộ tiêu chí master prompt đã đạt.
+
+## Native Windows backend continuation — 2026-10-18
+
+Theo yêu cầu sau restart, đã cài PostgreSQL17.11 + psql + pgAdmin trực tiếp trên Windows. PostgreSQL và Memurai Developer4.1.2 chạy dưới Windows Services Automatic, chỉ nghe loopback5432/6379. Đã tạo role ứng dụng không phải superuser, database wearly/wearly_test UTF8, deploy2 migrations và seed32 products/256SKUs. pgAdmin có kết nối WEARLY sẵn; bundled driver đọc dữ liệu thành công.
+
+Worker được kiểm chứng bằng PostgreSQL và Redis-compatible Memurai thật. Thêm6 worker integration tests, queue namespace độc lập và sửa lỗi provider exception có thể lộ dữ liệu trong Redis failedReason/stacktrace. Kết quả: unit5, commerce10 + worker6 E2E, build/lint và Flutter live catalog1 đều đạt. API readiness200 xác nhận cả database/Redis; Swagger200. Không gọi provider AI thật hay coi test doubles là kết quả AI sản phẩm.
+
+DISM RestoreHealth đã thành công, nhưng SFC báo hệ thống có repair pending cần restart tiếp; Docker Engine vẫn chưa chạy. Native backend không phụ thuộc Docker nên có thể sử dụng ngay. Compose dùng host ports5433/6380 trên máy này để tránh xung đột. Memurai Developer không dùng production, tự dừng sau10 ngày; các giới hạn AI/upload/payment/remote Flutter còn giữ nguyên trong migration-plan.md.

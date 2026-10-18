@@ -29,9 +29,11 @@ export class AiProcessor implements OnModuleInit, OnModuleDestroy {
       port: this.config.getOrThrow<number>('REDIS_PORT'),
       maxRetriesPerRequest: null,
     };
-    this.queue = new Queue(AI_QUEUE, { connection });
+    const prefix = this.config.getOrThrow<string>('AI_QUEUE_PREFIX');
+    this.queue = new Queue(AI_QUEUE, { connection, prefix });
     this.worker = new Worker(AI_QUEUE, (job) => this.process(job), {
       connection,
+      prefix,
       concurrency: 2,
     });
     this.queue.on('error', () => this.logger.warn('QUEUE_UNAVAILABLE'));
@@ -144,7 +146,11 @@ export class AiProcessor implements OnModuleInit, OnModuleDestroy {
         where: { id: row.id },
         data: { status: final ? 'FAILED' : 'PENDING', errorCode: known },
       });
-      throw error;
+      // BullMQ persists failedReason and stacktrace in Redis. Never forward a
+      // provider exception that may contain credentials or signed image URLs.
+      throw error instanceof UnrecoverableError
+        ? new UnrecoverableError(known)
+        : new Error(known);
     } finally {
       if (timer) clearTimeout(timer);
       controller.abort();

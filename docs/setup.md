@@ -2,15 +2,15 @@
 
 ## Công cụ và trạng thái máy ngày 18/10/2026
 
-Node24.22.0 LTS, Flutter/Dart portable đã có trong .tools; đã thêm vào user PATH. Git for Windows2.55.0.5, WSL3.0.3 và Docker Desktop4.95.0 đã cài. Docker CLI29.8.2, Compose5.6.0 kiểm tra được.
+Node 24.22.0 LTS, Flutter/Dart portable đã có trong .tools; đã thêm vào user PATH. Git for Windows 2.55.0.5, WSL 3.0.3 và Docker Desktop 4.95.0 đã cài. Docker CLI 29.8.2, Compose 5.6.0 kiểm tra được.
 
-**Cần khởi động lại Windows:** Virtual Machine Platform và các Windows features báo RestartNeeded=true. Docker Engine hiện báo Virtual Machine Platform not enabled. Không tự khởi động lại để tránh mất công việc đang mở. Sau reboot mở Docker Desktop và chờ Engine running.
+**Đã cài PostgreSQL trực tiếp trên Windows:** PostgreSQL 17.11, psql và pgAdmin 4 từ [bộ cài EDB được PostgreSQL giới thiệu](https://www.postgresql.org/download/windows/). Service `postgresql-x64-17` tự khởi động cùng Windows, chỉ nghe localhost:5432. Database `wearly` và `wearly_test` dùng UTF8, owner `wearly` không có quyền superuser/CREATEDB/CREATEROLE.
 
-Nếu còn báo virtualization sau reboot, kiểm tra `wsl --status`, `docker info` và virtualization trong BIOS/UEFI. HypervisorPresent hiện true; không kết luận BIOS bị tắt chỉ từ WMI khi Windows hypervisor đang hoạt động.
+**Hàng đợi local:** Memurai Developer 4.1.2 chạy dưới service `Memurai`, chỉ nghe 127.0.0.1:6379, AOF và `noeviction`. Đây là [Redis-compatible runtime trên Windows](https://redis.io/partners/memurai/). Bản Developer chỉ dành cho phát triển/test và tự dừng sau 10 ngày; khởi động lại service khi cần. Docker Redis vẫn là cấu hình triển khai dự kiến.
 
-Trên máy mới cài [Node LTS](https://nodejs.org/en/download), [Git](https://git-scm.com/download/win), [Flutter](https://docs.flutter.dev/install) và [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/). WSL cần quyền admin lần đầu theo [Microsoft](https://learn.microsoft.com/en-us/windows/wsl/install). Không cần PostgreSQL hoặc Redis cài như Windows service.
+**Docker chưa sẵn sàng:** người dùng đã khởi động lại Windows. Các feature VMP/WSL/Hyper-V báo Enabled nhưng thiếu `vmcompute`/HNS; Docker vẫn báo không đủ điều kiện ảo hóa. `DISM /Online /Cleanup-Image /RestoreHealth` đã hoàn tất (exit 0). SFC báo một đợt sửa hệ thống đang chờ khởi động lại, nên chưa thể kiểm chứng việc phục hồi các dịch vụ. Sau lần restart tiếp theo chạy SFC và kiểm tra lại WSL/Docker. Không cần Docker để chạy luồng phát triển native dưới đây. Không kết luận BIOS bị tắt vì `HypervisorPresent=true`.
 
-## Chạy theo thứ tự
+## Chạy bằng PostgreSQL và Memurai đã cài
 
 Mở PowerShell mới để nhận PATH. Từ root:
 
@@ -19,14 +19,12 @@ cd 'D:\Fashion Shop'
 node --version
 git --version
 flutter --version
-docker info
-docker compose version
-node tools/init-env.cjs
-docker compose config --quiet
-docker compose up -d --wait postgres redis
+psql --version
+Get-Service postgresql-x64-17,Memurai
+& 'C:\Program Files\Memurai\memurai-cli.exe' ping
 ```
 
-init-env chỉ chạy lần đầu: tạo secret random vào root/.env và backend/.env bị Git ignore; từ chối ghi đè file có sẵn. Máy hiện tại đã có hai file này, bỏ qua init-env. Ví dụ cấu hình công khai nằm ở .env.example, không dùng placeholder cho production. DATABASE_URL password cần URL-encode nếu tự đặt ký tự đặc biệt; script tạo hex không gặp vấn đề này.
+Máy hiện tại đã có root/.env và backend/.env; không chạy lại `node tools/init-env.cjs`. Script đó chỉ dùng lần đầu trên máy mới để tạo secret ngẫu nhiên, từ chối ghi đè. Database native đã được cấp tài khoản theo `backend/.env`, không cần thay mật khẩu. Nếu service dừng, chạy `Start-Service postgresql-x64-17,Memurai` trong PowerShell Administrator.
 
 ```powershell
 cd backend
@@ -47,7 +45,13 @@ cd 'D:\Fashion Shop\backend'
 npm run prisma:studio
 ```
 
-Mở URL CLI Studio in ra. pgAdmin là tùy chọn, không bắt buộc.
+Mở URL CLI Studio in ra.
+
+### Mở pgAdmin
+
+Start Menu → PostgreSQL 17 → **pgAdmin 4**. Kết nối đã được đăng ký ở nhóm **Wearly**, tên **WEARLY - PostgreSQL 17 (Windows)**. Host `127.0.0.1`, port `5432`, database và username `wearly`. Mật khẩu kết nối được đọc từ file riêng có ACL tại `.tools/pgadmin/pgpass.conf`; file này không được đưa lên Git. Nếu cần nhập thủ công, đọc credential trong `backend/.env`, không gửi qua chat hay đưa vào tài liệu công khai.
+
+Đường dẫn cài: `C:\Program Files\PostgreSQL\17`. Dữ liệu service nằm trong thư mục `data` bên trong đường dẫn này; không nằm trong `.tools` và không mất khi đóng Codex. Tài khoản admin `postgres` chỉ dùng cài đặt; thông tin riêng được lưu tại `.tools/postgres-admin.json`.
 
 Worker terminal:
 
@@ -58,6 +62,8 @@ npm run worker
 ```
 
 Redis cần sẵn sàng. Provider mặc định Disabled; AI_PROVIDER_URL/API_KEY chưa tự kích hoạt AI. Phải triển khai TryOnProvider và bind ở API/worker đồng thời.
+
+`AI_QUEUE_PREFIX` mặc định `wearly`. Nếu đã chạy bản cũ với prefix mặc định của BullMQ (`bull`) và còn job, giữ `AI_QUEUE_PREFIX=bull` cho đến khi xử lý hết; không đổi prefix tùy ý vì mỗi prefix là một hàng đợi riêng.
 
 ## Flutter
 
@@ -79,6 +85,17 @@ Android emulator (sau khi bổ sung platform) dùng http://10.0.2.2:3000/api/v1.
 
 ## Containers và storage
 
+Sau khi Docker Engine hoạt động, có thể dùng môi trường Docker độc lập:
+
+```powershell
+cd 'D:\Fashion Shop'
+docker info
+docker compose config --quiet
+docker compose up -d --wait postgres redis
+```
+
+Trên máy này `.env` đặt `POSTGRES_PUBLISHED_PORT=5433`, `REDIS_PUBLISHED_PORT=6380` để không tranh cổng với service Windows. Bản `.env.example` mặc định 5432/6379 dành cho máy chỉ dùng Docker. Hai PostgreSQL có volume/dữ liệu riêng; chạy migration/seed cho đúng database, không kỳ vọng dữ liệu native tự xuất hiện trong container. Khi chạy backend trên host với database Docker, đặt DATABASE_URL port 5433 và REDIS_PORT=6380 trong process/backend env. Container API/worker luôn dùng hostname postgres:5432 và redis:6379.
+
 ```powershell
 docker compose --profile app up -d --build
 docker compose --profile storage up -d minio
@@ -95,7 +112,7 @@ Named volumes giữ DB/Redis/MinIO. Không chạy `docker compose down -v` nếu
 ```powershell
 cd 'D:\Fashion Shop'
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\backend.ps1 check
-powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\test-backend.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\test-backend.ps1 -WithWorker
 cd frontend
 flutter analyze
 flutter test
@@ -103,17 +120,19 @@ flutter build web --release
 flutter test test/live_catalog_test.dart --dart-define=LIVE_API_BASE_URL=http://localhost:3000/api/v1
 ```
 
-test-backend tạo database riêng hậu tố _test nếu chưa có, không reset/drop DB. TEST_DATABASE_URL có thể override rõ ràng; script lưu vào backend/.env.test bị ignore. E2E tạo dữ liệu tổng hợp với UUID riêng cho mỗi lượt.
+test-backend dùng database riêng hậu tố _test, không reset/drop DB. Native `wearly_test` đã được tạo bằng tài khoản admin vì role ứng dụng không có CREATEDB. TEST_DATABASE_URL có thể override rõ ràng; script lưu vào backend/.env.test bị ignore. `-WithWorker` bật thêm test PostgreSQL + Redis/Memurai thật; chỉ provider AI và object storage dùng test doubles. Mỗi lượt dùng queue namespace UUID riêng, không FLUSHDB. Bỏ flag nếu chỉ muốn kiểm tra commerce; worker tests sẽ được báo skipped. TEST_REDIS_HOST/TEST_REDIS_PORT có thể trỏ một Redis test khác.
 
-## PostgreSQL thử nghiệm đang chạy trước reboot
+Chỉ chạy một worker suite trên cùng test database: suite giữ PostgreSQL advisory lock và từ chối lượt chạy trùng. Nếu một lượt bị ngắt để lại AIJob pending/processing hoặc outbox chưa publish, suite tiếp theo dừng trước khi khởi động worker để người phát triển kiểm tra fixture đó; không tự xử lý job cũ bằng test provider.
+
+## PostgreSQL portable của phiên trước
 
 Do Docker Engine còn chờ reboot, phiên này dùng PostgreSQL thật18.4 tại 127.0.0.1:55432 trong .tools/test-services để chạy migrations/seed/E2E. Không cài thành Windows service. Credentials chỉ nằm trong .tools bị ignore. DB UTF8: wearly_utf8 và wearly_utf8_test. Hai DB WIN1252 từ thử nghiệm đầu không bị xóa; chúng không chứa dữ liệu kinh doanh.
 
-API đang chạy với DATABASE_URL override trong process; backend/.env vẫn trỏ cấu hình Docker5432. Sau reboot PostgreSQL tạm không tự khởi động. Chạy quy trình Docker ở trên để dùng PostgreSQL17 đã khai báo trong Compose và seed lại dữ liệu demo.
+PostgreSQL tạm không còn được dùng sau reboot. Backend hiện dùng PostgreSQL 17 Windows tại 5432 với cấu hình sẵn có trong backend/.env. Dữ liệu demo đã seed lại; không xóa các database thử nghiệm cũ trong .tools.
 
 ## Xử lý lỗi
 
-- Docker500 hoặc WSL virtualization: hoàn tất reboot, kiểm tra docker info; chưa coi compose up là thành công.
+- Docker500 hoặc WSL virtualization: xem kết quả chẩn đoán thành phần Windows; việc reboot lần đầu chưa giải quyết được. Luồng native vẫn chạy độc lập.
 - P1001/connect refused: kiểm tra port/host/container health và DATABASE_URL.
 - Invalid environment: thay placeholder, secrets khác nhau dài≥32, durations tính theo giây.
 - UTF8/22P05: DB phải UTF8; không đổi dữ liệu tiếng Việt thành ASCII để né lỗi.

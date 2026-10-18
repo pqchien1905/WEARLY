@@ -19,11 +19,10 @@ tools/          Script phát triển PowerShell/Node
 docker-compose.yml  PostgreSQL, Redis; profile storage và app
 ```
 
-Bắt đầu sau khi Docker Engine hoạt động:
+Bắt đầu trên máy Windows đã cấu hình PostgreSQL và Memurai:
 
 ```powershell
-node tools/init-env.cjs   # chỉ lần đầu; không ghi đè .env đã có
-docker compose up -d --wait postgres redis
+Get-Service postgresql-x64-17,Memurai
 cd backend
 npm ci
 npm run prisma:generate
@@ -31,6 +30,8 @@ npm run prisma:deploy
 npm run prisma:seed
 npm run start:dev
 ```
+
+Mở terminal riêng trong `backend` và chạy `npm run build` rồi `npm run worker`. pgAdmin nằm trong Start Menu → PostgreSQL 17, với kết nối **WEARLY - PostgreSQL 17 (Windows)** đã đăng ký trên máy này. Máy mới hoặc chạy bằng Docker: làm theo [setup.md](docs/setup.md); không ghi đè các file `.env` đang có.
 
 Swagger: http://localhost:3000/api/docs. Catalog API: http://localhost:3000/api/v1/products.
 

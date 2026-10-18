@@ -313,6 +313,13 @@ describe('Commerce with real PostgreSQL', () => {
   });
   it('does not fabricate AI results when no provider is configured', async () => {
     const c = await customer();
+    for (const consent of [undefined, false]) {
+      await request(app.getHttpServer())
+        .post('/api/v1/ai/try-on/jobs')
+        .auth(c.accessToken, { type: 'bearer' })
+        .send({ imageId: randomUUID(), sku: 'missing', consent })
+        .expect(400);
+    }
     await request(app.getHttpServer())
       .post('/api/v1/ai/try-on/jobs')
       .auth(c.accessToken, { type: 'bearer' })

@@ -17,6 +17,10 @@ const schema = z
       ),
     REDIS_HOST: z.string().default('localhost'),
     REDIS_PORT: z.coerce.number().int().min(1).max(65535).default(6379),
+    AI_QUEUE_PREFIX: z
+      .string()
+      .regex(/^[a-zA-Z0-9_-]{1,100}$/)
+      .default('wearly'),
     JWT_ACCESS_SECRET: secret,
     JWT_REFRESH_SECRET: secret,
     JWT_ACCESS_EXPIRES_IN: z.coerce

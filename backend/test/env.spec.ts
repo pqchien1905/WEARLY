@@ -25,4 +25,14 @@ describe('configuration', () => {
       validateEnv({ ...good, JWT_ACCESS_EXPIRES_IN: '-1' }),
     ).toThrow();
   });
+  it('validates an explicit queue namespace for isolated integration tests', () => {
+    expect(validateEnv(good)).toHaveProperty('AI_QUEUE_PREFIX', 'wearly');
+    expect(
+      validateEnv({ ...good, AI_QUEUE_PREFIX: 'wearly-test-123' }),
+    ).toHaveProperty('AI_QUEUE_PREFIX', 'wearly-test-123');
+    expect(() => validateEnv({ ...good, AI_QUEUE_PREFIX: '' })).toThrow();
+    expect(() =>
+      validateEnv({ ...good, AI_QUEUE_PREFIX: 'contains:separator' }),
+    ).toThrow();
+  });
 });

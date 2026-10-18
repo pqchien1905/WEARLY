@@ -94,13 +94,13 @@ Backend mới gồm22 model,2 migration,seed,PrismaService,8 feature modules, co
 
 ## D. Database
 
-22 model có PK/FK/unique/index, Decimal VND, snapshot, enum và CHECK constraints. PostgreSQL thật18.4 tạm đã nhận2 migrations trong2 database UTF8 mới. Seed chạy2 lần,32 sản phẩm/256SKU, không nhân bản/đặt lại giá/tồn. Compose target PostgreSQL17 còn chờ Docker Engine sau reboot.
+22 model có PK/FK/unique/index, Decimal VND, snapshot, enum và CHECK constraints. Sau lần restart đầu, đã cài PostgreSQL **17.11** trực tiếp trên Windows, tạo `wearly`/`wearly_test` UTF8 và áp dụng hai migrations. Seed tạo 32 sản phẩm/256 SKU; các kiểm tra idempotency từ phiên trước vẫn được giữ. PostgreSQL 18.4 portable của phiên trước không còn được dùng. Compose PostgreSQL17 vẫn chưa được chạy do Windows virtualization chưa phục hồi.
 
 ## E. API
 
 Auth, users/addresses, public catalog, cart, orders, các endpoint admin được liệt kê tại [api.md](api.md) có implementation database thật. Swagger http://localhost:3000/api/docs đã trả OpenAPI khi smoke/E2E.
 
-GET health chạy; readiness cố ý báo503 nếu thiếu Redis. AI job routes có implementation ownership/config checks nhưng create hiện trả503 vì provider Disabled. Chưa có real Try-On hoặc upload.
+GET health và readiness đều trả200; readiness xác nhận PostgreSQL và Memurai sẵn sàng. AI job routes có implementation ownership/config checks nhưng create hiện trả503 vì provider Disabled. Worker/outbox đã được kiểm thử trên PostgreSQL + Memurai thật; provider AI và object storage trong test là test doubles. Chưa có real Try-On hoặc upload.
 
 ## F. Công cụ và cách chạy
 
@@ -111,12 +111,13 @@ GET health chạy; readiness cố ý báo503 nếu thiếu Redis. AI job routes 
 | Git | Git for Windows2.55.0.5 cài xong; origin pqchien1905/WEARLY |
 | WSL | 3.0.3 cài xong |
 | Docker Desktop | 4.95.0 cài xong; CLI29.8.2, Compose5.6.0 |
-| Windows virtualization features | Enabled nhưng RestartNeeded=true |
-| PostgreSQL | Runtime18.4 tạm chạy55432 để test; Compose17 sau reboot |
-| Redis/MinIO | Cấu hình Compose có; chưa chạy được trước reboot |
+| Windows virtualization features | Enabled nhưng thiếu vmcompute/HNS; DISM repair exit0, SFC yêu cầu restart tiếp |
+| PostgreSQL | 17.11 Windows Service tự khởi động, localhost5432, psql và pgAdmin đã cài |
+| Redis local | Memurai Developer4.1.2, Redis API7.2.5, localhost6379, AOF/noeviction |
+| Docker Redis/MinIO | Cấu hình Compose có; runtime vẫn chưa xác minh |
 | Prisma/Studio, NestJS, Jest, ESLint/Prettier | Cài local trong backend, có npm scripts |
 
-Không tự restart Windows. Sau reboot, theo thứ tự [setup.md](setup.md): docker compose up → npm ci → generate → deploy → seed → API/worker → Flutter. PostgreSQL/Redis dùng Docker, không yêu cầu cài Windows services.
+Luồng native hiện chạy được theo [setup.md](setup.md): kiểm tra service Windows → generate/deploy/seed → API/worker → Flutter. pgAdmin đã có kết nối WEARLY; credential nằm trong file local bị Git ignore. Docker publish5433/6380 trên máy này để tránh tranh cổng với native5432/6379. Không tự restart Windows. Memurai Developer không dùng production và tự dừng sau10 ngày.
 
 ## G. Kiểm thử thực tế
 
@@ -128,8 +129,11 @@ Không tự restart Windows. Sau reboot, theo thứ tự [setup.md](setup.md): d
 | Seed2 lần | Đạt |
 | Backend build | Đạt |
 | Backend lint | Đạt |
-| Jest unit | 4 đạt |
-| PostgreSQL E2E | 10 đạt, gồm overflow regression |
+| Jest unit | 5 đạt |
+| PostgreSQL E2E | 10 commerce đạt trên PostgreSQL17.11 |
+| Worker E2E | 6 đạt trên PostgreSQL17.11 + Memurai, tổng16 E2E |
+| Worker retries/privacy | Retry3 lần, sanitized Redis errors, outbox replay không tạo lại result, nguồn ảnh bị xóa/expired không xuất result |
+| AI ownership/consent | Chặn ảnh/kết quả của user khác; consent thiếu hoặc false trả400 |
 | Last SKU concurrency | Một201, một409; tồn0 |
 | Concurrent duplicate checkout | Cùng order ID; chỉ1 đơn |
 | Concurrent cancellation | Hoàn kho đúng1 lần |
@@ -140,16 +144,20 @@ Không tự restart Windows. Sau reboot, theo thứ tự [setup.md](setup.md): d
 | Flutter analyze | Không issues |
 | Flutter build web --release | Đạt |
 | docker compose config --quiet | Đạt |
-| docker compose up postgres redis | Thất bại vì VMP chờ restart |
+| docker compose up postgres redis | Chưa chạy được; Windows repair còn pending reboot |
+| Native service/pgAdmin | PostgreSQL và Memurai Running; pgAdmin driver đọc được32 sản phẩm |
+| API readiness | 200, database=true và redis=true |
 | npm audit --omit=dev | 0 vulnerability sau override js-yaml5.4.1 |
 
 Đã gặp lỗi và xử lý: PostgreSQL portable lấy WIN1252 theo Windows locale → tạo DB UTF8 riêng; không xóa DB cũ. Tổng Decimal vượt giới hạn trả500 → thêm validation400 trước stock mutation, E2E chứng minh. Flutter lint và ESLint CJS config đã sửa. pg8 có deprecation warning về Prisma query scheduling; chưa nâng pg9. Flutter build có thông tin Wasm dry-run; bản JavaScript release build thành công.
 
-Chưa kiểm chứng: container build/runtime PostgreSQL17/Redis, queue/outbox thực tế với Redis, MinIO upload lifecycle, Android/iOS/desktop, provider/payment thật. Không đánh dấu toàn bộ tiêu chí master prompt hoàn tất trước những kiểm tra còn thiếu.
+Lần tiếp tục này phát hiện lỗi provider exception có thể được BullMQ lưu nguyên văn trong Redis; test đã tái hiện lỗi rồi xác nhận bản sửa chỉ lưu mã an toàn. Test namespace độc lập tránh xử lý nhầm hàng đợi phát triển.
+
+Nền tảng local đã đáp ứng các tiêu chí chạy API/database/Prisma/auth/catalog/cart/orders, kết nối Flutter và worker trong phạm vi kiểm thử. Chưa kiểm chứng: container build/runtime PostgreSQL17/Redis, MinIO upload lifecycle, Android/iOS/desktop, provider/payment thật. Không coi native runtime là bằng chứng container hoặc hệ thống production đã sẵn sàng.
 
 ## H. Việc tiếp theo
 
-1. Khởi động lại Windows, chạy Docker/PostgreSQL17/Redis và lặp migration/E2E; xác minh worker enqueue/retry với Redis.
+1. Hoàn tất Windows repair sau lần restart tiếp theo, chạy lại SFC/WSL/Docker; sau đó kiểm chứng container build và Redis Linux. Worker native đã được kiểm thử.
 2. Nối Flutter auth → địa chỉ → cart → orders cùng cache async và idempotency, bảo toàn UI.
 3. Private uploads với byte/MIME/resolution checks, consent, quota, delete/retention; sau đó chọn và triển khai TryOnProvider thật.
 4. Payment gateway/webhook và reservation expiry; COD settlement; không tự đánh dấu đã thanh toán.

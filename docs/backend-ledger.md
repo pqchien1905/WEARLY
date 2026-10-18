@@ -22,3 +22,22 @@
 - Dependency audit: patched Swagger js-yaml override to5.4.1; npm audit --omit=dev reports0 known vulnerabilities.
 - Final review: no Critical/Important findings. Minor null DTO bypass and test-helper environment leakage corrected. Null inputs now400; E2E10 pass; helper run confirms Environment restored=True.
 - Deferred scope rulings: Docker/Redis/container/worker runtime require Windows reboot; real upload/AI/payment and mobile builds explicitly remain unverified. No other review findings deferred.
+
+## Follow-up after Windows restart — 2026-10-18
+
+- User confirmed restart and explicitly requested PostgreSQL software on Windows. Continue the existing foundation plan; do not redesign the Flutter app.
+- Ruling: install the official PostgreSQL 17 server, command-line tools and pgAdmin on Windows, with a dedicated application role and UTF8 databases. Native services become the local development path; Compose remains available separately.
+- Windows feature inspection reports VMP/WSL/Hyper-V Enabled, but vmcompute/HNS services and binaries are absent. Docker still fails its preconditions; DISM restore and SFC verification are running. Do not attribute this to BIOS without evidence.
+- Ruling: use Memurai Developer for local Redis-compatible queue integration while Windows virtualization is repaired. It is not licensed for production and stops after 10 days; Docker Redis remains the deployment target. No inbound firewall exception was added; bind only 127.0.0.1.
+- Native PostgreSQL17.11 installed successfully (verified installer SHA256 and EDB signature), psql/pgAdmin present, automatic service running with loopback-only listen addresses. Application role has no superuser/CREATEDB/CREATEROLE. Both UTF8 databases and migrations ready, seed32 products/256SKUs.
+- pgAdmin server registration imported and bundled driver connection verified against32 products. Credentials kept in ignored private files; passfile ACL restricted to owner/admin/SYSTEM.
+- DISM RestoreHealth exit0; SFC exit1 explicitly reports pending system repair requiring another restart. vmcompute/HNS still absent. Ruling: do not force another restart; native backend and queue are usable now, Docker runtime remains unverified.
+- Unit namespace validation RED→GREEN. First queue integration attempt revealed ConfigModule snapshots env during import; tests now explicitly override validated ConfigService and use UUID queue prefixes. Removed only the five synthetic jobs/events from the initial default queue.
+- Provider error regression RED→GREEN: raw provider message was persisted in Redis failedReason; worker now throws sanitized Error/UnrecoverableError. Retry count and unrecoverable behavior preserved.
+- Verification: build/lint passed; unit5 passed; PostgreSQL17.11 commerce10 + Memurai worker6 passed. Worker tests cover disabled provider, retry3, sanitized failure, expired/deleted input, replay idempotency and ownership. HTTP tests cover missing/false consent.
+- Native API/worker started; readiness200 with database=true/redis=true, Swagger200, catalog32. Compose config valid; host mappings5433/6380 avoid native5432/6379 conflicts.
+- Flutter live catalog test passed against native PostgreSQL17 API. Full frontend source unchanged in this continuation; prior180-test/analyze/web-build evidence remains recorded separately.
+- Queue-prefix compatibility documented: an installation that previously had BullMQ jobs under bull must retain AI_QUEUE_PREFIX=bull until drained; this user's old worker never ran real jobs.
+- Fresh review fallback (first model at capacity): no Critical/Important production findings. Addressed three test reliability findings: explicit provider state (isolated replay test RED→GREEN), wait for actual outbox republication, database advisory lock plus unfinished-fixture preflight. Negative overlap check confirms refusal before inserting jobs.
+- Review boundaries: host installation verified independently by service/driver/DB/readiness commands; real AI/storage/payment and Docker runtime remain outside the completed native scope; unchanged frontend/commerce retain prior evidence plus current E2E/live checks.
+- Final post-review verification: isolated replay1 passed, overlapping-suite guard passed without mutation, full E2E16 passed, unit5 passed, lint passed. All three test findings addressed; no deferred minor findings in this continuation.

@@ -1,6 +1,7 @@
+param([switch]$WithWorker)
 $ErrorActionPreference = 'Stop'
 $previousEnvironment = @{}
-foreach ($name in @('PATH','DATABASE_URL','TEST_DATABASE_URL','NODE_ENV')) {
+foreach ($name in @('PATH','DATABASE_URL','TEST_DATABASE_URL','NODE_ENV','TEST_REDIS_HOST','TEST_REDIS_PORT')) {
   $previousEnvironment[$name] = [Environment]::GetEnvironmentVariable($name,'Process')
 }
 $workspace = Split-Path -Parent $PSScriptRoot
@@ -15,6 +16,10 @@ try {
   $env:TEST_DATABASE_URL = $line.Substring('TEST_DATABASE_URL='.Length)
   $env:DATABASE_URL = $env:TEST_DATABASE_URL
   $env:NODE_ENV = 'test'
+  if ($WithWorker) {
+    if (!$env:TEST_REDIS_HOST) { $env:TEST_REDIS_HOST = '127.0.0.1' }
+    if (!$env:TEST_REDIS_PORT) { $env:TEST_REDIS_PORT = '6379' }
+  }
   & npm.cmd run prisma:deploy
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   & npm.cmd run test:e2e
