@@ -23,7 +23,7 @@ Preview là máy chủ file tĩnh phục vụ build Flutter, không phải backe
 Cài Flutter stable và Git theo [hướng dẫn Flutter](https://docs.flutter.dev/install/manual). Phiên kiểm thử dùng Flutter **3.47.7**, Dart **3.13.5**, Chrome Windows. `pubspec.lock` khóa dependencies đã chạy.
 
 ```sh
-cd apps/storefront
+cd frontend
 flutter pub get
 flutter run -d chrome --dart-define=DEMO_MODE=true
 flutter analyze
@@ -31,7 +31,7 @@ flutter test --reporter expanded
 flutter build web --release --dart-define=DEMO_MODE=true
 ```
 
-Đầu ra: `apps/storefront/build/web`. Phục vụ qua HTTP, không mở trực tiếp `index.html` bằng file explorer. Hash routes hỗ trợ static hosting không cần rewrite. Nếu triển khai dưới thư mục con, dùng `--base-href=/ten-thu-muc/`.
+Đầu ra: `frontend/build/web`. Phục vụ qua HTTP, không mở trực tiếp `index.html` bằng file explorer. Hash routes hỗ trợ static hosting không cần rewrite. Nếu triển khai dưới thư mục con, dùng `--base-href=/ten-thu-muc/`.
 
 ## Điểm bắt đầu
 
@@ -68,7 +68,7 @@ Admin cho phép tạo/sửa/xóa sản phẩm, thêm/xóa biến thể màu–si
 - `lib/core/widgets`: buttons, fields, states, shell, cards, selectors.
 - `lib/domain`: hợp đồng catalog/commerce/AI; `lib/data`: mock implementations và fixture 32 sản phẩm / 256 SKU ban đầu.
 - `lib/app/*providers*`: nơi thay repository bằng adapter NestJS. [Kiến trúc](docs/frontend-architecture.md), [API contracts](docs/api-contracts-frontend.md).
-- `assets/images`, `assets/fonts`: ảnh và fonts local. [Nguồn tài sản](apps/storefront/assets/ATTRIBUTION.md).
+- `assets/images`, `assets/fonts`: ảnh và fonts local. [Nguồn tài sản](frontend/assets/ATTRIBUTION.md).
 
 `DEMO_MODE=false` chưa có adapter production và không bật dịch vụ thật. Không dùng bản frontend này như hệ thống đăng nhập/quản trị có bảo mật.
 

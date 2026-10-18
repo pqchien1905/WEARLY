@@ -1,5 +1,7 @@
 # Contracts cho giai đoạn NestJS
 
+**Cập nhật 18/10/2026:** đây là contract đề xuất lịch sử. API đã triển khai dùng /api/v1, POST /orders và /users/me, chi tiết tại [api.md](api.md). Khác biệt được ghi trong [architecture.md](architecture.md); không dùng các đường dẫn /v1 dưới đây để gọi server mới.
+
 **Thiết kế tích hợp, chưa có server hoặc request API trong ứng dụng hiện tại.** Contracts dưới đây là ranh giới mong đợi để thay mock. UI không được làm nguồn thẩm quyền về giá, tồn kho, quyền hoặc trạng thái thanh toán.
 
 ## Quy ước chung

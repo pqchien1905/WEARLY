@@ -1,0 +1,19 @@
+flowchart TD
+  App["AppModule"] --> Config["ConfigModule: validated env"]
+  App --> Security["AuthGuard + ThrottlerGuard + validation + filter"]
+  App --> Auth["AuthModule"]
+  App --> Users["UsersModule: profile + addresses"]
+  App --> Catalog["ProductsModule: products + categories + brands"]
+  App --> Cart["CartModule"]
+  App --> Orders["OrdersModule"]
+  App --> Admin["AdminModule: guarded management"]
+  App --> Health["HealthModule"]
+  App --> AI["AiModule"]
+  Auth & Users & Catalog & Cart & Orders & Admin & Health & AI --> Prisma["PrismaModule / PrismaService"]
+  AI --> Adapter["TryOnProvider: Disabled by default"]
+  AI --> Storage["StorageService"]
+  Worker["WorkerModule: separate process"] --> Prisma
+  Worker --> Processor["AiProcessor + outbox dispatcher"]
+  Processor --> Adapter
+  Processor --> Storage
+  Processor --> Queue["BullMQ"]

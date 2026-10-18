@@ -57,7 +57,7 @@ const out=path.resolve(__dirname,'../docs/qa');
   await route('/admin/products');await check('Admin mobile exposes price','Từ 490.000');await shot('admin-product-cards');
   await route('/virtual-try-on?product=nep-1');
   await button('Chọn màu và size').click();await page.getByRole('menuitem',{name:'Trắng / M',exact:true}).click();
-  const chooser=page.waitForEvent('filechooser');await button('Chọn ảnh từ thiết bị').click();await (await chooser).setFiles(path.resolve(__dirname,'../apps/storefront/assets/images/shirt.jpg'));await page.waitForTimeout(600);
+  const chooser=page.waitForEvent('filechooser');await button('Chọn ảnh từ thiết bị').click();await (await chooser).setFiles(path.resolve(__dirname,'../frontend/assets/images/shirt.jpg'));await page.waitForTimeout(600);
   await page.getByRole('checkbox',{name:/Tôi có quyền/}).click();await button('Tạo bản thử đồ demo').click();await page.waitForTimeout(2300);
   await button('Xem trang kết quả').click();await page.waitForTimeout(450);
   if(!page.url().includes('/virtual-try-on/tryon-'))throw Error('Missing result URL');

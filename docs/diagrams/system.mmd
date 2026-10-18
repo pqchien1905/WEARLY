@@ -1,0 +1,11 @@
+flowchart LR
+  F["Flutter: Riverpod + go_router"] -->|"HTTP JSON /api/v1"| API["NestJS API"]
+  API --> P["Prisma 7 + adapter-pg"]
+  P --> DB[("PostgreSQL")]
+  API -->|"AIJob + OutboxEvent transaction"| DB
+  W["AI worker / outbox dispatcher"] --> DB
+  W --> Q[("Redis / BullMQ")]
+  Q --> W
+  W -. "future provider adapter" .-> AI["AI provider / optional FastAPI"]
+  W -. "private objects" .-> S3["S3 / MinIO optional"]
+  API -. "owned signed URL" .-> S3

@@ -1,7 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const root = path.resolve(__dirname, '../apps/storefront/build/web');
+const root = path.resolve(__dirname, '../frontend/build/web');
 const mime = {'.html':'text/html','.js':'application/javascript','.json':'application/json','.wasm':'application/wasm','.jpg':'image/jpeg','.png':'image/png','.ttf':'font/ttf','.svg':'image/svg+xml'};
 http.createServer((req,res) => {
   const clean = decodeURIComponent(req.url.split('?')[0]);

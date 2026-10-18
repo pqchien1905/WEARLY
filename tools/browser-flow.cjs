@@ -47,7 +47,7 @@ const results = [], errors = [], external = [];
     await route('/virtual-try-on?product=nep-1');
     const chooser=page.waitForEvent('filechooser');
     await button('Chọn ảnh từ thiết bị').click();
-    await (await chooser).setFiles(path.resolve(__dirname,'../apps/storefront/assets/images/shirt.jpg'));
+    await (await chooser).setFiles(path.resolve(__dirname,'../frontend/assets/images/shirt.jpg'));
     await page.waitForTimeout(500);
     fs.writeFileSync(path.join(out,'browser-snapshot.txt'),await snap());
     await button('Chọn màu và size').click();

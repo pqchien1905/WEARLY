@@ -11,7 +11,7 @@ if ($Action -eq 'preview') {
   & $node (Join-Path $PSScriptRoot 'serve.cjs')
   exit $LASTEXITCODE
 }
-Push-Location (Join-Path $workspace 'apps/storefront')
+Push-Location (Join-Path $workspace 'frontend')
 try {
   & $flutter pub get
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -51,3 +51,13 @@ Remaining limits:7 repeated stock photos across32 fixtures, incomplete per-color
 Added account-scoped address/style repository and AsyncNotifier, shared account navigation, address CRUD/default and explicit checkout selection, saved style application in Stylist, order search/status filter/current progress/detail, metadata-only Try-On history with confirmed removal, and contextual PDP→Stylist prompt. Fixed CartSummary narrow/enlarged-text overflow. Signout/identity-change completion guard prevents stale writes from restoring account data or reporting success.
 
 Verification:174 tests pass, analyzer clean, release build exit0;59 Chrome checks across6 suites have no JS errors or external requests.10 new screenshots at375/1440. Independent review had no blocking findings; added the suggested status-dropdown test and reran full suite. Details and remaining commercial gaps: docs/account-journeys-2026-10-16.md. Preview4173 serves current build; no real services or persistent personal storage added.
+
+## Backend foundation — 2026-10-18
+
+Đã lưu Git baseline, nối origin pqchien1905/WEARLY và chuyển Flutter sang frontend với102 file source/assets giữ nguyên hash. Thêm backend NestJS11/Prisma7,22 models,2 migrations,seed32 products/256SKUs, auth/users/catalog/cart/orders/admin, AI disabled-provider/worker/outbox/storage foundation, Docker Compose và tài liệu.
+
+Node/Flutter portable đã thêm PATH; Git,WSL,Docker Desktop đã cài. Windows yêu cầu restart để bật virtualization features. Compose config đạt nhưng Engine/Redis chưa chạy được trước reboot. PostgreSQL18.4 thật tại55432 được dùng tạm để kiểm thử; backend .env mặc định vẫn theo Docker.
+
+Backend build/lint/unit4 và PostgreSQL E2E10 đạt; Flutter180 test đạt,1 live API test đạt riêng, analyze sạch, Web release build đạt. Independent review không có Critical/Important; hai lỗi nhỏ về null-validation và khôi phục env test đã sửa. npm production dependency audit0 findings. Chi tiết, các lệnh và phạm vi chưa hoàn tất tại [backend-report.md](backend-report.md).
+
+Chưa hoàn tất: Docker/Redis runtime sau reboot, real AI/private upload lifecycle/payment, remote Flutter auth/cart/orders/admin. Không tuyên bố production-ready hoặc toàn bộ tiêu chí master prompt đã đạt.

@@ -1,5 +1,7 @@
 # Frontend architecture
 
+**Cập nhật 18/10/2026:** ứng dụng đã chuyển từ apps/storefront sang frontend. RemoteProductRepository + ApiClient có thể đọc catalog thật bằng USE_REMOTE_CATALOG/API_BASE_URL; mặc định vẫn giữ toàn bộ mock. Xem [kiến trúc backend](architecture.md) và [kế hoạch chuyển đổi](migration-plan.md). Các mô tả demo phía dưới được giữ để tham chiếu.
+
 Một ứng dụng Flutter Web, hai shell: StoreShell cho khách và AdminShell cho quản trị. Dùng chung ProviderScope và repository; thay giá/tồn kho trong Admin có hiệu lực ngay trong storefront. Đây là mô phỏng một phiên trình duyệt, không mô phỏng bảo mật đa người dùng.
 
 ```mermaid

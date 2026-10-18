@@ -9,4 +9,16 @@
 - Ruling: new master prompt /api/v1, /orders and /users/me replace earlier proposed /v1 and /orders/checkout.
 - Ruling: integer-valued Decimal(14,0) VND serialized as exact decimal strings; Flutter converts only safe integer values.
 - Pre-flight: Task 2 supplies catalog JSON consumed by Task 5; field names mapped explicitly. Task 1 Prisma models feed Tasks 2–4. Cart mutation and checkout share a transaction lock. No competing app/state architecture.
-- Baseline Flutter test: sandbox denied process access; rerun outside sandbox authorized by tool approval, running.
+- Baseline Flutter test: sandbox denied process access; approved rerun passed 174/174.
+- User follow-up authorized installing missing software and supplied GitHub remote; author pqchien1905 + noreply approved. Git initialized and baseline committed as 9033bce before moving; all 102 source/assets hashes preserved.
+- Installed Git2.55.0.5, WSL3.0.3, Docker Desktop4.95.0. Existing Node24.22 and Flutter3.47.7 added to user PATH.
+- Windows features activation requires reboot (RestartNeeded=true); compose config passed, Engine/compose up failed because VMP not active. No automatic restart.
+- Ruling: temporary PostgreSQL18.4 under ignored .tools enables real DB testing while Compose PostgreSQL17 awaits reboot. Initial WIN1252 locale failed Vietnamese strings; created new UTF8 DBs without dropping existing DBs.
+- Task1: schema22 models, two migrations validated/applied to fresh DBs, seed run twice creates32 products/256SKUs without resetting inventory.
+- Tasks2–3: core API build/lint/unit4 and E2E9 passed; last-SKU race, duplicate checkout, cancellation replay, refresh replay, role injection/ownership covered. Added explicit order-total overflow regression after observing500; validation now rejects before mutation.
+- Task4: AI provider Disabled, queue/outbox/worker/storage architecture implemented; Redis runtime tests blocked by Windows reboot. No real AI/upload/payment claim.
+- Task5: remote catalog6 tests, full Flutter180 tests pass,1 live API test passes separately; analyze clean; release Web build passes.
+- Task6: architecture/database/API/setup/migration docs and Mermaid sources created; independent read-only final review in progress.
+- Dependency audit: patched Swagger js-yaml override to5.4.1; npm audit --omit=dev reports0 known vulnerabilities.
+- Final review: no Critical/Important findings. Minor null DTO bypass and test-helper environment leakage corrected. Null inputs now400; E2E10 pass; helper run confirms Environment restored=True.
+- Deferred scope rulings: Docker/Redis/container/worker runtime require Windows reboot; real upload/AI/payment and mobile builds explicitly remain unverified. No other review findings deferred.

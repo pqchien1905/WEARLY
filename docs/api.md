@@ -1,0 +1,87 @@
+# API đã triển khai
+
+Base URL: `http://localhost:3000/api/v1`. Swagger: `http://localhost:3000/api/docs`; OpenAPI JSON `/api/docs-json`. Swagger tự tắt trong production. HTTP JSON UTF-8, UUID, dates ISO UTC. Bearer JWT cho mọi route trừ route công khai.
+
+| Method | Path (sau /api/v1) | Quyền / trạng thái |
+|---|---|---|
+| POST | /auth/register, /auth/login, /auth/refresh | Public, rate limited |
+| POST | /auth/logout | Bearer; revoke session family |
+| GET | /auth/me | Bearer |
+| GET, PATCH | /users/me | Bearer |
+| GET, POST | /users/me/addresses | Owner |
+| PATCH, DELETE | /users/me/addresses/:id | Owner |
+| GET | /products | Public; active products |
+| GET | /products/facets | Public; colors toàn catalog |
+| GET | /products/:slug | Public; active SKU |
+| GET | /categories, /brands | Public |
+| GET | /cart | Bearer |
+| POST | /cart/items | Bearer; {sku,quantity} |
+| PATCH, DELETE | /cart/items/:id | Owner; id là CartItem UUID |
+| POST | /orders | Bearer; bắt buộc Idempotency-Key |
+| GET | /orders, /orders/:id | Owner, phân trang list |
+| POST | /orders/:id/cancel | Owner; chỉ PENDING |
+| GET, POST | /admin/products | ADMIN |
+| PATCH | /admin/products/:id | ADMIN |
+| POST | /admin/skus | ADMIN; inventory ban đầu 0 |
+| PATCH | /admin/skus/:id | ADMIN; price/active |
+| POST | /admin/categories | ADMIN |
+| GET | /admin/inventory | ADMIN |
+| POST | /admin/inventory/:id/adjust | ADMIN; delta,expectedVersion,reason |
+| GET | /admin/orders | ADMIN |
+| PATCH | /admin/orders/:id/status | ADMIN; status,expectedVersion |
+| GET | /admin/users | ADMIN; không passwordHash |
+| POST, GET | /ai/try-on/jobs, /ai/try-on/jobs/:id | Owner; create trả503 khi provider Disabled |
+| GET | /health | Public liveness |
+| GET | /health/ready | Public; DB+Redis; 503 khi dependency chưa ready |
+
+Không có API reset password, upload, wishlist, reviews, promotions, AI Stylist hoặc online payments ở foundation này. Admin là các endpoint kể trên, chưa có toàn bộ workflow quản trị/audit.
+
+## Auth
+
+Register `{name,email,password}`; password 12..128 ký tự, email normalize lowercase. Gửi role/price hoặc field không có trong DTO trả400. Response register/login/refresh:
+
+```json
+{"user":{"id":"uuid","email":"customer@example.com","name":"An","phone":"","role":"CUSTOMER"},"accessToken":"JWT","refreshToken":"JWT","expiresIn":900}
+```
+
+POST refresh `{refreshToken}` xoay token và vô hiệu hóa session cũ. Replay token cũ revoke toàn family. Logout cần access token, revoke family. Tokens không được log hoặc lưu vào URL. API hiện dành cho bearer clients; Flutter auth chưa tích hợp.
+
+## Catalog
+
+`GET /products?q=cotton&category=ao&size=M&color=Trắng&minPrice=100000&maxPrice=600000&inStock=true&sort=price-asc&page=1&limit=12`
+
+Sort newest/price-asc/price-desc/name; limit1..100; page1..10000. Filter price/size/color/stock áp dụng cùng một variant. Response:
+
+```json
+{"items":[{"id":"uuid","slug":"nep-1","name":"Áo cotton không tay Essential","categoryId":"ao","style":"Tối giản","description":"...","material":"Cotton","active":true,"tryOnSupported":true,"images":[{"url":"assets/images/shirt.jpg","alt":"Ảnh minh họa","color":"Trắng"}],"priceFrom":{"amount":"490000","currency":"VND"},"variants":[{"id":"uuid","sku":"WRL-1-MAIN-M","size":"M","color":"Trắng","colorHex":"#E8E7E2","price":{"amount":"490000","currency":"VND"},"available":12}]}],"total":32,"page":1,"limit":12}
+```
+
+categoryId trên catalog JSON là slug tương thích Flutter; category.id bên trong object category là UUID cho admin. Mọi giá là chuỗi Decimal, không phải floating point. Giá priceFrom là min toàn bộ active variants, sort theo cùng giá hiển thị.
+
+## Cart và order
+
+POST cart/items `{"sku":"WRL-1-MAIN-M","quantity":1}` trả cart{id,version,items,subtotal,currency}. PATCH item `{quantity}` dùng UUID item. Server không nhận giá client.
+
+POST orders có header `Idempotency-Key: checkout-unique-key`:
+
+```json
+{"addressId":"owned-address-uuid","shippingMethod":"standard","expectedSubtotal":"490000","cartVersion":1}
+```
+
+Response là order trực tiếp, có items và payment. subtotal/shipping/total là decimal strings. Standard30.000, miễn từ1.500.000; express50.000. Tất cả tính ở backend, thống nhất BrandConfig demo. expectedSubtotal bắt buộc, cartVersion nên luôn gửi từ adapter thật. COD Payment vẫn PENDING.
+
+List orders/admin dùng page/limit. Hủy đơn hoặc sửa inventory có kiểm tra trạng thái/phiên bản. Luồng admin: PENDING→CONFIRMED→SHIPPED→DELIVERED, không nhảy bước.
+
+## AI foundation
+
+POST jobs `{imageId,sku,consent:true}` được thiết kế trả `{id,status:"pending"}` sau transaction tạo AIJob+outbox. Hiện DisabledTryOnProvider trả503 AI_PROVIDER_NOT_CONFIGURED. GET job kiểm tra owner, trả status/errorCode và signed result URL có TTL60s khi có kết quả còn hạn. Không có ảnh giả.
+
+Worker process riêng dispatch outbox tới BullMQ jobId ổn định, retry3 lần, backoff exponential từ2s, provider timeout60s, concurrency2. Chưa có adapter thật, uploader, cancel/delete/retention cleanup; không bật dữ liệu ảnh người dùng thật.
+
+## Lỗi và bảo mật
+
+```json
+{"error":{"code":"STOCK_CHANGED","message":"Insufficient stock","retryable":false,"requestId":"uuid"},"path":"/api/v1/orders"}
+```
+
+400 validation, 401 auth, 403 role, 404 missing/không thuộc owner, 409 stock/price/version/idempotency/state, 429 throttling, 503 disabled provider/dependency. 500 không trả stack, SQL hoặc secrets. X-Request-Id được tạo tại server. Các POST hiện dùng201 theo NestJS; GET/PATCH/DELETE200.

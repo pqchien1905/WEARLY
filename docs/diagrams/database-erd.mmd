@@ -1,0 +1,67 @@
+erDiagram
+  User ||--o{ RefreshToken : sessions
+  User ||--o{ Address : owns
+  User ||--o| Cart : owns
+  User ||--o{ Order : places
+  User ||--o{ WishlistItem : saves
+  User ||--o{ Review : writes
+  User ||--o{ ImageAsset : owns
+  User ||--o{ AIJob : requests
+  Category ||--o{ Product : groups
+  Brand ||--o{ Product : supplies
+  Product ||--o{ ProductVariant : variants
+  Product ||--o{ ProductImage : images
+  Product ||--o{ WishlistItem : saved
+  Product ||--o{ Review : reviewed
+  ProductVariant ||--o| Inventory : stock
+  ProductVariant ||--o{ CartItem : selected
+  ProductVariant ||--o{ OrderItem : purchased
+  ProductVariant ||--o{ AIJob : garment
+  Inventory ||--o{ InventoryMovement : history
+  Order ||--o{ InventoryMovement : changes
+  Cart ||--o{ CartItem : contains
+  Order ||--|{ OrderItem : snapshots
+  Order ||--o| Payment : payment
+  ImageAsset ||--o{ AIJob : input
+  AIJob ||--o| TryOnResult : output
+  AIJob ||--o| OutboxEvent : enqueue
+  User { uuid id PK
+    string email UK
+    string passwordHash
+    Role role
+  }
+  Product { uuid id PK
+    string slug UK
+    uuid categoryId FK
+    uuid brandId FK
+  }
+  ProductVariant { uuid id PK
+    uuid productId FK
+    string sku UK
+    decimal price
+  }
+  Inventory { uuid id PK
+    uuid variantId FK,UK
+    int quantity
+    int version
+  }
+  Order { uuid id PK
+    uuid userId FK
+    string idempotencyKey
+    decimal subtotal
+    decimal shipping
+    decimal total
+    OrderStatus status
+  }
+  OrderItem { uuid id PK
+    uuid orderId FK
+    uuid variantId FK
+    string sku
+    decimal unitPrice
+    int quantity
+  }
+  Coupon { uuid id PK
+    string code UK
+    decimal amount
+    boolean active
+  }

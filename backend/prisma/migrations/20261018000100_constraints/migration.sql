@@ -1,0 +1,10 @@
+ALTER TABLE "Inventory" ADD CONSTRAINT "Inventory_quantity_nonnegative" CHECK ("quantity" >= 0);
+ALTER TABLE "ProductVariant" ADD CONSTRAINT "ProductVariant_price_nonnegative" CHECK ("price" >= 0);
+ALTER TABLE "CartItem" ADD CONSTRAINT "CartItem_quantity_valid" CHECK ("quantity" BETWEEN 1 AND 99);
+ALTER TABLE "OrderItem" ADD CONSTRAINT "OrderItem_quantity_valid" CHECK ("quantity" BETWEEN 1 AND 99);
+ALTER TABLE "OrderItem" ADD CONSTRAINT "OrderItem_price_nonnegative" CHECK ("unitPrice" >= 0);
+ALTER TABLE "Order" ADD CONSTRAINT "Order_total_valid" CHECK ("subtotal" >= 0 AND "shipping" >= 0 AND "total" = "subtotal" + "shipping");
+ALTER TABLE "Payment" ADD CONSTRAINT "Payment_amount_nonnegative" CHECK ("amount" >= 0);
+ALTER TABLE "Coupon" ADD CONSTRAINT "Coupon_amount_nonnegative" CHECK ("amount" >= 0);
+ALTER TABLE "Review" ADD CONSTRAINT "Review_rating_valid" CHECK ("rating" BETWEEN 1 AND 5);
+CREATE UNIQUE INDEX "Address_one_default_per_user" ON "Address"("userId") WHERE "isDefault" = true;

@@ -1,0 +1,24 @@
+sequenceDiagram
+  participant C as Client
+  participant A as NestJS
+  participant D as PostgreSQL
+  C->>A: POST /api/v1/orders + bearer + Idempotency-Key
+  A->>D: BEGIN SERIALIZABLE
+  A->>D: Lock user/cart transaction
+  A->>D: Lookup (userId, idempotencyKey)
+  alt Same request already exists
+    D-->>A: Original order snapshot
+  else New request
+    A->>D: Read owned address and cart/SKUs
+    A->>A: Validate price confirmation and cart version
+    A->>D: Conditional inventory decrement quantity >= requested
+    alt Any item unavailable
+      A->>D: ROLLBACK all items
+      A-->>C: 409 STOCK_CHANGED
+    else All available
+      A->>D: Order + immutable item/address snapshots + pending COD
+      A->>D: Inventory movements + clear ordered cart
+      A->>D: COMMIT
+    end
+  end
+  A-->>C: Persisted order (retries return same ID)

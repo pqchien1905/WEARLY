@@ -63,7 +63,7 @@ const out=path.resolve(__dirname,'../docs/qa');
   await button('Xóa bộ lọc').click();await button('Xem chi tiết').click();await page.waitForTimeout(500);
   await check('Order detail has progress and recipient','Tiến trình đơn hàng');await capture('order-detail');
   await route('/virtual-try-on?product=nep-1');
-  const chooser=page.waitForEvent('filechooser');await button('Chọn ảnh từ thiết bị').click();await(await chooser).setFiles(path.resolve(__dirname,'../apps/storefront/assets/images/shirt.jpg'));
+  const chooser=page.waitForEvent('filechooser');await button('Chọn ảnh từ thiết bị').click();await(await chooser).setFiles(path.resolve(__dirname,'../frontend/assets/images/shirt.jpg'));
   await page.waitForTimeout(500);await button('Chọn màu và size').click();await page.getByRole('menuitem',{name:'Trắng / M',exact:true}).click();
   await page.getByRole('checkbox',{name:/Tôi có quyền/}).click();await button('Tạo bản thử đồ demo').click();await page.waitForTimeout(2200);
   await route('/account/try-ons');await check('Try-On appears in history','Xem kết quả');await capture('history');
