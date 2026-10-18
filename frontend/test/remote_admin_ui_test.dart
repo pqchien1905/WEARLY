@@ -95,6 +95,18 @@ void main() {
   }
 
   for (final role in [null, 'CUSTOMER']) {
+    testWidgets('taxonomy gate blocks $role', (tester) async {
+      var reads = 0;
+      await setup(tester, '/admin/categories', (r) async {
+        reads++;
+        return jsonResponse({});
+      }, role: role);
+      expect(
+        find.widgetWithText(FilledButton, 'Đăng nhập quản trị'),
+        findsOneWidget,
+      );
+      expect(reads, 0);
+    });
     testWidgets('admin gate blocks $role without loading private data', (
       tester,
     ) async {
@@ -110,6 +122,117 @@ void main() {
       expect(reads, 0);
     });
   }
+  for (final kind in ['categories', 'brands']) {
+    testWidgets('$kind create, validate and rename on mobile; stable slug', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(375, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final rows = <Map<String, dynamic>>[];
+      final writes = <Map<String, dynamic>>[];
+      await setup(tester, '/admin/$kind', (r) async {
+        if (r.method == 'GET') {
+          return jsonResponse(pageJson(rows, total: rows.length));
+        }
+        final body = jsonDecode(r.body) as Map<String, dynamic>;
+        writes.add(body);
+        if (r.method == 'POST') {
+          rows.add({
+            'id': 'new-id',
+            ...body,
+            '_count': {'products': 0},
+          });
+        }
+        if (r.method == 'PATCH') rows.first['name'] = body['name'];
+        return jsonResponse(rows.first);
+      });
+      await tester.tap(
+        find.text(kind == 'categories' ? 'Thêm danh mục' : 'Thêm thương hiệu'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Lưu thay đổi'));
+      await tester.pumpAndSettle();
+      expect(writes, isEmpty);
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Tên hiển thị'),
+        '  Mùa thu  ',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Đường dẫn'),
+        'mua-thu',
+      );
+      await tester.tap(find.text('Lưu thay đổi'));
+      await tester.pumpAndSettle();
+      expect(writes.single, {'name': 'Mùa thu', 'slug': 'mua-thu'});
+      expect(find.text('Mùa thu'), findsOneWidget);
+      await tester.tap(find.byTooltip('Đổi tên Mùa thu'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(TextFormField, 'Đường dẫn'), findsNothing);
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Tên hiển thị'),
+        'Thu đông',
+      );
+      await tester.tap(find.text('Lưu thay đổi'));
+      await tester.pumpAndSettle();
+      expect(writes.last, {'name': 'Thu đông', 'expectedName': 'Mùa thu'});
+      expect(find.text('Thu đông'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+  testWidgets('taxonomy pagination, conflict reload and session loss', (
+    tester,
+  ) async {
+    var writes = 0, reads = 0;
+    final container = await setup(tester, '/admin/categories', (r) async {
+      if (r.method == 'GET') {
+        reads++;
+        final page = int.parse(r.url.queryParameters['page']!);
+        return jsonResponse(
+          pageJson(
+            [
+              {
+                'id': 'c$page',
+                'name': 'Danh mục $page',
+                'slug': 'c$page',
+                '_count': {'products': 2},
+              },
+            ],
+            page: page,
+            total: 21,
+          ),
+        );
+      }
+      writes++;
+      return jsonResponse({
+        'error': {'code': 'VERSION_CONFLICT', 'message': 'Tên đã thay đổi'},
+      }, 409);
+    });
+    await tester.tap(find.text('Trang sau'));
+    await tester.pumpAndSettle();
+    expect(find.text('Danh mục 2'), findsOneWidget);
+    await tester.tap(find.byTooltip('Đổi tên Danh mục 2'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Tên hiển thị'),
+      'Mới',
+    );
+    await tester.tap(find.text('Lưu thay đổi'));
+    await tester.pumpAndSettle();
+    expect(writes, 1);
+    expect(find.text('Lưu thay đổi'), findsNothing);
+    final beforeReload = reads;
+    await tester.tap(find.text('Tải lại dữ liệu'));
+    await tester.pumpAndSettle();
+    expect(reads, greaterThan(beforeReload));
+    await tester.tap(find.byTooltip('Đổi tên Danh mục 2'));
+    await tester.pumpAndSettle();
+    await container.read(adminAccountProvider.notifier).signOut();
+    await tester.pumpAndSettle();
+    expect(find.text('Lưu thay đổi'), findsNothing);
+    expect(writes, 1);
+  });
   testWidgets('demo-only admin settings disclose unavailability', (
     tester,
   ) async {

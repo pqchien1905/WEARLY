@@ -2,8 +2,26 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/catalog.dart';
 import '../data/mock_catalog.dart';
 import '../data/remote_catalog.dart';
+import '../data/fixtures/catalog_fixture.dart' as fixture;
 import 'config.dart';
 import 'api_providers.dart';
+
+final catalogCategoriesProvider = FutureProvider<Map<String, String>>((
+  ref,
+) async {
+  ref.watch(catalogRevisionProvider);
+  if (!ref.watch(remoteApiProvider) && !BrandConfig.useRemoteCatalog) {
+    return fixture.categories;
+  }
+  final data = await ref
+      .watch(apiClientProvider)
+      .request('GET', 'categories', authenticated: false);
+  return {
+    '': 'Tất cả',
+    for (final row in data as List)
+      (row as Map)['slug'] as String: row['name'] as String,
+  };
+});
 
 final productRepositoryProvider = Provider<ProductRepository>((ref) {
   if (!ref.watch(remoteApiProvider) && !BrandConfig.useRemoteCatalog) {

@@ -18,6 +18,10 @@ const adminNav = [
   ('Theo dõi AI', '/admin/ai-monitoring', Icons.auto_awesome_outlined),
   ('Cài đặt demo', '/admin/settings', Icons.tune),
 ];
+const taxonomyNav = [
+  ('Danh mục', '/admin/categories', Icons.category_outlined),
+  ('Thương hiệu', '/admin/brands', Icons.label_outline),
+];
 
 class AdminShell extends ConsumerWidget {
   const AdminShell({super.key, required this.child});
@@ -41,7 +45,8 @@ class AdminShell extends ConsumerWidget {
         Expanded(
           child: ListView(
             children: [
-              for (final item in remote ? adminNav.take(5) : adminNav)
+              for (final item
+                  in remote ? [...adminNav.take(5), ...taxonomyNav] : adminNav)
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,

@@ -6,6 +6,7 @@ import '../../core/design/tokens.dart';
 import '../../core/format.dart';
 import '../../core/widgets/primitives.dart';
 import '../../core/widgets/product_card.dart';
+import '../../core/widgets/category_choices.dart';
 import '../../data/fixtures/catalog_fixture.dart';
 import '../../domain/catalog.dart';
 
@@ -28,6 +29,8 @@ class CatalogPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final query = ProductQuery.fromParams(uri.queryParameters);
+    final categories =
+        ref.watch(catalogCategoriesProvider).value ?? const <String, String>{};
     final result = wishlist
         ? ref.watch(allProductsProvider)
         : ref.watch(catalogProvider(uri.query));
@@ -66,18 +69,9 @@ class CatalogPage extends ConsumerWidget {
           ),
           const SizedBox(height: 32),
           if (!wishlist) ...[
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: categories.entries
-                  .map(
-                    (e) => ChoiceChip(
-                      label: Text(e.value),
-                      selected: e.key == query.category,
-                      onSelected: (_) => change(context, 'category', e.key),
-                    ),
-                  )
-                  .toList(),
+            CategoryChoices(
+              selected: query.category,
+              onSelected: (slug) => change(context, 'category', slug),
             ),
             const SizedBox(height: 24),
           ],

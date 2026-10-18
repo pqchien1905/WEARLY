@@ -5,7 +5,7 @@ import '../../app/providers.dart';
 import '../../core/design/tokens.dart';
 import '../../core/widgets/primitives.dart';
 import '../../core/widgets/product_card.dart';
-import '../../data/fixtures/catalog_fixture.dart';
+import '../../core/widgets/category_choices.dart';
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -156,19 +156,14 @@ class HomePage extends ConsumerWidget {
                 const SizedBox(width: 32),
               ],
               Expanded(
-                child: Wrap(
-                  spacing: mobile ? 8 : 20,
-                  runSpacing: 8,
-                  children: categories.entries
-                      .where((e) => e.key.isNotEmpty)
-                      .map(
-                        (e) => OutlinedButton(
-                          onPressed: () =>
-                              context.go('/shop?category=${e.key}'),
-                          child: Text(e.value),
-                        ),
-                      )
-                      .toList(),
+                child: CategoryChoices(
+                  home: true,
+                  onSelected: (slug) => context.go(
+                    Uri(
+                      path: '/shop',
+                      queryParameters: {'category': slug},
+                    ).toString(),
+                  ),
                 ),
               ),
             ],

@@ -59,6 +59,17 @@ class AdminRepository {
     id == null ? 'admin/products' : 'admin/products/${Uri.encodeComponent(id)}',
     body: body,
   );
+  Future<AdminRecord> saveTaxonomy(String kind, String? id, AdminRecord body) {
+    if (!['categories', 'brands'].contains(kind)) {
+      throw ArgumentError.value(kind);
+    }
+    return _call(
+      id == null ? 'POST' : 'PATCH',
+      id == null ? 'admin/$kind' : 'admin/$kind/${Uri.encodeComponent(id)}',
+      body: body,
+    );
+  }
+
   Future<AdminRecord> saveSku(String? id, AdminRecord body) => _call(
     id == null ? 'POST' : 'PATCH',
     id == null ? 'admin/skus' : 'admin/skus/${Uri.encodeComponent(id)}',

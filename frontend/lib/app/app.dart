@@ -120,6 +120,14 @@ GoRouter createRouter({String initialLocation = '/'}) => GoRouter(
           path: '/admin/customers',
           builder: (_, _) => const AdminCustomersPage(),
         ),
+        for (final path in ['/admin/categories', '/admin/brands'])
+          appRoute(
+            path: path,
+            builder: (_, _) => const StatePanel(
+              title: 'Quản lý danh mục và thương hiệu',
+              message: 'Chức năng này có trong chế độ kết nối API.',
+            ),
+          ),
         appRoute(
           path: '/admin/promotions',
           builder: (_, _) => const AdminPromotionsPage(),

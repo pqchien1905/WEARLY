@@ -9,6 +9,7 @@ import '../../../app/providers.dart';
 import 'admin_providers.dart';
 import 'admin_widgets.dart';
 import 'product_editor.dart';
+import 'taxonomy_page.dart';
 
 class RemoteAdminRoute extends StatelessWidget {
   const RemoteAdminRoute({super.key, required this.path});
@@ -17,6 +18,9 @@ class RemoteAdminRoute extends StatelessWidget {
   Widget build(BuildContext context) {
     final parts = path.split('/');
     if (path == '/admin') return const RemoteAdminDashboard();
+    if (path == '/admin/categories' || path == '/admin/brands') {
+      return RemoteTaxonomyPage(key: ValueKey(path), kind: parts[2]);
+    }
     if (path == '/admin/products/new') return const RemoteProductEditor();
     if (parts.length == 5 && parts[2] == 'products' && parts[4] == 'edit') {
       return RemoteProductEditor(id: parts[3]);
