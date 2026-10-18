@@ -92,7 +92,10 @@ async function main() {
       // Synthetic fixture only: delivery is the eligibility precondition under test.
       await db.order.update({ where: { id: order.id }, data: { status: 'DELIVERED' } });
       await flutter(['build', 'web', '--release', '--dart-define=USE_REMOTE_API=true', '--dart-define=API_BASE_URL=' + url]);
-      await require('./verify-reviews-browser.cjs')({ root, fixture, buyerEmail, otherEmail, password });
+      await require('./verify-reviews-browser.cjs')({ root, fixture, buyerEmail, otherEmail, password,
+        // Only this run's synthetic product can be hidden/restored by the browser scenario.
+        setProductAvailable: active => db.product.update({ where: { id: product.id }, data: { active } }),
+      });
       const saved = await db.review.findMany({ where: { productId: product.id } });
       if (saved.length !== 1 || saved[0].userId !== buyer.user.id || saved[0].rating !== 5 || saved[0].comment !== 'Mặc rất thoải mái.') throw new Error('Review persistence/ownership mismatch');
       console.log('PASS database assertions: one verified buyer review, exact edited content and rating.');

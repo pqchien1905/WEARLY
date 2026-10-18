@@ -3,7 +3,7 @@ const path = require('node:path');
 const http = require('node:http');
 const assert = require('node:assert/strict');
 
-module.exports = async function verify({ root, fixture, buyerEmail, otherEmail, password }) {
+module.exports = async function verify({ root, fixture, buyerEmail, otherEmail, password, setProductAvailable }) {
   const { chromium } = require(path.join(root, '.tools/browser/node_modules/playwright'));
   const web = path.join(root, 'frontend/build/web'), output = path.join(root, '.tools/api-reviews-verification');
   fs.mkdirSync(output, { recursive: true });
@@ -48,6 +48,14 @@ module.exports = async function verify({ root, fixture, buyerEmail, otherEmail, 
       await page.mouse.wheel(0, box.y - 145); await page.waitForTimeout(500);
     }
     async function logout() { await route('/account'); await button('Đăng xuất'); }
+    async function history() { await route('/account'); await button('Đánh giá của tôi'); await page.getByText('1 đánh giá', { exact: true }).waitFor(); }
+    async function frameHistory() {
+      const title = page.getByText('Đánh giá của tôi', { exact: true }).first();
+      await reveal(title);
+      const box = await title.boundingBox(), viewport = page.viewportSize();
+      await page.mouse.move(viewport.width * .8, viewport.height * .7);
+      await page.mouse.wheel(0, box.y - 145); await page.waitForTimeout(500);
+    }
     async function publish() { await button('Viết đánh giá'); await button('Chọn 5 sao'); await fill('Nội dung đánh giá', 'Mặc rất thoải mái.'); await button('Gửi đánh giá'); }
     await page.goto('http://127.0.0.1:4183/#/products/' + fixture); await semantics(); await button('Xem đánh giá');
     await page.getByText('Chưa có đánh giá', { exact: true }).waitFor();
@@ -68,21 +76,40 @@ module.exports = async function verify({ root, fixture, buyerEmail, otherEmail, 
     await page.reload(); await semantics(); await button('Xem đánh giá');
     await page.getByText('Cotton mềm, vừa size M.', { exact: true }).waitFor();
     await button('Đăng nhập để đánh giá'); await login(buyerEmail); await button('Xem đánh giá');
+    await history(); await frameHistory();
+    await page.screenshot({ path: path.join(output, 'customer-reviews-mobile.png') });
     await button('Sửa đánh giá'); await button('Chọn 5 sao'); await fill('Nội dung đánh giá', 'Mặc rất thoải mái.'); await button('Lưu đánh giá');
+    await page.getByText('Mặc rất thoải mái.', { exact: true }).waitFor();
+    await button('Xem sản phẩm'); await button('Xem đánh giá');
     await page.getByText('5,0 / 5', { exact: true }).waitFor();
+    await history(); await setProductAvailable(false); await button('Tải lại');
+    await page.getByText('Sản phẩm không còn mở bán', { exact: true }).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Sửa đánh giá', exact: true }).count(), 0);
+    assert.equal(await page.getByRole('button', { name: 'Xem sản phẩm', exact: true }).count(), 0);
+    await frameHistory(); await page.screenshot({ path: path.join(output, 'customer-reviews-hidden-mobile.png') });
     await button('Xóa đánh giá'); await button('Xóa đánh giá');
-    await page.getByText('Chưa có đánh giá', { exact: true }).waitFor();
+    await page.getByText('Bạn chưa viết đánh giá nào', { exact: true }).waitFor();
+    await setProductAvailable(true); await product();
     await publish(); await page.getByText('5,0 / 5', { exact: true }).waitFor();
     await page.setViewportSize({ width: 1440, height: 900 }); await page.waitForTimeout(500);
     await frameReviews();
     await page.screenshot({ path: path.join(output, 'reviews-buyer-desktop.png') });
+    await history(); await frameHistory();
+    await page.screenshot({ path: path.join(output, 'customer-reviews-desktop.png') });
+    await page.reload(); await semantics(); await button('Đăng nhập'); await login(buyerEmail);
+    await page.getByText('1 đánh giá', { exact: true }).waitFor();
+    assert.equal(await page.evaluate(() => location.hash), '#/account/reviews');
+    await logout(); await route('/account/reviews'); await button('Đăng nhập'); await login(otherEmail);
+    await page.getByText('Bạn chưa viết đánh giá nào', { exact: true }).waitFor();
+    assert.equal(await page.getByText('Mặc rất thoải mái.', { exact: true }).count(), 0);
     await logout(); await product();
     await page.getByText('Mặc rất thoải mái.', { exact: true }).waitFor();
     assert.equal(await page.getByRole('button', { name: 'Sửa đánh giá', exact: true }).count(), 0);
     assert(requests.some(r => r.method === 'PATCH' && r.path.endsWith('/reviews/me') && r.status === 200));
     assert(requests.some(r => r.method === 'DELETE' && r.path.endsWith('/reviews/me') && r.status === 200));
+    assert(requests.some(r => r.path.endsWith('/users/me/reviews') && r.status === 200));
     assert(!requests.some(r => r.status >= 400), 'Unexpected API failure'); assert.deepEqual(errors, []);
-    console.log('PASS Chrome reviews: persisted after reload, edited rating/comment, deleted and republished, public anonymous read, isolated owner actions.');
+    console.log('PASS Chrome reviews: customer history navigation/login return, edit and hidden-product removal, republish, persisted reload, separate account privacy and public anonymous read.');
   } catch (error) {
     if (page) { fs.writeFileSync(path.join(output, 'failure-aria.txt'), await page.locator('body').ariaSnapshot()); await page.screenshot({ path: path.join(output, 'failure.png') }); }
     throw error;

@@ -157,3 +157,15 @@ Rà soát cuối đã tái hiện và sửa: nội dung emoji hợp lệ đượ
 Chrome/PostgreSQL thật (`node tools/test-frontend-api.cjs --reviews`) đạt: khách vãng lai và khách chưa mua được phân biệt, người đã nhận hàng gửi/sửa/xóa/viết lại, dữ liệu giữ qua reload, điểm trung bình đổi đúng và chỉ chủ đánh giá có hành động sửa/xóa. Đã xem ảnh giao diện375/1440, không overflow/exception. Helper chỉ dọn fixture riêng trên `_test`; API native đã reload và health ready, giữ nguyên tiến trình Flutter của người dùng.
 
 Còn lại: promotions/style preferences, email/reset password, uploads catalog, audit/đối soát COD, AI/provider/payment thật; đánh giá chưa có ảnh đính kèm, trả lời của cửa hàng hoặc quản lý kiểm duyệt.
+
+## Lịch sử đánh giá cá nhân — 2026-10-19
+
+Theo ưu tiên người dùng chọn, bổ sung **Tài khoản → Đánh giá của tôi** tại `/#/account/reviews`. GET `/users/me/reviews` phân trang theo người dùng đang đăng nhập, hiển thị sản phẩm còn mở bán và quyền sửa theo đơn đã giao. Sản phẩm ẩn/không còn SKU active trở thành nhãn chung, không lộ tên/slug, vẫn xóa được đánh giá của mình. Dữ liệu legacy chưa có đơn đã giao vẫn được xem/xóa trong lịch sử riêng, không mở thêm quyền sửa/công khai.
+
+Flutter dùng lại editor và xác nhận xóa hiện có; tải/lỗi/rỗng, thử lại, phân trang và trở về trang đầu sau thao tác. Logout/đổi tài khoản loại bỏ dữ liệu riêng và chặn phản hồi cũ; mọi revision đánh giá làm mới lịch sử cá nhân. Phiên ADMIN vẫn độc lập. Không thêm dữ liệu demo hoặc dependency.
+
+Kiểm chứng: 29 PostgreSQL E2E +11 backend unit đạt (17 worker/storage opt-in bỏ qua), backend build/lint đạt; 279 Flutter tests đạt (2 live opt-in bỏ qua), analyze sạch. Đã thấy hai lỗi404 trước triển khai API và lỗi thiếu lớp trang/repository trước triển khai Flutter, sau đó đều đạt. Index Review(userId,createdAt,id) đã deploy trên wearly_test và wearly native, không reset dữ liệu.
+
+Chrome/PostgreSQL thật đạt: đi từ tài khoản vào lịch sử, sửa đánh giá và kiểm tra điểm công khai, ẩn đúng sản phẩm fixture rồi xóa từ lịch sử, viết lại, reload/đăng nhập trở về đúng trang, tài khoản khác không thấy nội dung riêng. Đã xem ảnh375/1440 của trang thường và sản phẩm ẩn, không overflow/exception. Harness chỉ tạo/ẩn/khôi phục/dọn fixture của lượt chạy trên `_test`.
+
+Các phần chưa triển khai vẫn gồm promotions/style preferences, khôi phục mật khẩu/email, uploads catalog, audit/đối soát COD, AI/provider/payment thật; ảnh/phản hồi/kiểm duyệt đánh giá là các phần mở rộng riêng. Không đánh dấu toàn bộ dự án đã hoàn tất.
