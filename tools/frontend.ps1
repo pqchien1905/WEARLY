@@ -16,6 +16,9 @@ if ($Action -eq 'preview') {
 }
 Push-Location (Join-Path $workspace 'frontend')
 try {
+  # Windows PowerShell 5.1 wraps redirected native stderr as an ErrorRecord,
+  # including harmless Flutter diagnostics. Check native exit codes below.
+  $ErrorActionPreference = 'Continue'
   & $flutter pub get
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   switch ($Action) {
@@ -30,5 +33,5 @@ try {
     }
   }
   $result = $LASTEXITCODE
-} finally { Pop-Location }
+} finally { $ErrorActionPreference = 'Stop'; Pop-Location }
 exit $result
