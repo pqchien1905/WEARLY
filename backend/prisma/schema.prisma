@@ -265,6 +265,7 @@ model Review {
   updatedAt DateTime @updatedAt
   @@unique([userId, productId])
   @@index([productId, createdAt, id])
+  @@index([userId, createdAt, id])
 }
 model ImageAsset {
   id String @id @default(uuid()) @db.Uuid

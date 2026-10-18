@@ -22,6 +22,68 @@ type Db = Prisma.TransactionClient;
 @Injectable()
 export class ReviewsService {
   constructor(private readonly db: PrismaService) {}
+  history(userId: string, q: ReviewPageDto) {
+    return this.db.$transaction(
+      async (tx) => {
+        const where = { userId };
+        const rows = await tx.review.findMany({
+          where,
+          select: {
+            ...reviewSelect,
+            productId: true,
+            product: {
+              select: {
+                name: true,
+                slug: true,
+                active: true,
+                variants: {
+                  where: { active: true },
+                  take: 1,
+                  select: { id: true },
+                },
+              },
+            },
+          },
+          skip: (q.page - 1) * q.limit,
+          take: q.limit,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        });
+        const total = await tx.review.count({ where });
+        const purchases = rows.length
+          ? await tx.product.findMany({
+              where: {
+                id: { in: rows.map((r) => r.productId) },
+                variants: {
+                  some: {
+                    orderItems: {
+                      some: { order: { userId, status: 'DELIVERED' } },
+                    },
+                  },
+                },
+              },
+              select: { id: true },
+            })
+          : [];
+        const purchased = new Set(purchases.map((p) => p.id));
+        return {
+          items: rows.map(({ product, ...review }) => {
+            const available = product.active && product.variants.length > 0;
+            return {
+              ...review,
+              product: available
+                ? { name: product.name, slug: product.slug }
+                : null,
+              canEdit: available && purchased.has(review.productId),
+            };
+          }),
+          total,
+          page: q.page,
+          limit: q.limit,
+        };
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
+  }
   private async product(tx: Db, id: string) {
     const product = await tx.product.findUnique({
       where: { id },

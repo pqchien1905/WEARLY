@@ -20,6 +20,16 @@ import {
 } from './review.dto';
 
 @ApiTags('reviews')
+@ApiBearerAuth()
+@Controller('users/me/reviews')
+export class CustomerReviewsController {
+  constructor(private readonly service: ReviewsService) {}
+  @Get() history(@CurrentUser() user: Identity, @Query() q: ReviewPageDto) {
+    return this.service.history(user.id, q);
+  }
+}
+
+@ApiTags('reviews')
 @Controller('products/:productId/reviews')
 export class ReviewsController {
   constructor(private readonly service: ReviewsService) {}

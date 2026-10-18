@@ -235,6 +235,131 @@ describe('Verified product reviews with PostgreSQL', () => {
       /Private review buyer|example.test|userId|Unverified/,
     );
   });
+  it('lists only owned reviews with stable pages and current edit eligibility', async () => {
+    const history = (user = 0, query = '') =>
+      request(app.getHttpServer())
+        .get('/api/v1/users/me/reviews' + query)
+        .auth(tokens[user], { type: 'bearer' });
+    await request(app.getHttpServer())
+      .get('/api/v1/users/me/reviews')
+      .expect(401);
+    for (const query of ['?page=0', '?limit=21', '?userId=' + users[1]]) {
+      await history(0, query).expect(400);
+    }
+    const extra = await db.review.create({
+      data: {
+        userId: users[0],
+        productId: products[1],
+        rating: 3,
+        comment: 'Own legacy second product',
+      },
+    });
+    try {
+      await db.review.updateMany({
+        where: { userId: users[0] },
+        data: { createdAt: new Date('2026-01-01T00:00:00.000Z') },
+      });
+      const first = (await history(0, '?limit=1').expect(200)).body;
+      const second = (await history(0, '?limit=1&page=2').expect(200)).body;
+      expect(first).toMatchObject({ total: 2, page: 1, limit: 1 });
+      expect(second).toMatchObject({ total: 2, page: 2, limit: 1 });
+      const rows = [...first.items, ...second.items];
+      expect(rows.map((r: { id: string }) => r.id)).toEqual(
+        rows
+          .map((r: { id: string }) => r.id)
+          .sort()
+          .reverse(),
+      );
+      expect(new Set(rows.map((r: { id: string }) => r.id)).size).toBe(2);
+      expect(
+        rows.find((r: { productId: string }) => r.productId === products[0]),
+      ).toMatchObject({
+        canEdit: true,
+        product: { name: 'Review shirt', slug: `reviews-0-${suffix}` },
+      });
+      expect(rows.find((r: { id: string }) => r.id === extra.id)).toMatchObject(
+        { canEdit: false },
+      );
+      expect(Object.keys(rows[0]).sort()).toEqual(
+        [
+          'id',
+          'rating',
+          'comment',
+          'createdAt',
+          'updatedAt',
+          'productId',
+          'product',
+          'canEdit',
+        ].sort(),
+      );
+      expect(JSON.stringify(rows)).not.toMatch(
+        /userId|email|Private review buyer|Hơi rộng|Unverified legacy review/,
+      );
+      expect((await history(1).expect(200)).body).toMatchObject({
+        total: 1,
+        items: [{ comment: 'Hơi rộng', canEdit: true }],
+      });
+      expect((await history(2).expect(200)).body).toMatchObject({
+        total: 1,
+        items: [{ comment: 'Unverified legacy review', canEdit: false }],
+      });
+      expect(
+        (await history(0, '?page=3&limit=1').expect(200)).body,
+      ).toMatchObject({ total: 2, items: [] });
+    } finally {
+      await db.review.delete({ where: { id: extra.id } });
+    }
+  });
+  it('keeps hidden product reviews removable without exposing product metadata', async () => {
+    const history = () =>
+      request(app.getHttpServer())
+        .get('/api/v1/users/me/reviews')
+        .auth(tokens[0], { type: 'bearer' });
+    const extra = await db.review.create({
+      data: {
+        userId: users[0],
+        productId: products[1],
+        rating: 3,
+        comment: 'Hidden review',
+      },
+    });
+    try {
+      for (const hiddenBy of ['product', 'variant']) {
+        await db.product.update({
+          where: { id: products[1] },
+          data: { active: hiddenBy !== 'product' },
+        });
+        await db.productVariant.update({
+          where: { id: variants[1] },
+          data: { active: hiddenBy !== 'variant' },
+        });
+        const rows = (await history().expect(200)).body.items;
+        const hidden = rows.find((r: { id: string }) => r.id === extra.id);
+        expect(hidden).toMatchObject({
+          productId: products[1],
+          comment: 'Hidden review',
+          product: null,
+          canEdit: false,
+        });
+        expect(JSON.stringify(hidden)).not.toContain(`reviews-1-${suffix}`);
+        expect(JSON.stringify(hidden)).not.toContain('Review shirt');
+      }
+      await call('delete', '/me', 0, 1)
+        .send({ expectedUpdatedAt: extra.updatedAt.toISOString() })
+        .expect(200);
+      expect((await history().expect(200)).body.total).toBe(1);
+    } finally {
+      await db.review.deleteMany({ where: { id: extra.id } });
+      await db.product.update({
+        where: { id: products[1] },
+        data: { active: true },
+      });
+      await db.productVariant.update({
+        where: { id: variants[1] },
+        data: { active: true },
+      });
+    }
+  });
   it('guards stale updates/deletes and never targets another customer review', async () => {
     const before = (await call('get', '/me')).body.review;
     await call('patch', '/me')
