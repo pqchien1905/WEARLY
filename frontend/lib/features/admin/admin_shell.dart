@@ -131,12 +131,28 @@ class AdminShell extends ConsumerWidget {
                         ),
                       ),
                       if (wide) const SizedBox(width: 16),
-                      if (remote && ref.watch(accountProvider) != null)
+                      if (remote && ref.watch(adminAccountProvider) != null)
                         IconButton(
-                          tooltip: 'Đăng xuất',
+                          tooltip: 'Đăng xuất quản trị',
                           icon: const Icon(Icons.logout),
-                          onPressed: () =>
-                              ref.read(accountProvider.notifier).signOut(),
+                          onPressed: () async {
+                            final messenger = ScaffoldMessenger.of(context);
+                            try {
+                              await ref
+                                  .read(adminAccountProvider.notifier)
+                                  .signOut();
+                            } catch (_) {
+                              if (messenger.mounted) {
+                                messenger.showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Đã thoát trên thiết bị này. Không thể xác nhận đăng xuất với máy chủ.',
+                                    ),
+                                  ),
+                                );
+                              }
+                            }
+                          },
                         ),
                       if (wide)
                         const CircleAvatar(

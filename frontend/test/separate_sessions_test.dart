@@ -50,8 +50,9 @@ void main() {
           seen.add(
             '$area ${r.method} ${r.url.path} ${r.headers['authorization']}',
           );
-          if (r.url.path.endsWith('/login'))
+          if (r.url.path.endsWith('/login')) {
             return jsonResponse(loginJson(area));
+          }
           return jsonResponse({});
         }),
       );

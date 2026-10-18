@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 import '../core/design/tokens.dart';
@@ -12,6 +13,10 @@ import '../features/info/info_page.dart';
 import '../features/info/support_pages.dart';
 import '../features/info/collection_page.dart';
 import 'config.dart';
+import 'account_state.dart';
+import 'api_providers.dart';
+import 'auth_routes.dart';
+import '../features/admin/admin_login_page.dart';
 import 'remote_route_gate.dart';
 import '../features/cart/cart_page.dart';
 import '../features/checkout/checkout_page.dart';
@@ -55,6 +60,21 @@ GoRoute appRoute({
 
 GoRouter createRouter({String initialLocation = '/'}) => GoRouter(
   initialLocation: initialLocation,
+  redirect: (context, state) {
+    final scope = ProviderScope.containerOf(context, listen: false);
+    if (scope.read(remoteApiProvider) &&
+        isAdminPath(state.uri.path) &&
+        state.uri.path != '/admin/login' &&
+        scope.read(adminAccountProvider)?.role != 'ADMIN') {
+      return Uri(
+        path: '/admin/login',
+        queryParameters: {
+          'next': loginDestination(state.uri.toString(), admin: true),
+        },
+      ).toString();
+    }
+    return null;
+  },
   errorBuilder: (c, s) => StoreShell(
     child: StatePanel(
       title: 'Trang này không còn ở đây',
@@ -63,6 +83,11 @@ GoRouter createRouter({String initialLocation = '/'}) => GoRouter(
     ),
   ),
   routes: [
+    GoRoute(
+      path: '/admin/login',
+      pageBuilder: (_, s) =>
+          NoTransitionPage(key: s.pageKey, child: const AdminLoginPage()),
+    ),
     ShellRoute(
       builder: (_, _, child) => AdminShell(child: child),
       routes: [
@@ -212,14 +237,14 @@ GoRouter createRouter({String initialLocation = '/'}) => GoRouter(
   ],
 );
 
-class NepApp extends StatefulWidget {
+class NepApp extends ConsumerStatefulWidget {
   const NepApp({super.key, this.router});
   final GoRouter? router;
   @override
-  State<NepApp> createState() => _NepAppState();
+  ConsumerState<NepApp> createState() => _NepAppState();
 }
 
-class _NepAppState extends State<NepApp> {
+class _NepAppState extends ConsumerState<NepApp> {
   late final router = widget.router ?? createRouter();
   @override
   void dispose() {
@@ -228,17 +253,22 @@ class _NepAppState extends State<NepApp> {
   }
 
   @override
-  Widget build(BuildContext context) => MaterialApp.router(
-    title: BrandConfig.title,
-    debugShowCheckedModeBanner: false,
-    theme: buildTheme(),
-    builder: (context, child) => Theme(
-      data: buildTheme(reduceMotion: MediaQuery.disableAnimationsOf(context)),
-      child: child!,
-    ),
-    routerConfig: router,
-    locale: const Locale('vi'),
-    supportedLocales: const [Locale('vi'), Locale('en')],
-    localizationsDelegates: GlobalMaterialLocalizations.delegates,
-  );
+  Widget build(BuildContext context) {
+    if (ref.watch(remoteApiProvider)) {
+      ref.listen(adminAccountProvider, (_, _) => router.refresh());
+    }
+    return MaterialApp.router(
+      title: BrandConfig.title,
+      debugShowCheckedModeBanner: false,
+      theme: buildTheme(),
+      builder: (context, child) => Theme(
+        data: buildTheme(reduceMotion: MediaQuery.disableAnimationsOf(context)),
+        child: child!,
+      ),
+      routerConfig: router,
+      locale: const Locale('vi'),
+      supportedLocales: const [Locale('vi'), Locale('en')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
+    );
+  }
 }

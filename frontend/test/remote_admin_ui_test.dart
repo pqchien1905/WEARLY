@@ -47,7 +47,7 @@ void main() {
     final api = ApiClient(
       baseUrl: 'http://localhost/api/v1',
       client: MockClient((r) async {
-        if (r.url.path.endsWith('/auth/login')) {
+        if (r.url.path.endsWith('/login')) {
           final session = sessionJson();
           (session['user'] as Map)['role'] = role;
           return jsonResponse(session);
@@ -56,20 +56,31 @@ void main() {
         return handle(r);
       }),
     );
+    final shopper = ApiClient(
+      baseUrl: 'http://localhost/api/v1',
+      client: MockClient((r) async => jsonResponse(sessionJson())),
+    );
     final container = ProviderContainer(
       overrides: [
         remoteApiProvider.overrideWithValue(true),
-        apiClientProvider.overrideWithValue(api),
-        sessionTokensProvider.overrideWithValue(api.tokens),
+        apiClientProvider.overrideWithValue(shopper),
+        sessionTokensProvider.overrideWithValue(shopper.tokens),
+        adminApiClientProvider.overrideWithValue(api),
+        adminSessionTokensProvider.overrideWithValue(api.tokens),
       ],
     );
     addTearDown(() {
       container.dispose();
       api.close();
+      shopper.close();
     });
     if (role != null) {
       await container
-          .read(accountProvider.notifier)
+          .read(
+            role == 'ADMIN'
+                ? adminAccountProvider.notifier
+                : accountProvider.notifier,
+          )
           .signIn('', 'an@example.com', 'password');
     }
     final router = createRouter(initialLocation: path);
@@ -93,9 +104,7 @@ void main() {
         return jsonResponse({});
       }, role: role);
       expect(
-        find.text(
-          role == null ? 'Đăng nhập để tiếp tục' : 'Cần quyền quản trị',
-        ),
+        find.widgetWithText(FilledButton, 'Đăng nhập quản trị'),
         findsOneWidget,
       );
       expect(reads, 0);
@@ -140,10 +149,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Áo trang hai'), findsOneWidget);
       expect(tester.takeException(), isNull);
-      await container.read(accountProvider.notifier).signOut();
+      await container.read(adminAccountProvider.notifier).signOut();
       await tester.pumpAndSettle();
       expect(find.text('Áo trang hai'), findsNothing);
-      expect(find.text('Đăng nhập để tiếp tục'), findsOneWidget);
+      expect(
+        find.widgetWithText(FilledButton, 'Đăng nhập quản trị'),
+        findsOneWidget,
+      );
     },
   );
   testWidgets(

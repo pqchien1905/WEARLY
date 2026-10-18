@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/account_state.dart';
 import '../../app/api_providers.dart';
+import '../../app/auth_routes.dart';
 import '../../data/mock_account.dart';
 
 import '../../core/design/tokens.dart';
@@ -55,14 +56,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
         if (mounted) {
           password.clear();
           final next = GoRouterState.of(context).uri.queryParameters['next'];
-          context.go(
-            next != null &&
-                    next.startsWith('/') &&
-                    !next.startsWith('//') &&
-                    !next.contains('\\')
-                ? next
-                : '/account',
-          );
+          context.go(loginDestination(next));
         }
       }
     } catch (e) {
@@ -101,7 +95,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                         ? 'Tìm lại lối vào.'
                         : register
                         ? 'Tủ đồ mới, của bạn.'
-                        : 'Chào bạn trở lại.',
+                        : 'Đăng nhập khách hàng',
                     style: T.display(40),
                   ),
                   const SizedBox(height: 24),
@@ -217,6 +211,10 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                       TextButton(
                         onPressed: () => context.go('/forgot-password'),
                         child: const Text('Quên mật khẩu?'),
+                      ),
+                      TextButton(
+                        onPressed: () => context.go('/admin/login'),
+                        child: const Text('Đăng nhập quản trị'),
                       ),
                     ],
                   ),

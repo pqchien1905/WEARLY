@@ -14,15 +14,9 @@ class RemoteRouteGate extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     if (!ref.watch(remoteApiProvider)) return child;
     if (path == '/admin' || path.startsWith('/admin/')) {
-      final account = ref.watch(accountProvider);
-      if (account == null) return LoginRequired(next: path);
-      if (account.role != 'ADMIN') {
-        return const StatePanel(
-          title: 'Cần quyền quản trị',
-          message: 'Tài khoản này chưa được cấp quyền quản trị cửa hàng.',
-        );
-      }
-      return RemoteAdminRoute(key: ValueKey((account.id, path)), path: path);
+      final account = ref.watch(adminAccountProvider);
+      if (account?.role != 'ADMIN') return const SizedBox.shrink();
+      return RemoteAdminRoute(key: ValueKey((account!.id, path)), path: path);
     }
     if ([
       '/ai-stylist',

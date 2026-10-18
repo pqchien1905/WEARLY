@@ -527,7 +527,9 @@ class _StoreFooterState extends ConsumerState<StoreFooter> {
                 style: T.small,
               ),
               TextButton(
-                onPressed: () => context.go('/admin'),
+                onPressed: () => context.go(
+                  ref.read(remoteApiProvider) ? '/admin/login' : '/admin',
+                ),
                 child: Text(
                   ref.watch(remoteApiProvider) ? 'Quản trị' : 'Quản trị demo',
                 ),

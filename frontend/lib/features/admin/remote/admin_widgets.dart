@@ -110,7 +110,7 @@ class AdminMutationDialog extends ConsumerStatefulWidget {
 }
 
 class _AdminMutationDialogState extends ConsumerState<AdminMutationDialog> {
-  late final identity = ref.read(accountProvider)?.id;
+  late final identity = ref.read(adminAccountProvider)?.id;
   final form = GlobalKey<FormState>();
   bool saving = false, needsReload = false;
   String? error;
@@ -137,7 +137,7 @@ class _AdminMutationDialogState extends ConsumerState<AdminMutationDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final account = ref.watch(accountProvider);
+    final account = ref.watch(adminAccountProvider);
     if (account?.role != 'ADMIN' || account?.id != identity) {
       return AlertDialog(
         title: const Text('Phiên quản trị đã kết thúc'),

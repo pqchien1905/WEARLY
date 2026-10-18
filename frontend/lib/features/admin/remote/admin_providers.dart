@@ -7,7 +7,7 @@ export '../../../data/remote_admin.dart';
 
 final adminRepositoryProvider = Provider.autoDispose<AdminRepository>((ref) {
   final user = ref.watch(
-    accountProvider.select((u) => (u?.id, u?.email, u?.role)),
+    adminAccountProvider.select((u) => (u?.id, u?.email, u?.role)),
   );
   if (!ref.watch(remoteApiProvider) || user.$3 != 'ADMIN') {
     throw const ApiException(
@@ -16,7 +16,7 @@ final adminRepositoryProvider = Provider.autoDispose<AdminRepository>((ref) {
       status: 403,
     );
   }
-  final repository = AdminRepository(ref.watch(apiClientProvider));
+  final repository = AdminRepository(ref.watch(adminApiClientProvider));
   ref.onDispose(repository.dispose);
   return repository;
 });
