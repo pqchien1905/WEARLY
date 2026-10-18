@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +8,7 @@ import 'package:http/testing.dart';
 import 'package:nep_storefront/app/app.dart';
 import 'package:nep_storefront/app/account_state.dart';
 import 'package:nep_storefront/app/api_providers.dart';
+import 'package:nep_storefront/app/providers.dart';
 import 'package:nep_storefront/core/network/api_client.dart';
 import 'remote_account_test.dart' show sessionJson;
 import 'remote_commerce_test.dart' show orderJson;
@@ -43,6 +45,7 @@ void main() {
     String path,
     Future<http.Response> Function(http.Request) handle, {
     String? role = 'ADMIN',
+    Future<http.Response> Function(http.Request)? publicHandle,
   }) async {
     final api = ApiClient(
       baseUrl: 'http://localhost/api/v1',
@@ -58,7 +61,11 @@ void main() {
     );
     final shopper = ApiClient(
       baseUrl: 'http://localhost/api/v1',
-      client: MockClient((r) async => jsonResponse(sessionJson())),
+      client: MockClient(
+        (r) async => publicHandle != null && !r.url.path.endsWith('/auth/login')
+            ? publicHandle(r)
+            : jsonResponse(sessionJson()),
+      ),
     );
     final container = ProviderContainer(
       overrides: [
@@ -94,6 +101,82 @@ void main() {
     return container;
   }
 
+  for (final loseSession in [true, false]) {
+    testWidgets(
+      'taxonomy refresh survives ${loseSession ? 'logout before response' : 'closing after uncertain response'}',
+      (tester) async {
+        final response = Completer<http.Response>();
+        var name = 'Tên cũ', writes = 0, publicReads = 0;
+        final container = await setup(
+          tester,
+          '/admin/categories',
+          (r) async {
+            if (r.method == 'GET') {
+              return jsonResponse(
+                pageJson([
+                  {
+                    'id': 'c1',
+                    'name': name,
+                    'slug': 'stable',
+                    '_count': {'products': 1},
+                  },
+                ]),
+              );
+            }
+            writes++;
+            name =
+                'Tên mới'; // The server commits before the client learns the outcome.
+            return response.future;
+          },
+          publicHandle: (r) async {
+            expect(r.url.path, '/api/v1/categories');
+            publicReads++;
+            return jsonResponse([
+              {'slug': 'stable', 'name': name},
+            ]);
+          },
+        );
+        expect(
+          (await tester.runAsync(
+            () => container.read(catalogCategoriesProvider.future),
+          ))!['stable'],
+          'Tên cũ',
+        );
+        await tester.tap(find.byTooltip('Đổi tên Tên cũ'));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.widgetWithText(TextFormField, 'Tên hiển thị'),
+          'Tên mới',
+        );
+        await tester.tap(find.text('Lưu thay đổi'));
+        await tester.pump();
+        if (loseSession) {
+          await container.read(adminAccountProvider.notifier).signOut();
+          await tester.pumpAndSettle();
+          response.complete(
+            jsonResponse({'id': 'c1', 'name': name, 'slug': 'stable'}),
+          );
+        } else {
+          response.completeError(
+            http.ClientException('Response lost after commit'),
+          );
+        }
+        await tester.pumpAndSettle();
+        if (!loseSession) {
+          await tester.tap(find.text('Đóng'));
+          await tester.pumpAndSettle();
+        }
+        expect(
+          (await tester.runAsync(
+            () => container.read(catalogCategoriesProvider.future),
+          ))!['stable'],
+          'Tên mới',
+        );
+        expect(publicReads, greaterThan(1));
+        expect(writes, 1);
+      },
+    );
+  }
   for (final role in [null, 'CUSTOMER']) {
     testWidgets('taxonomy gate blocks $role', (tester) async {
       var reads = 0;

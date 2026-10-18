@@ -46,7 +46,9 @@ final catalogRevisionProvider = NotifierProvider<CatalogRevision, int>(
 class CatalogRevision extends Notifier<int> {
   @override
   int build() => 0;
-  void refresh() => state++;
+  void refresh() {
+    if (ref.mounted) state++;
+  }
 }
 
 final catalogProvider = FutureProvider.family<ProductPage, String>((

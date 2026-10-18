@@ -27,9 +27,11 @@ class _RemoteTaxonomyPageState extends ConsumerState<RemoteTaxonomyPage> {
 
   Future<void> edit([AdminRecord? row]) async {
     final repository = ref.read(adminRepositoryProvider);
+    // Public cache lifetime is independent of this page and staff session.
+    final catalogRevision = ref.read(catalogRevisionProvider.notifier);
     final name = TextEditingController(text: row?['name'] ?? '');
     final slug = TextEditingController();
-    final saved = await showDialog<bool>(
+    await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (_) => AdminMutationDialog(
@@ -84,11 +86,18 @@ class _RemoteTaxonomyPageState extends ConsumerState<RemoteTaxonomyPage> {
               );
             }
             rethrow;
+          } finally {
+            // The server may have committed even if logout/navigation or a lost
+            // response prevents acknowledging success. Re-read, never replay.
+            catalogRevision.refresh();
+            if (mounted) {
+              refreshAdmin(ref);
+              ref.invalidate(adminReferencesProvider);
+            }
           }
         },
       ),
     );
-    if (saved == true) refresh();
   }
 
   @override

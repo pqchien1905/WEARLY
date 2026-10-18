@@ -136,8 +136,10 @@ Thêm API và hai trang quản trị `/#/admin/categories`, `/#/admin/brands`: p
 
 Flutter cập nhật lựa chọn trong biểu mẫu sản phẩm và danh mục công khai ở trang chủ/cửa hàng. API lỗi có trạng thái tải lại, không lấy danh mục demo thay thế. Dialog xử lý validation, xung đột, kết quả chưa rõ và mất phiên quản trị; phiên khách hàng vẫn độc lập.
 
-Kiểm chứng tự động: 21 PostgreSQL E2E, 11 backend unit và 252 Flutter tests đạt; 17 worker/storage và 2 Flutter live tests opt-in được bỏ qua. Backend build/lint đạt, Flutter analyze sạch. Kiểm thử trình duyệt mở rộng dùng `node tools/test-frontend-api.cjs --admin`, chỉ tạo/dọn fixture của lượt chạy trên database `_test`.
+Kiểm chứng tự động trước review: 21 PostgreSQL E2E, 11 backend unit và 252 Flutter tests đạt; 17 worker/storage và 2 Flutter live tests opt-in được bỏ qua. Backend build/lint đạt, Flutter analyze sạch. Kiểm thử trình duyệt mở rộng dùng `node tools/test-frontend-api.cjs --admin`, chỉ tạo/dọn fixture của lượt chạy trên database `_test`.
 
 Chrome/PostgreSQL thật đạt: tạo và đổi tên cả hai loại, chọn chúng khi tạo sản phẩm, lưu SKU/kho, tải lại và đăng nhập lại vẫn giữ dữ liệu; danh mục công khai lọc đúng sản phẩm. Đã xem ảnh 375/1440 px của danh sách, dialog và cửa hàng; không overflow hoặc exception. Luồng đơn/COD và đăng xuất độc lập ở hai khu vực vẫn đạt. API native đã reload, health ready; release bình thường khôi phục về localhost:3000.
+
+Final review phát hiện cache công khai có thể giữ tên cũ khi đăng xuất trong lúc lưu hoặc đóng dialog sau mất phản hồi. Đã tái hiện hai trường hợp RED và sửa để làm mới cache độc lập với vòng đời trang quản trị; không gửi lại thao tác ghi. Sau sửa: 254 Flutter tests đạt (2 opt-in bỏ qua), không còn finding chưa xử lý. Các trình duyệt khác cần tải lại; expectedName so sánh tên hiện tại, chưa lưu lịch sử đổi tên.
 
 Còn lại: reviews, promotions/style preferences, email/reset password, uploads catalog, audit/đối soát COD, AI/provider và payment thật. Chưa tuyên bố hoàn tất toàn bộ dự án hoặc sẵn sàng production.
