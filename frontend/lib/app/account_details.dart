@@ -1,15 +1,18 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/account_details.dart';
 import '../data/mock_account_details.dart';
+import '../data/remote_account_details.dart';
+import 'api_providers.dart';
 import 'account_state.dart';
 export '../domain/account_details.dart';
 
-// A fresh, ephemeral repository per signed-in identity. Sign-out/reset discards
-// all addresses/preferences; no personal data is written to browser storage.
+// Recreate the local cache for each identity. Remote data remains on the server.
 final accountDetailsRepositoryProvider = Provider<AccountDetailsRepository>((
   ref,
 ) {
   ref.watch(accountProvider.select((user) => user?.email));
+  if (ref.watch(remoteApiProvider))
+    return RemoteAccountDetailsRepository(ref.watch(apiClientProvider));
   return MockAccountDetailsRepository();
 });
 
@@ -33,7 +36,7 @@ class AccountDetailsController extends AsyncNotifier<AccountDetails> {
   ) async {
     final identity = ref.read(accountProvider)?.email;
     if (identity == null) {
-      throw StateError('Mở phiên tài khoản demo trước khi lưu.');
+      throw StateError('Đăng nhập trước khi lưu thay đổi.');
     }
     final generation = _generation;
     final repo = ref.read(accountDetailsRepositoryProvider);

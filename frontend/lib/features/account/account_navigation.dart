@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/account_state.dart';
 import '../../app/account_details.dart';
+import '../../app/api_providers.dart';
+import '../../core/network/api_client.dart';
 import '../../core/design/tokens.dart';
 import '../../core/widgets/primitives.dart';
 
@@ -71,14 +73,16 @@ class AccountDataView extends ConsumerWidget {
   final Widget Function(AccountDetails) builder;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final remote = ref.watch(remoteApiProvider);
     if (ref.watch(accountProvider) == null) {
       return StatePanel(
         title: 'Mở góc riêng của bạn',
-        message:
-            'Đăng nhập demo để dùng sổ địa chỉ và hồ sơ phong cách. Dữ liệu được xóa khi đăng xuất hoặc tải lại trang.',
+        message: remote
+            ? 'Đăng nhập để mở sổ địa chỉ đã lưu trong tài khoản.'
+            : 'Đăng nhập demo để dùng sổ địa chỉ và hồ sơ phong cách. Dữ liệu được xóa khi đăng xuất hoặc tải lại trang.',
         icon: Icons.person_outline,
         action: AppButton(
-          'Đăng nhập demo',
+          remote ? 'Đăng nhập' : 'Đăng nhập demo',
           onPressed: () => context.go('/login'),
         ),
       );
@@ -103,7 +107,9 @@ class AccountDataView extends ConsumerWidget {
   }
 }
 
-String accountError(Object error) => error is StateError
+String accountError(Object error) => error is ApiException
+    ? error.message
+    : error is StateError
     ? error.message.toString()
     : error is ArgumentError
     ? error.message.toString()

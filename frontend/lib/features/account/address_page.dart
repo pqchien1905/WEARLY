@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/account_details.dart';
+import '../../app/api_providers.dart';
 import '../../core/design/tokens.dart';
 import '../../core/widgets/primitives.dart';
 import 'account_navigation.dart';
@@ -19,7 +20,12 @@ class _AddressPageState extends ConsumerState<AddressPage> {
       builder: (_) => _AddressEditor(address: address),
     );
     if (mounted && saved == true) {
-      toast(context, 'Đã lưu địa chỉ trong phiên demo.');
+      toast(
+        context,
+        ref.read(remoteApiProvider)
+            ? 'Đã lưu địa chỉ.'
+            : 'Đã lưu địa chỉ trong phiên demo.',
+      );
     }
   }
 
@@ -43,17 +49,23 @@ class _AddressPageState extends ConsumerState<AddressPage> {
       builder: (data) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const DemoNotice(
-            text:
-                'Lưu tối đa 5 địa chỉ trong phiên tài khoản demo. Bạn chủ động chọn địa chỉ khi checkout; không có giao hàng thật.',
+          DemoNotice(
+            text: ref.watch(remoteApiProvider)
+                ? 'Địa chỉ được lưu trong tài khoản. Chọn địa chỉ nhận hàng khi đặt đơn.'
+                : 'Lưu tối đa 5 địa chỉ trong phiên tài khoản demo. Bạn chủ động chọn địa chỉ khi checkout; không có giao hàng thật.',
           ),
           const SizedBox(height: 24),
           AppButton(
             'Thêm địa chỉ',
             icon: Icons.add,
-            onPressed: busy || data.addresses.length >= 5 ? null : () => edit(),
+            onPressed:
+                busy ||
+                    (!ref.watch(remoteApiProvider) &&
+                        data.addresses.length >= 5)
+                ? null
+                : () => edit(),
           ),
-          if (data.addresses.length >= 5)
+          if (!ref.watch(remoteApiProvider) && data.addresses.length >= 5)
             const Padding(
               padding: EdgeInsets.only(top: 12),
               child: Text(
@@ -145,7 +157,9 @@ class _AddressPageState extends ConsumerState<AddressPage> {
                                         final yes = await confirmAction(
                                           context,
                                           'Xóa địa chỉ ${a.label}?',
-                                          'Địa chỉ sẽ được xóa khỏi phiên. Thông tin của đơn đã tạo vẫn được giữ nguyên.',
+                                          ref.read(remoteApiProvider)
+                                              ? 'Địa chỉ sẽ được xóa khỏi tài khoản. Thông tin của đơn đã tạo vẫn được giữ nguyên.'
+                                              : 'Địa chỉ sẽ được xóa khỏi phiên. Thông tin của đơn đã tạo vẫn được giữ nguyên.',
                                         );
                                         if (!mounted || !yes) return;
                                         await perform(
@@ -298,7 +312,13 @@ class _AddressEditorState extends ConsumerState<_AddressEditor> {
                   ),
                 ),
               const SizedBox(height: 24),
-              AppButton('Lưu địa chỉ demo', busy: busy, onPressed: save),
+              AppButton(
+                ref.watch(remoteApiProvider)
+                    ? 'Lưu địa chỉ'
+                    : 'Lưu địa chỉ demo',
+                busy: busy,
+                onPressed: save,
+              ),
             ],
           ),
         ),

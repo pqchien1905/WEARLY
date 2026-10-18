@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/account_state.dart';
+import '../../app/api_providers.dart';
 import '../../data/mock_account.dart';
 
 import '../../core/design/tokens.dart';
@@ -73,6 +74,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
 
   @override
   Widget build(BuildContext context) {
+    final remote = ref.watch(remoteApiProvider);
     final register = widget.mode == '/register',
         forgot = widget.mode == '/forgot-password';
     return PageBody(
@@ -95,9 +97,10 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                     style: T.display(40),
                   ),
                   const SizedBox(height: 24),
-                  const DemoNotice(
-                    text:
-                        'Tài khoản mô phỏng. Không xác thực danh tính; không dùng mật khẩu thật. Dữ liệu chỉ trong phiên này.',
+                  DemoNotice(
+                    text: remote
+                        ? 'Đăng nhập để lưu giỏ hàng, địa chỉ và đơn hàng. Sau khi tải lại trang, hãy đăng nhập lại.'
+                        : 'Tài khoản mô phỏng. Không xác thực danh tính; không dùng mật khẩu thật. Dữ liệu chỉ trong phiên này.',
                   ),
                   const SizedBox(height: 28),
                   if (register) ...[
@@ -119,11 +122,15 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                     TextFormField(
                       controller: password,
                       obscureText: obscure,
-                      validator: (v) => (v?.length ?? 0) >= 8
+                      validator: (v) =>
+                          (v?.length ?? 0) >= (remote ? 12 : 8) &&
+                              (v?.length ?? 0) <= 128
                           ? null
+                          : remote
+                          ? 'Mật khẩu cần từ 12 đến 128 ký tự.'
                           : 'Nhập ít nhất 8 ký tự cho mật khẩu demo.',
                       decoration: InputDecoration(
-                        labelText: 'Mật khẩu demo',
+                        labelText: remote ? 'Mật khẩu' : 'Mật khẩu demo',
                         suffixIcon: IconButton(
                           tooltip: obscure ? 'Hiện mật khẩu' : 'Ẩn mật khẩu',
                           onPressed: () => setState(() => obscure = !obscure),
@@ -143,7 +150,11 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                       forgot
                           ? 'Gửi hướng dẫn demo'
                           : register
-                          ? 'Tạo tài khoản demo'
+                          ? remote
+                                ? 'Tạo tài khoản'
+                                : 'Tạo tài khoản demo'
+                          : remote
+                          ? 'Đăng nhập'
                           : 'Đăng nhập demo',
                       busy: busy,
                       onPressed: submit,
@@ -190,6 +201,8 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                         child: Text(
                           register
                               ? 'Đã có tài khoản? Đăng nhập'
+                              : remote
+                              ? 'Tạo tài khoản'
                               : 'Tạo tài khoản demo',
                         ),
                       ),
@@ -281,7 +294,7 @@ class _AccountPageState extends ConsumerState<AccountPage> {
   final name = TextEditingController(),
       phone = TextEditingController(),
       address = TextEditingController();
-  bool seeded = false;
+  String? seededIdentity;
   bool busy = false;
   String? error;
   @override
@@ -294,20 +307,26 @@ class _AccountPageState extends ConsumerState<AccountPage> {
 
   @override
   Widget build(BuildContext context) {
+    final remote = ref.watch(remoteApiProvider);
     final user = ref.watch(accountProvider);
     if (user == null) {
+      seededIdentity = null;
       return StatePanel(
         title: 'Góc riêng của bạn.',
-        message:
-            'Mở phiên tài khoản demo để lưu thông tin. Bạn vẫn có thể đặt hàng không cần đăng nhập.',
+        message: remote
+            ? 'Đăng nhập để xem hồ sơ, địa chỉ và đơn hàng đã lưu.'
+            : 'Mở phiên tài khoản demo để lưu thông tin. Bạn vẫn có thể đặt hàng không cần đăng nhập.',
         icon: Icons.person_outline,
         action: Wrap(
           spacing: 12,
           runSpacing: 12,
           children: [
-            AppButton('Đăng nhập demo', onPressed: () => context.go('/login')),
             AppButton(
-              'Xem đơn trong phiên',
+              remote ? 'Đăng nhập' : 'Đăng nhập demo',
+              onPressed: () => context.go('/login'),
+            ),
+            AppButton(
+              remote ? 'Xem đơn hàng' : 'Xem đơn trong phiên',
               outlined: true,
               onPressed: () => context.go('/account/orders'),
             ),
@@ -315,11 +334,12 @@ class _AccountPageState extends ConsumerState<AccountPage> {
         ),
       );
     }
-    if (!seeded) {
+    final identity = '${user.id}:${user.email}';
+    if (seededIdentity != identity) {
       name.text = user.name;
       phone.text = user.phone;
       address.text = user.address;
-      seeded = true;
+      seededIdentity = identity;
     }
     return PageBody(
       child: Column(
@@ -337,9 +357,21 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                 onPressed: busy
                     ? null
                     : () async {
-                        await ref.read(accountProvider.notifier).signOut();
-                        if (context.mounted) {
-                          toast(context, 'Đã kết thúc phiên tài khoản demo.');
+                        try {
+                          await ref.read(accountProvider.notifier).signOut();
+                          if (context.mounted)
+                            toast(
+                              context,
+                              remote
+                                  ? 'Đã đăng xuất.'
+                                  : 'Đã kết thúc phiên tài khoản demo.',
+                            );
+                        } catch (_) {
+                          if (context.mounted)
+                            toast(
+                              context,
+                              'Đã xóa phiên trên thiết bị. Máy chủ chưa xác nhận thu hồi phiên; vui lòng đăng nhập và đăng xuất lại khi có mạng.',
+                            );
                         }
                       },
                 child: const Text('Đăng xuất'),
@@ -353,9 +385,10 @@ class _AccountPageState extends ConsumerState<AccountPage> {
               key: form,
               child: Column(
                 children: [
-                  const DemoNotice(
-                    text:
-                        'Hồ sơ chỉ lưu trong bộ nhớ phiên trình duyệt. Không phải tài khoản bảo mật thật.',
+                  DemoNotice(
+                    text: remote
+                        ? 'Thông tin được lưu trong tài khoản của bạn.'
+                        : 'Hồ sơ chỉ lưu trong bộ nhớ phiên trình duyệt. Không phải tài khoản bảo mật thật.',
                   ),
                   const SizedBox(height: 24),
                   AppField(
@@ -375,14 +408,20 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                         : 'Nhập số điện thoại 10 chữ số.',
                   ),
                   const SizedBox(height: 16),
-                  AppField(
-                    label: 'Địa chỉ (không bắt buộc)',
-                    controller: address,
-                    maxLines: 2,
-                  ),
+                  if (!remote)
+                    AppField(
+                      label: 'Địa chỉ (không bắt buộc)',
+                      controller: address,
+                      maxLines: 2,
+                    ),
+                  if (remote)
+                    TextButton(
+                      onPressed: () => context.go('/account/addresses'),
+                      child: const Text('Quản lý địa chỉ nhận hàng'),
+                    ),
                   const SizedBox(height: 24),
                   AppButton(
-                    'Lưu hồ sơ demo',
+                    remote ? 'Lưu hồ sơ' : 'Lưu hồ sơ demo',
                     busy: busy,
                     onPressed: () async {
                       if (form.currentState!.validate()) {
@@ -402,7 +441,12 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                                 ),
                               );
                           if (context.mounted) {
-                            toast(context, 'Đã lưu hồ sơ trong phiên demo.');
+                            toast(
+                              context,
+                              remote
+                                  ? 'Đã lưu hồ sơ.'
+                                  : 'Đã lưu hồ sơ trong phiên demo.',
+                            );
                           }
                         } catch (e) {
                           if (mounted) setState(() => error = '$e');
