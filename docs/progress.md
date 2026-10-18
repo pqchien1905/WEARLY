@@ -143,3 +143,15 @@ Chrome/PostgreSQL thật đạt: tạo và đổi tên cả hai loại, chọn c
 Final review phát hiện cache công khai có thể giữ tên cũ khi đăng xuất trong lúc lưu hoặc đóng dialog sau mất phản hồi. Đã tái hiện hai trường hợp RED và sửa để làm mới cache độc lập với vòng đời trang quản trị; không gửi lại thao tác ghi. Sau sửa: 254 Flutter tests đạt (2 opt-in bỏ qua), không còn finding chưa xử lý. Các trình duyệt khác cần tải lại; expectedName so sánh tên hiện tại, chưa lưu lịch sử đổi tên.
 
 Còn lại: reviews, promotions/style preferences, email/reset password, uploads catalog, audit/đối soát COD, AI/provider và payment thật. Chưa tuyên bố hoàn tất toàn bộ dự án hoặc sẵn sàng production.
+
+## Đánh giá của người mua — 2026-10-19
+
+Đã nối reviews API với Flutter: chỉ khách có đơn DELIVERED chứa sản phẩm được gửi 1–5 sao/nội dung; một đánh giá mỗi tài khoản/sản phẩm, sửa/xóa theo phiên bản timestamp. Người dùng đã chọn hiển thị ngay, không chờ duyệt. GET công khai phân trang kèm điểm trung bình, chỉ tính đánh giá có đơn đã giao, không gửi tên/email/userId hoặc dữ liệu đơn. SKU hết hàng vẫn đánh giá được; sản phẩm ẩn/không còn SKU active không công khai reviews.
+
+Trang sản phẩm có nút Xem đánh giá và khu vực riêng, trạng thái rỗng/lỗi/tải lại, đăng nhập trở về đúng sản phẩm, xác nhận xóa và kiểm tra lại sau phản hồi không rõ. Khách chưa mua không có nút gửi; phiên ADMIN riêng không mở quyền đánh giá của khách. Repository kiểm tra generation/disposal và làm mới cache công khai sau mọi thao tác đã gửi, kể cả mất phiên hoặc mất phản hồi. Không tự gửi lại lệnh ghi.
+
+Kiểm chứng: 26 PostgreSQL E2E + 11 unit backend đạt, build/lint đạt; Flutter266 tests đạt (2 live opt-in bỏ qua), analyze sạch. Index Review(productId,createdAt,id) đã deploy vào PostgreSQL native, không reset dữ liệu. Hướng dẫn và giới hạn tại [reviews.md](reviews.md).
+
+Chrome/PostgreSQL thật (`node tools/test-frontend-api.cjs --reviews`) đạt: khách vãng lai và khách chưa mua được phân biệt, người đã nhận hàng gửi/sửa/xóa/viết lại, dữ liệu giữ qua reload, điểm trung bình đổi đúng và chỉ chủ đánh giá có hành động sửa/xóa. Đã xem ảnh giao diện375/1440, không overflow/exception. Helper chỉ dọn fixture riêng trên `_test`; API native đã reload và health ready, giữ nguyên tiến trình Flutter của người dùng.
+
+Còn lại: promotions/style preferences, email/reset password, uploads catalog, audit/đối soát COD, AI/provider/payment thật; đánh giá chưa có ảnh đính kèm, trả lời của cửa hàng hoặc quản lý kiểm duyệt.

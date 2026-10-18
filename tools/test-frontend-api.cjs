@@ -28,6 +28,7 @@ const fixture = 'flutter-test-' + randomUUID();
 const browser = process.argv.includes('--browser');
 const admin = process.argv.includes('--admin');
 const wishlist = process.argv.includes('--wishlist');
+const reviews = process.argv.includes('--reviews');
 function flutter(args) {
   const binary = path.join(root, '.tools/flutter/bin/flutter.bat');
   // All arguments below are local constants, loopback URLs or generated UUIDs.
@@ -75,6 +76,26 @@ async function main() {
       const delivered = await db.order.findUniqueOrThrow({ where: { id: order.id }, include: { payment: true } });
       if (delivered.status !== 'DELIVERED' || delivered.payment.status !== 'PENDING') throw new Error('Persisted order/COD state mismatch');
       console.log('PASS database assertions: product, SKU, gallery, stock, order delivered with COD pending.');
+    } else if (reviews) {
+      const password = 'Browser-only-Password-2026';
+      const post = async (path, body, token, headers = {}) => {
+        const response = await fetch(url + '/' + path, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}), ...headers }, body: JSON.stringify(body) });
+        if (!response.ok) throw new Error('Review fixture request failed: ' + path + ' ' + response.status);
+        return response.json();
+      };
+      const buyerEmail = fixture + '@example.com', otherEmail = 'browser-' + fixture + '@example.com';
+      const buyer = await post('auth/register', { name: 'Khách đã nhận hàng', email: buyerEmail, password });
+      await post('auth/register', { name: 'Khách chưa mua', email: otherEmail, password });
+      const address = await post('users/me/addresses', { recipient: 'Khách kiểm thử', phone: '0901234567', address: '12 Nguyễn Huệ, TP.HCM', label: 'Nhà' }, buyer.accessToken);
+      await post('cart/items', { sku: fixture, quantity: 1 }, buyer.accessToken);
+      const order = await post('orders', { addressId: address.id, shippingMethod: 'standard', expectedSubtotal: '490000' }, buyer.accessToken, { 'Idempotency-Key': randomUUID() });
+      // Synthetic fixture only: delivery is the eligibility precondition under test.
+      await db.order.update({ where: { id: order.id }, data: { status: 'DELIVERED' } });
+      await flutter(['build', 'web', '--release', '--dart-define=USE_REMOTE_API=true', '--dart-define=API_BASE_URL=' + url]);
+      await require('./verify-reviews-browser.cjs')({ root, fixture, buyerEmail, otherEmail, password });
+      const saved = await db.review.findMany({ where: { productId: product.id } });
+      if (saved.length !== 1 || saved[0].userId !== buyer.user.id || saved[0].rating !== 5 || saved[0].comment !== 'Mặc rất thoải mái.') throw new Error('Review persistence/ownership mismatch');
+      console.log('PASS database assertions: one verified buyer review, exact edited content and rating.');
     } else if (wishlist) {
       await flutter(['build', 'web', '--release', '--dart-define=USE_REMOTE_API=true', '--dart-define=API_BASE_URL=' + url]);
       await require('./verify-wishlist-browser.cjs')({ root, fixture });
@@ -95,6 +116,7 @@ async function main() {
       const users = await db.user.findMany({ where: { email: { in: [fixture + '@example.com', 'browser-' + fixture + '@example.com', 'admin-' + fixture + '@example.com'] } }, select: { id: true } });
       const owner = { userId: { in: users.map(user => user.id) } };
       await db.$transaction(async tx => {
+        await tx.review.deleteMany({ where: owner });
         await tx.inventoryMovement.deleteMany({ where: { order: owner } });
         await tx.payment.deleteMany({ where: { order: owner } });
         await tx.orderItem.deleteMany({ where: { order: owner } });

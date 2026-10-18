@@ -20,6 +20,9 @@ Base URL: `http://localhost:3000/api/v1`. Swagger: `http://localhost:3000/api/do
 | PATCH, DELETE | /cart/items/:id | Owner; id là CartItem UUID |
 | GET | /wishlist | Owner; toàn bộ danh sách tối đa200 sản phẩm |
 | PUT, DELETE | /wishlist/:productId | Owner; UUID sản phẩm; lưu/bỏ idempotent |
+| GET | /products/:productId/reviews | Public; phân trang, điểm trung bình, chỉ đánh giá có đơn đã giao; không thông tin tài khoản |
+| POST | /products/:productId/reviews | Bearer; đơn đã giao chứa sản phẩm, {rating,comment}, một đánh giá/tài khoản/sản phẩm |
+| GET, PATCH, DELETE | /products/:productId/reviews/me | Owner; PATCH/DELETE yêu cầu expectedUpdatedAt; chi tiết tại reviews.md |
 | POST | /orders | Bearer; bắt buộc Idempotency-Key |
 | GET | /orders, /orders/:id | Owner, phân trang list |
 | POST | /orders/:id/cancel | Owner; chỉ PENDING |

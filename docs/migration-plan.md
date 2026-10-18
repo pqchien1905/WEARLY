@@ -36,7 +36,7 @@ Giá VND được đọc từ chuỗi số nguyên, không làm tròn. Checkout 
 ## Các bước còn lại
 
 1. Quản trị sản phẩm/SKU/kho/đơn/khách hàng và danh mục/thương hiệu đã nối API với quyền ADMIN. Danh mục công khai lấy từ API; đổi tên giữ đường dẫn. Còn audit đầy đủ, uploads catalog và đối soát COD.
-2. Wishlist đã nối API. Còn reviews/promotions/style preferences, khôi phục mật khẩu và email provider.
+2. Wishlist và đánh giá sản phẩm của người mua đã nối API. Còn promotions/style preferences, khôi phục mật khẩu và email provider; mở rộng đánh giá (ảnh, phản hồi cửa hàng, moderation) chưa có.
 3. Nối private upload hiện có → AI adapter thật → polling/cancel riêng job; đưa consent/delete/quota vào UI hiện tại.
 4. Payment provider, webhook và hạ tầng triển khai production. Chưa có cam kết production-ready.
 
