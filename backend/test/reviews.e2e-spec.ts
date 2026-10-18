@@ -282,6 +282,18 @@ describe('Verified product reviews with PostgreSQL', () => {
       .expect(404);
     expect((await call('get')).body).toMatchObject({ total: 1, average: 2 });
   });
+  it('rejects unsupported ISO versions before reaching database operations', async () => {
+    for (const expectedUpdatedAt of [
+      '2026-W01-1',
+      '2026-01-01',
+      '2026-01-01T00:00:00+07:00',
+    ]) {
+      await call('patch', '/me', 1)
+        .send({ rating: 4, comment: 'Changed', expectedUpdatedAt })
+        .expect(400);
+      await call('delete', '/me', 1).send({ expectedUpdatedAt }).expect(400);
+    }
+  });
   it('hides public reviews for unavailable products but permits owner removal', async () => {
     await db.product.update({
       where: { id: products[0] },

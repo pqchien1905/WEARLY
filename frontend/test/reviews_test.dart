@@ -30,6 +30,50 @@ Map<String, dynamic> reviewPageJson(
 };
 
 void main() {
+  test('API-valid supplementary characters decode without hiding the page', () {
+    final value = ProductReview.fromJson(reviewJson(comment: '😀' * 1500));
+    expect(value.comment.runes.length, 1500);
+  });
+  test(
+    'commit after timeout and logout refreshes public data again without replay',
+    () async {
+      final lateResponse = Completer<http.Response>();
+      var committed = false, writes = 0;
+      final reads = <Future<ReviewPage>>[];
+      final api = ApiClient(
+        baseUrl: 'http://localhost/api/v1',
+        timeout: const Duration(milliseconds: 15),
+        client: MockClient((r) async {
+          if (r.method == 'GET') {
+            return jsonResponse(reviewPageJson([if (committed) reviewJson()]));
+          }
+          writes++;
+          return lateResponse.future;
+        }),
+      );
+      addTearDown(api.close);
+      api.tokens.set(accessToken: 'buyer', refreshToken: 'refresh');
+      final repo = OwnerReviewRepository(
+        api,
+        onSettled: (id) {
+          reads.add(PublicReviewRepository(api).list(id, 1));
+        },
+      );
+      await expectLater(
+        repo.save('product', rating: 4, comment: 'Cotton mềm'),
+        throwsA(isA<ApiException>().having((e) => e.code, 'code', 'TIMEOUT')),
+      );
+      expect((await reads.single).total, 0);
+      repo.dispose();
+      api.tokens.clear();
+      committed = true;
+      lateResponse.complete(jsonResponse(reviewJson()));
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect(reads.length, 2);
+      expect((await reads.last).total, 1);
+      expect(writes, 1);
+    },
+  );
   test(
     'public review reads are anonymous and preserve paging/empty/error',
     () async {

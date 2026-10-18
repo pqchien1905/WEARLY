@@ -150,7 +150,9 @@ Còn lại: reviews, promotions/style preferences, email/reset password, uploads
 
 Trang sản phẩm có nút Xem đánh giá và khu vực riêng, trạng thái rỗng/lỗi/tải lại, đăng nhập trở về đúng sản phẩm, xác nhận xóa và kiểm tra lại sau phản hồi không rõ. Khách chưa mua không có nút gửi; phiên ADMIN riêng không mở quyền đánh giá của khách. Repository kiểm tra generation/disposal và làm mới cache công khai sau mọi thao tác đã gửi, kể cả mất phiên hoặc mất phản hồi. Không tự gửi lại lệnh ghi.
 
-Kiểm chứng: 26 PostgreSQL E2E + 11 unit backend đạt, build/lint đạt; Flutter266 tests đạt (2 live opt-in bỏ qua), analyze sạch. Index Review(productId,createdAt,id) đã deploy vào PostgreSQL native, không reset dữ liệu. Hướng dẫn và giới hạn tại [reviews.md](reviews.md).
+Kiểm chứng sau sửa cuối: 27 PostgreSQL E2E + 11 unit backend đạt (17 worker/storage opt-in bỏ qua), build/lint đạt; Flutter269 tests đạt (2 live opt-in bỏ qua), analyze sạch và web release build đạt. Index Review(productId,createdAt,id) đã deploy vào PostgreSQL native, không reset dữ liệu. Hướng dẫn và giới hạn tại [reviews.md](reviews.md).
+
+Rà soát cuối đã tái hiện và sửa: nội dung emoji hợp lệ được đếm theo Unicode code point ở cả API/Flutter; phản hồi đến sau timeout tiếp tục làm mới dữ liệu công khai mà không gửi lại lệnh hoặc khôi phục phiên đã thoát; timestamp phiên bản không đúng định dạng máy chủ trả400 trước truy vấn thay vì gây500. Cả bốn kiểm thử hồi quy đều đã quan sát thất bại trước sửa và đạt sau sửa.
 
 Chrome/PostgreSQL thật (`node tools/test-frontend-api.cjs --reviews`) đạt: khách vãng lai và khách chưa mua được phân biệt, người đã nhận hàng gửi/sửa/xóa/viết lại, dữ liệu giữ qua reload, điểm trung bình đổi đúng và chỉ chủ đánh giá có hành động sửa/xóa. Đã xem ảnh giao diện375/1440, không overflow/exception. Helper chỉ dọn fixture riêng trên `_test`; API native đã reload và health ready, giữ nguyên tiến trình Flutter của người dùng.
 

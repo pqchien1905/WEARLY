@@ -25,7 +25,7 @@ class ProductReview {
         rating < 1 ||
         rating > 5 ||
         comment.trim().isEmpty ||
-        comment.length > 2000) {
+        comment.runes.length > 2000) {
       throw invalidReview;
     }
   }
@@ -120,6 +120,7 @@ class OwnerReviewRepository {
         method,
         '${_path(id)}${method == 'POST' ? '' : '/me'}',
         body: body,
+        onLateCompletion: () => onSettled(id),
       );
       _check();
       return value;

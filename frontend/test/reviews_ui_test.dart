@@ -94,6 +94,36 @@ void main() {
     return container;
   }
 
+  testWidgets(
+    'editor accepts backend-valid emoji content and shows the saved review',
+    (tester) async {
+      final content = '😀' * 1500;
+      Map<String, dynamic>? own;
+      var writes = 0;
+      await mount(tester, (r) async {
+        if (r.method == 'GET') {
+          return jsonResponse(
+            r.url.path.endsWith('/me')
+                ? {'canReview': true, 'review': own}
+                : reviewPageJson([if (own != null) own!]),
+          );
+        }
+        writes++;
+        expect((jsonDecode(r.body) as Map)['comment'], content);
+        own = reviewJson(comment: content);
+        return jsonResponse(own!);
+      });
+      await tester.tap(find.text('Viết đánh giá'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Chọn 4 sao'));
+      await tester.enterText(find.byType(TextFormField), content);
+      await tester.tap(find.text('Gửi đánh giá'));
+      await tester.pumpAndSettle();
+      expect(writes, 1);
+      expect(find.text('Sửa đánh giá'), findsOneWidget);
+      expect(find.text(content), findsOneWidget);
+    },
+  );
   testWidgets('staff-only login does not unlock buyer reviews', (tester) async {
     var privateReads = 0;
     await mount(tester, (r) async {

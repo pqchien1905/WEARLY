@@ -54,6 +54,7 @@ class ApiClient {
     Map<String, String>? headers,
     bool authenticated = true,
     bool refresh = true,
+    void Function()? onLateCompletion,
   }) async {
     if (path.startsWith('/') ||
         path.contains('://') ||
@@ -69,6 +70,7 @@ class ApiClient {
       path,
       query: query,
       body: body,
+      onLateCompletion: onLateCompletion,
       headers: {
         if (access != null) 'Authorization': 'Bearer $access',
         ...?headers,
@@ -90,6 +92,7 @@ class ApiClient {
         headers: headers,
         authenticated: true,
         refresh: false,
+        onLateCompletion: onLateCompletion,
       );
     }
     if (response.statusCode == 401 && authenticated) tokens.clear();
@@ -105,6 +108,7 @@ class ApiClient {
     Map<String, String>? query,
     Map<String, Object?>? body,
     Map<String, String>? headers,
+    void Function()? onLateCompletion,
   }) async {
     final request = http.Request(
       method,
@@ -115,11 +119,22 @@ class ApiClient {
       request.headers['Content-Type'] = 'application/json';
       request.body = jsonEncode(body);
     }
+    var timedOut = false;
     try {
       return await _client
           .send(request)
           .then(http.Response.fromStream)
-          .timeout(timeout);
+          .whenComplete(() {
+            // A timeout stops waiting, but the server may still commit a write.
+            if (timedOut) onLateCompletion?.call();
+          })
+          .timeout(
+            timeout,
+            onTimeout: () {
+              timedOut = true;
+              throw TimeoutException('API request timed out', timeout);
+            },
+          );
     } on TimeoutException {
       throw const ApiException(
         'TIMEOUT',

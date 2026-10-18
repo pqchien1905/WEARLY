@@ -44,7 +44,7 @@ Base URL: `http://localhost:3000/api/v1`. Swagger: `http://localhost:3000/api/do
 | GET | /health | Public liveness |
 | GET | /health/ready | Public; DB+Redis; 503 khi dependency chưa ready |
 
-Không có API reset password, reviews, promotions, AI Stylist hoặc online payments ở foundation này. Admin là các endpoint kể trên, chưa có toàn bộ workflow quản trị/audit.
+Chưa có API reset password, promotions, AI Stylist hoặc online payments. Reviews đã có các endpoint kể trên; hướng dẫn tại [reviews.md](reviews.md). Admin chưa có toàn bộ workflow quản trị/audit.
 
 ## Auth
 

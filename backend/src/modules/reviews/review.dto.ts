@@ -4,6 +4,7 @@ import {
   IsInt,
   IsISO8601,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -42,12 +43,14 @@ export class CreateReviewDto {
 export class ReviewVersionDto {
   @ApiProperty()
   @IsISO8601({ strict: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
   @MaxLength(40)
   expectedUpdatedAt!: string;
 }
 export class UpdateReviewDto extends CreateReviewDto {
   @ApiProperty()
   @IsISO8601({ strict: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
   @MaxLength(40)
   expectedUpdatedAt!: string;
 }

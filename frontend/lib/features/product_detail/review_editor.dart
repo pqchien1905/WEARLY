@@ -137,13 +137,20 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
                       minLines: 3,
                       maxLines: 6,
                       maxLength: 2000,
+                      buildCounter:
+                          (
+                            context, {
+                            required currentLength,
+                            required isFocused,
+                            required maxLength,
+                          }) => Text('${comment.text.runes.length} / 2000'),
                       decoration: const InputDecoration(
                         labelText: 'Nội dung đánh giá',
                         hintText: 'Chất liệu, độ vừa vặn, cảm giác khi mặc…',
                       ),
                       validator: (value) => (value ?? '').trim().isEmpty
                           ? 'Hãy viết nội dung đánh giá.'
-                          : value!.trim().length > 2000
+                          : value!.trim().runes.length > 2000
                           ? 'Tối đa 2000 ký tự.'
                           : null,
                     ),

@@ -6,7 +6,7 @@ Chỉ tài khoản có đơn **đã giao** chứa sản phẩm đó mới đư�
 
 Mỗi tài khoản có một đánh giá cho mỗi sản phẩm: chọn 1–5 sao và viết nội dung tối đa 2000 ký tự. Theo lựa chọn của chủ cửa hàng, đánh giá hiển thị ngay sau khi gửi. Nhãn người viết là **Khách đã mua hàng**; API công khai không trả tên, email, mã tài khoản hoặc thông tin đơn. Người viết tự chịu trách nhiệm không đưa thông tin liên hệ vào nội dung.
 
-Chủ đánh giá có thể sửa hoặc xóa, có xác nhận trước khi xóa. Nếu dữ liệu đã đổi ở tab khác, phải tải lại trước khi thao tác tiếp. Nếu mất phản hồi, **Kiểm tra lại** lấy trạng thái từ máy chủ; không tự gửi lại lệnh. Danh sách và điểm trung bình cập nhật sau thao tác, kể cả khi phiên khách hàng kết thúc trong lúc chờ phản hồi. Trình duyệt khác cần tải lại để thấy thay đổi.
+Chủ đánh giá có thể sửa hoặc xóa, có xác nhận trước khi xóa. Nếu dữ liệu đã đổi ở tab khác, phải tải lại trước khi thao tác tiếp. Nếu mất phản hồi, **Kiểm tra lại** lấy trạng thái từ máy chủ; không tự gửi lại lệnh. Danh sách và điểm trung bình cập nhật sau thao tác, kể cả khi phiên khách hàng kết thúc trong lúc chờ phản hồi. Nếu phản hồi đến sau thời gian chờ, ứng dụng làm mới dữ liệu thêm lần nữa khi nhận được phản hồi đó. Trình duyệt khác cần tải lại để thấy thay đổi.
 
 Sản phẩm bị ẩn hoặc không có SKU đang bán không có trang đánh giá công khai. API riêng vẫn cho chủ tài khoản đọc/xóa đánh giá đã có, nhưng không thêm/sửa khi sản phẩm bị ẩn. UI đánh giá hiện nằm trên trang sản phẩm đang mở bán; chưa có trang riêng tập hợp đánh giá cá nhân. Dữ liệu cũ không có đơn đã giao không được tính vào danh sách/điểm công khai.
 
@@ -21,6 +21,8 @@ Các đường dẫn sau có tiền tố `/api/v1/products/:productId/reviews`; 
 | POST | `/` | `{rating,comment}`; cần đơn đã giao, trùng đánh giá trả409 |
 | PATCH | `/me` | `{rating,comment,expectedUpdatedAt}`; phiên bản cũ trả409 |
 | DELETE | `/me` | `{expectedUpdatedAt}`; chỉ xóa của mình, lặp lại khi đã xóa vẫn thành công |
+
+`expectedUpdatedAt` phải giữ nguyên giá trị `updatedAt` máy chủ trả về, dạng UTC `YYYY-MM-DDTHH:mm:ss.sssZ`. Dạng khác trả400 trước khi truy vấn dữ liệu. Giới hạn nội dung 2000 ký tự được tính theo Unicode code point ở cả API và Flutter, bao gồm emoji.
 
 Chưa có hàng đợi duyệt, ảnh đính kèm, phản hồi của cửa hàng, thông báo email hoặc sắp xếp/lọc theo sao. Migration chỉ thêm index cho truy vấn đánh giá theo sản phẩm, không xóa hay chuyển dữ liệu.
 
