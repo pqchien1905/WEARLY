@@ -2,14 +2,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/catalog.dart';
 import '../data/mock_catalog.dart';
 import '../data/remote_catalog.dart';
-import '../core/network/api_client.dart';
 import 'config.dart';
+import 'api_providers.dart';
 
 final productRepositoryProvider = Provider<ProductRepository>((ref) {
-  if (!BrandConfig.useRemoteCatalog) return MockProductRepository();
-  final api = ApiClient(baseUrl: BrandConfig.apiBaseUrl);
-  ref.onDispose(api.close);
-  return RemoteProductRepository(api);
+  if (!ref.watch(remoteApiProvider) && !BrandConfig.useRemoteCatalog)
+    return MockProductRepository();
+  return RemoteProductRepository(ref.watch(apiClientProvider));
 });
 final catalogColorsProvider = FutureProvider<List<String>>((ref) {
   ref.watch(catalogRevisionProvider);

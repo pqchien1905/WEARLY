@@ -1,11 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/account.dart';
 import '../data/mock_account.dart';
+import '../data/remote_account.dart';
+import 'api_providers.dart';
 export '../domain/account.dart';
 
-final accountRepositoryProvider = Provider<AccountRepository>(
-  (ref) => MockAccountRepository(),
-);
+final accountRepositoryProvider = Provider<AccountRepository>((ref) {
+  if (!ref.watch(remoteApiProvider)) return MockAccountRepository();
+  final repository = RemoteAccountRepository(ref.watch(apiClientProvider));
+  ref.onDispose(repository.dispose);
+  return repository;
+});
 
 final accountProvider = NotifierProvider<AccountController, UserProfile?>(
   AccountController.new,
@@ -18,6 +23,19 @@ class AccountController extends Notifier<UserProfile?> {
     // Riverpod may retain this notifier across invalidation. A reset must
     // invalidate requests started by the previous account state too.
     _generation++;
+    if (ref.watch(remoteApiProvider)) {
+      final tokens = ref.watch(sessionTokensProvider);
+      tokens.clear();
+      void changed() {
+        if (ref.mounted && tokens.accessToken == null) {
+          _generation++;
+          state = null;
+        }
+      }
+
+      tokens.addListener(changed);
+      ref.onDispose(() => tokens.removeListener(changed));
+    }
     return null;
   }
 
@@ -27,6 +45,7 @@ class AccountController extends Notifier<UserProfile?> {
     String password, {
     bool register = false,
   }) async {
+    if (ref.read(remoteApiProvider)) ref.read(sessionTokensProvider).clear();
     final token = ++_generation;
     final profile = await ref
         .read(accountRepositoryProvider)

@@ -89,7 +89,9 @@ void main() {
         baseUrl: 'http://localhost:3000/api/v1',
         tokens: tokens,
         client: MockClient((req) async {
-          expect(req.headers['authorization'], 'Bearer sample-access');
+          if (!req.url.path.endsWith('/auth/refresh')) {
+            expect(req.headers['authorization'], 'Bearer sample-access');
+          }
           return http.Response('{"error":{"code":"AUTH_REQUIRED"}}', 401);
         }),
       );

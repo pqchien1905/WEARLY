@@ -4,8 +4,10 @@ class UserProfile {
     required this.email,
     this.phone = '',
     this.address = '',
+    this.id = '',
+    this.role = 'CUSTOMER',
   });
-  final String name, email, phone, address;
+  final String name, email, phone, address, id, role;
 }
 
 abstract interface class AccountRepository {

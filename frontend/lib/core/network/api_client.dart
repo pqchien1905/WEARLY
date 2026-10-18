@@ -12,6 +12,11 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
+const sessionChanged = ApiException(
+  'SESSION_CHANGED',
+  'Phiên tài khoản đã thay đổi. Vui lòng thử lại.',
+);
+
 class ApiClient {
   ApiClient({
     required String baseUrl,
@@ -35,69 +40,83 @@ class ApiClient {
   final http.Client _client;
   final SessionTokens tokens;
   final Duration timeout;
+  Future<void>? _refreshing;
+  int? _refreshGeneration;
+
   Future<Object?> get(String path, {Map<String, String>? query}) =>
       request('GET', path, query: query);
+
   Future<Object?> request(
     String method,
     String path, {
     Map<String, String>? query,
     Map<String, Object?>? body,
+    Map<String, String>? headers,
+    bool authenticated = true,
+    bool refresh = true,
   }) async {
     if (path.startsWith('/') ||
         path.contains('://') ||
-        path.split('/').contains('..')) {
+        path.split('/').contains('..') ||
+        Uri.parse(path).hasScheme ||
+        path.contains('\\')) {
       throw ArgumentError('API path must be relative.');
     }
-    final uri = _base.resolve(path).replace(queryParameters: query);
-    final req = http.Request(method, uri);
-    req.headers['Accept'] = 'application/json';
-    if (tokens.accessToken != null) {
-      req.headers['Authorization'] = 'Bearer ${tokens.accessToken}';
+    final generation = tokens.generation;
+    final access = authenticated ? tokens.accessToken : null;
+    final response = await _send(
+      method,
+      path,
+      query: query,
+      body: body,
+      headers: {
+        if (access != null) 'Authorization': 'Bearer $access',
+        ...?headers,
+      },
+    );
+    if (authenticated && tokens.generation != generation) throw sessionChanged;
+    if (response.statusCode == 401 &&
+        authenticated &&
+        refresh &&
+        !path.startsWith('auth/') &&
+        tokens.refreshToken != null) {
+      if (tokens.accessToken == access) await _refresh(generation);
+      if (tokens.generation != generation) throw sessionChanged;
+      return request(
+        method,
+        path,
+        query: query,
+        body: body,
+        headers: headers,
+        authenticated: true,
+        refresh: false,
+      );
     }
+    if (response.statusCode == 401 && authenticated) tokens.clear();
+    return _decode(response, login: path == 'auth/login');
+  }
+
+  Future<http.Response> _send(
+    String method,
+    String path, {
+    Map<String, String>? query,
+    Map<String, Object?>? body,
+    Map<String, String>? headers,
+  }) async {
+    final request = http.Request(
+      method,
+      _base.resolve(path).replace(queryParameters: query),
+    );
+    request.headers.addAll({'Accept': 'application/json', ...?headers});
     if (body != null) {
-      req.headers['Content-Type'] = 'application/json';
-      req.body = jsonEncode(body);
+      request.headers['Content-Type'] = 'application/json';
+      request.body = jsonEncode(body);
     }
     try {
-      final response = await _client
-          .send(req)
+      return await _client
+          .send(request)
           .then(http.Response.fromStream)
           .timeout(timeout);
-      Object? data;
-      try {
-        data = response.bodyBytes.isEmpty
-            ? null
-            : jsonDecode(utf8.decode(response.bodyBytes));
-      } on FormatException {
-        throw ApiException(
-          'INVALID_RESPONSE',
-          'Máy chủ trả dữ liệu không hợp lệ. Hãy thử lại.',
-          status: response.statusCode,
-        );
-      }
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        if (response.statusCode == 401) tokens.clear();
-        final error = data is Map ? data['error'] : null;
-        final code = error is Map
-            ? error['code']?.toString() ?? 'REQUEST_FAILED'
-            : 'REQUEST_FAILED';
-        final message = switch (response.statusCode) {
-          400 => 'Thông tin chưa hợp lệ. Kiểm tra lại các trường đã nhập.',
-          401 => 'Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.',
-          403 => 'Bạn không có quyền thực hiện thao tác này.',
-          404 => 'Không tìm thấy nội dung này.',
-          409 => 'Dữ liệu đã thay đổi. Tải lại trước khi tiếp tục.',
-          429 => 'Bạn thao tác quá nhanh. Vui lòng thử lại sau.',
-          _ => 'Chưa thể kết nối dịch vụ. Vui lòng thử lại.',
-        };
-        throw ApiException(
-          code,
-          message,
-          status: response.statusCode,
-          details: error,
-        );
-      }
-      return data;
     } on TimeoutException {
       throw const ApiException(
         'TIMEOUT',
@@ -109,6 +128,91 @@ class ApiClient {
         'Không kết nối được máy chủ. Kiểm tra mạng và thử lại.',
       );
     }
+  }
+
+  Future<void> _refresh(int generation) async {
+    if (_refreshing != null && _refreshGeneration == generation)
+      return _refreshing;
+    final future = _rotate(generation);
+    _refreshGeneration = generation;
+    _refreshing = future;
+    try {
+      await future;
+    } finally {
+      if (identical(_refreshing, future)) {
+        _refreshing = null;
+        _refreshGeneration = null;
+      }
+    }
+  }
+
+  Future<void> _rotate(int generation) async {
+    final refreshToken = tokens.refreshToken;
+    try {
+      final response = await _send(
+        'POST',
+        'auth/refresh',
+        body: {'refreshToken': refreshToken},
+      );
+      if (tokens.generation != generation) throw sessionChanged;
+      final data = _decode(response);
+      if (data is! Map ||
+          data['accessToken'] is! String ||
+          data['refreshToken'] is! String) {
+        throw const ApiException(
+          'INVALID_RESPONSE',
+          'Phiên đăng nhập không hợp lệ. Hãy đăng nhập lại.',
+        );
+      }
+      if (!tokens.rotate(
+        generation: generation,
+        accessToken: data['accessToken'],
+        refreshToken: data['refreshToken'],
+      )) {
+        throw sessionChanged;
+      }
+    } catch (_) {
+      if (tokens.generation == generation) tokens.clear();
+      rethrow;
+    }
+  }
+
+  Object? _decode(http.Response response, {bool login = false}) {
+    Object? data;
+    try {
+      data = response.bodyBytes.isEmpty
+          ? null
+          : jsonDecode(utf8.decode(response.bodyBytes));
+    } on FormatException {
+      throw ApiException(
+        'INVALID_RESPONSE',
+        'Máy chủ trả dữ liệu không hợp lệ. Hãy thử lại.',
+        status: response.statusCode,
+      );
+    }
+    if (response.statusCode >= 200 && response.statusCode < 300) return data;
+    final error = data is Map ? data['error'] : null;
+    final code = error is Map
+        ? error['code']?.toString() ?? 'REQUEST_FAILED'
+        : 'REQUEST_FAILED';
+    final message = switch (response.statusCode) {
+      400 => 'Thông tin chưa hợp lệ. Kiểm tra lại các trường đã nhập.',
+      401 =>
+        login
+            ? 'Email hoặc mật khẩu chưa đúng.'
+            : 'Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.',
+      403 => 'Bạn không có quyền thực hiện thao tác này.',
+      404 => 'Không tìm thấy nội dung này.',
+      409 => 'Dữ liệu đã thay đổi. Tải lại trước khi tiếp tục.',
+      429 => 'Bạn thao tác quá nhanh. Vui lòng thử lại.',
+      _ => 'Chưa thể kết nối dịch vụ. Vui lòng thử lại.',
+    };
+    throw ApiException(
+      code,
+      message,
+      status: response.statusCode,
+      details: error,
+    );
   }
 
   void close() {
