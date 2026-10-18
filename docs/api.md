@@ -18,6 +18,8 @@ Base URL: `http://localhost:3000/api/v1`. Swagger: `http://localhost:3000/api/do
 | GET | /cart | Bearer |
 | POST | /cart/items | Bearer; {sku,quantity} |
 | PATCH, DELETE | /cart/items/:id | Owner; id là CartItem UUID |
+| GET | /wishlist | Owner; toàn bộ danh sách tối đa200 sản phẩm |
+| PUT, DELETE | /wishlist/:productId | Owner; UUID sản phẩm; lưu/bỏ idempotent |
 | POST | /orders | Bearer; bắt buộc Idempotency-Key |
 | GET | /orders, /orders/:id | Owner, phân trang list |
 | POST | /orders/:id/cancel | Owner; chỉ PENDING |
@@ -38,7 +40,7 @@ Base URL: `http://localhost:3000/api/v1`. Swagger: `http://localhost:3000/api/do
 | GET | /health | Public liveness |
 | GET | /health/ready | Public; DB+Redis; 503 khi dependency chưa ready |
 
-Không có API reset password, wishlist, reviews, promotions, AI Stylist hoặc online payments ở foundation này. Admin là các endpoint kể trên, chưa có toàn bộ workflow quản trị/audit.
+Không có API reset password, reviews, promotions, AI Stylist hoặc online payments ở foundation này. Admin là các endpoint kể trên, chưa có toàn bộ workflow quản trị/audit.
 
 ## Auth
 
@@ -51,6 +53,12 @@ Register `{name,email,password}`; password 12..128 ký tự, email normalize low
 POST refresh `{refreshToken}` xoay token và vô hiệu hóa session cũ. Replay token cũ revoke toàn family. Logout cần access token, revoke family. Tokens không được log hoặc lưu vào URL. Flutter đã tích hợp bearer auth khi bật `USE_REMOTE_API=true`; access/refresh token chỉ ở RAM, refresh đồng thời được gộp, logout/đổi tài khoản loại cache cá nhân. Sau reload cần đăng nhập lại, dữ liệu trên PostgreSQL vẫn được giữ.
 
 `POST /auth/admin/login` nhận `{email,password}` và trả cùng shape login. Sai thông tin trả401; tài khoản đúng mật khẩu nhưng không có quyền ADMIN trả403, không tạo refresh token. Flutter sử dụng client/token/account riêng cho quản trị; logout hoặc refresh thất bại không ảnh hưởng phiên mua sắm. `/auth/login` vẫn chấp nhận ADMIN để họ mua sắm bằng một phiên độc lập. Đây là tách luồng sử dụng và phiên; quyền endpoint vẫn xác minh theo role hiện tại trên máy chủ.
+
+## Wishlist
+
+`GET /wishlist` và `PUT/DELETE /wishlist/:productId` trả `{items:[{productId,product}],limit:200}`; `product` dùng đúng shape catalog, hoặc `null` nếu đã ẩn/không còn biến thể hoạt động. Không trả thông tin sản phẩm chưa công khai trong placeholder. Danh sách sắp xếp mới lưu trước, tie-break ID; Flutter hiển thị12 mục mỗi trang. API lấy user từ bearer token, không nhận userId làm chủ sở hữu.
+
+PUT lưu sản phẩm đang mở bán, cho phép hết tồn kho. Lưu lại sản phẩm đã có và bỏ sản phẩm chưa có không tạo lỗi hay bản ghi trùng. Giới hạn200 mục được kiểm tra trong transaction có khóa theo user; vượt giới hạn trả409 `WISHLIST_LIMIT`. Bỏ mục vẫn được khi sản phẩm đã ẩn. Dữ liệu thuộc phiên khách hàng của Flutter; ADMIN muốn lưu yêu thích phải đăng nhập riêng ở cửa hàng. Mất phản hồi ghi thì UI yêu cầu tải lại trước khi đảo trạng thái tiếp, không tự giả định lưu thành công.
 
 ## Catalog
 

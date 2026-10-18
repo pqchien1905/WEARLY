@@ -27,6 +27,7 @@ const { configureApp } = requireBackend('./dist/bootstrap');
 const fixture = 'flutter-test-' + randomUUID();
 const browser = process.argv.includes('--browser');
 const admin = process.argv.includes('--admin');
+const wishlist = process.argv.includes('--wishlist');
 function flutter(args) {
   const binary = path.join(root, '.tools/flutter/bin/flutter.bat');
   // All arguments below are local constants, loopback URLs or generated UUIDs.
@@ -73,6 +74,13 @@ async function main() {
       const delivered = await db.order.findUniqueOrThrow({ where: { id: order.id }, include: { payment: true } });
       if (delivered.status !== 'DELIVERED' || delivered.payment.status !== 'PENDING') throw new Error('Persisted order/COD state mismatch');
       console.log('PASS database assertions: product, SKU, gallery, stock, order delivered with COD pending.');
+    } else if (wishlist) {
+      await flutter(['build', 'web', '--release', '--dart-define=USE_REMOTE_API=true', '--dart-define=API_BASE_URL=' + url]);
+      await require('./verify-wishlist-browser.cjs')({ root, fixture });
+      const saved = await db.wishlistItem.findMany({ where: { user: { email: 'browser-' + fixture + '@example.com' } } });
+      if (saved.length !== 1 || saved[0].productId !== product.id) throw new Error('Wishlist was not persisted for first customer');
+      if (await db.wishlistItem.count({ where: { user: { email: fixture + '@example.com' } } }) !== 0) throw new Error('Wishlist crossed customer accounts');
+      console.log('PASS database assertions: first customer saved product, second customer empty.');
     } else if (browser) {
       await flutter(['build', 'web', '--release', '--dart-define=USE_REMOTE_API=true', '--dart-define=API_BASE_URL=' + url]);
       await require('./verify-api-browser.cjs')({ root, url, fixture });

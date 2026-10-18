@@ -116,14 +116,13 @@ class RemoteWishlistController extends ChangeNotifier {
     _check();
     if (!loaded || loading) await refresh();
     _check();
+    _checkIdle();
     if (_items.containsKey(id)) return;
     await _set(id, true);
   }
 
   Future<void> _set(String id, bool saved) async {
-    if (busy) {
-      throw const ApiException('BUSY', 'Đang lưu thay đổi. Vui lòng đợi.');
-    }
+    _checkIdle();
     busy = true;
     error = null;
     notifyListeners();
@@ -150,6 +149,12 @@ class RemoteWishlistController extends ChangeNotifier {
         busy = false;
         notifyListeners();
       }
+    }
+  }
+
+  void _checkIdle() {
+    if (busy) {
+      throw const ApiException('BUSY', 'Đang lưu thay đổi. Vui lòng đợi.');
     }
   }
 

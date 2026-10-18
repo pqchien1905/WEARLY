@@ -26,6 +26,34 @@ Map<String, Object?> snapshot({bool saved = true, bool unavailable = false}) =>
 
 void main() {
   test(
+    'cart save cannot acknowledge a favorite while its removal is pending',
+    () async {
+      final pending = Completer<http.Response>(), started = Completer<void>();
+      final api = ApiClient(
+        baseUrl: 'http://localhost/api/v1',
+        client: MockClient((r) async {
+          if (r.method == 'DELETE') {
+            started.complete();
+            return pending.future;
+          }
+          return jsonResponse(snapshot());
+        }),
+      );
+      final c = RemoteWishlistController(api, signedIn: true);
+      addTearDown(() {
+        c.dispose();
+        api.close();
+      });
+      await c.refresh();
+      final removal = c.toggle('product-id');
+      await started.future;
+      await expectLater(c.save('product-id'), throwsA(isA<ApiException>()));
+      pending.complete(jsonResponse(snapshot(saved: false)));
+      await removal;
+      expect(c.items, isEmpty);
+    },
+  );
+  test(
     'loads private products, saves idempotently and removes unavailable entries',
     () async {
       var saved = false, puts = 0;

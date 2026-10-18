@@ -118,4 +118,14 @@ Khách hàng đăng nhập tại `/#/login`; quản trị đăng nhập tại `/
 
 Kiểm chứng: 235 Flutter tests đạt (2 live opt-in không chạy trong suite thường), analyzer sạch; backend build/lint, 11 unit và 16 PostgreSQL E2E đạt (17 worker/storage opt-in không chạy). Chrome thật với PostgreSQL `_test` xác nhận hai giao diện, CUSTOMER bị từ chối, hai chiều logout độc lập, safe return path và các thao tác quản trị/sản phẩm/kho/đơn tiếp tục hoạt động. Ảnh desktop1440/mobile375 đã được xem; thêm regression cho viewport1440×400 khi mở DevTools, sửa overflow cột Studio bằng cuộn độc lập. Reload vẫn cần đăng nhập lại vì token chỉ ở RAM.
 
-Final review độc lập phát hiện một lỗi mất ảnh khi quản trị viên lưu metadata từ bản cũ. Đã sửa PATCH chỉ gửi trường thay đổi và cập nhật mốc so sánh sau khi lưu thành công. Hai regression đã thất bại trước sửa và đạt sau sửa: giữ thay đổi gallery/chất liệu của người khác và giữ đúng mốc sau lần sửa gallery. Suite cuối225 đạt,2 opt-in bỏ qua; analyzer sạch. Không có finding Critical/Important/Minor còn tồn đọng. Các giới hạn taxonomy/upload/audit, đối soát COD, native và production giữ nguyên như tài liệu.
+Final review của giai đoạn Flutter API administration trước đó phát hiện một lỗi mất ảnh khi quản trị viên lưu metadata từ bản cũ. Đã sửa PATCH chỉ gửi trường thay đổi và cập nhật mốc so sánh sau khi lưu thành công. Hai regression đã thất bại trước sửa và đạt sau sửa: giữ thay đổi gallery/chất liệu của người khác và giữ đúng mốc sau lần sửa gallery. Suite tại giai đoạn đó225 đạt,2 opt-in bỏ qua; analyzer sạch. Không có finding Critical/Important/Minor còn tồn đọng. Các giới hạn taxonomy/upload/audit, đối soát COD, native và production giữ nguyên như tài liệu.
+
+## Persistent customer wishlist — 2026-10-18
+
+Đã thêm wishlist API và Flutter thật: trái tim trên catalog/chi tiết, Lưu yêu thích trong giỏ, trang danh sách có phân trang12 mục, trạng thái tải/lỗi/rỗng và sản phẩm không còn mở bán. Dùng phiên khách hàng độc lập; đăng nhập lại lấy dữ liệu PostgreSQL, logout/đổi tài khoản loại cache và phản hồi cũ. ADMIN dùng wishlist bằng phiên mua sắm riêng. Không đổi schema hoặc dependencies.
+
+PUT/DELETE idempotent, khóa theo user bảo đảm quota200 và không tạo trùng khi lưu đồng thời. Sản phẩm hết kho vẫn lưu được; sản phẩm bị ẩn/không còn SKU hoạt động thành placeholder có thể bỏ, không lộ metadata chưa công khai. Mất phản hồi ghi yêu cầu tải lại trước khi đảo trạng thái, và không báo lưu thành công khi một lệnh bỏ đang chờ.
+
+Kiểm chứng: backend19 PostgreSQL E2E đạt (17 worker/storage opt-in bỏ qua), build/lint đạt. Flutter246 tests đạt (2 live opt-in bỏ qua), analyze sạch. Chrome/PostgreSQL thật đã lưu/bỏ từ card, chi tiết, giỏ, xác nhận lưu lặp trong giỏ không bỏ mục; reload/login giữ danh sách; tài khoản thứ hai rỗng; viewport375/600/1440 không exception. Helper `node tools/test-frontend-api.cjs --wishlist` dùng fixture riêng trên database `_test`, dọn đúng dữ liệu lượt chạy. Ảnh/log nằm tại `.tools/api-wishlist-verification` (ignored).
+
+Tiếp theo: đánh giá sản phẩm, danh mục/thương hiệu trong quản trị, audit, promotions/style; email/reset password, AI/provider và payment thật vẫn chưa hoàn tất.

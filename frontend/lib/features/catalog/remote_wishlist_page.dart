@@ -31,7 +31,7 @@ class RemoteWishlistPage extends ConsumerWidget {
     final visible = records.skip((page - 1) * 12).take(12).toList();
     return PageBody(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text('Trang chủ / Yêu thích', style: T.small),
           const SizedBox(height: 28),

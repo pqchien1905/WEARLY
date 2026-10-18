@@ -16,7 +16,7 @@ Giữ Flutter, Riverpod, go_router và bố cục hiện có. `USE_REMOTE_API=tr
 | AccountRepository.requestPasswordReset | Chưa có endpoint | Cần mail provider/token có hạn, response không lộ tài khoản |
 | AccountDetailsRepository.read/saveAddress/deleteAddress/setDefault | GET/POST/PATCH/DELETE /users/me/addresses; isDefault | Remote CRUD/default; checkout chọn UUID đã lưu |
 | AccountDetailsRepository.saveStyle | Chưa có model/API sở thích | Giai đoạn sau |
-| wishlistProvider.toggle/clear | WishlistItem schema | Chưa có API hoặc remote adapter |
+| wishlistProvider demo / remoteWishlistProvider | GET /wishlist; PUT/DELETE /wishlist/:productId | Lưu thật theo tài khoản, snapshot tối đa200 mục; card/detail/cart và trang danh sách đã nối; không bulk-clear |
 | StylistRepository.reply | Future /ai/stylist/messages | Chưa có API/provider/retrieval |
 | TryOnRepository.create/cancel | POST/GET /ai/try-on/jobs; POST/GET/DELETE /uploads/images | Upload/delete/retention/quota có; provider Disabled, Flutter chưa nối; hủy qua xóa ảnh, chưa cancel riêng job |
 | Admin state promotions/content/audit | Coupon schema, các endpoint admin có trong api.md | Nội dung, promotions, audit workflow chưa có backend |
@@ -36,7 +36,7 @@ Giá VND được đọc từ chuỗi số nguyên, không làm tròn. Checkout 
 ## Các bước còn lại
 
 1. Quản trị sản phẩm/SKU/kho/đơn/khách hàng đã nối API với quyền ADMIN. Còn audit đầy đủ, quản lý danh mục/thương hiệu bằng UI và đối soát COD.
-2. Wishlist/reviews/promotions/style preferences, khôi phục mật khẩu và email provider.
+2. Wishlist đã nối API. Còn reviews/promotions/style preferences, khôi phục mật khẩu và email provider.
 3. Nối private upload hiện có → AI adapter thật → polling/cancel riêng job; đưa consent/delete/quota vào UI hiện tại.
 4. Payment provider, webhook và hạ tầng triển khai production. Chưa có cam kết production-ready.
 
