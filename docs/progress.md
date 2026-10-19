@@ -1,5 +1,7 @@
 # Execution ledger — 2026-10-15-fashion-frontend
 
+> Lịch sử phát triển được giữ bên dưới. Trạng thái mới nhất20/10/2026: [PROGRESS.md](../PROGRESS.md), [đối chiếu nghiệm thu](acceptance.md), [bàn giao](handoff.md). Đã chạy lại53E2E/11unit/299Flutter tests, kiểm tra Swagger/4Mermaid bằng Chrome và quét lịch sử Git bằng Gitleaks; xem các tài liệu trên để biết phạm vi/giới hạn.
+
 P0 in progress: source specifications and installed frontend-design read. Two concepts evaluated; A selected. Documents written. Toolchain detection: Chrome available; Flutter, Git, Node not in PATH.
 
 Ruling: implement in the explicitly requested empty workspace; no existing Git branch to isolate. Preserve source documents.

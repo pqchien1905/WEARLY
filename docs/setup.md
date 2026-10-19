@@ -1,5 +1,40 @@
 # Thiết lập trên Windows
 
+## Cài mới từ repository trên máy Windows khác
+
+Phần này dành cho máy mới, dùng PostgreSQL/Redis Docker và backend chạy trên host. Máy hiện tại đã có dữ liệu native: dùng mục kế tiếp, không tạo lại `.env` hoặc đổi cổng theo phần cài mới.
+
+1. Cài Git for Windows; cài **Node24 LTS** từ [Node.js](https://nodejs.org/en/download), giữ tùy chọn thêm PATH. Prisma nằm trong dependencies dự án, không cần cài Prisma global.
+2. Cài [Docker Desktop cho Windows](https://docs.docker.com/desktop/setup/install/windows-install/), chọn WSL2/Linux containers, làm theo yêu cầu bật ảo hóa/WSL của bộ cài và Restart khi Windows yêu cầu. Mở Docker Desktop, chờ Engine running rồi kiểm tra `docker info`.
+3. Cài [Flutter SDK](https://docs.flutter.dev/install/manual), thêm thư mục `bin` vào user PATH; cài Chrome để chạy Web. Dùng SDK stable có Dart>=3.10 theo `frontend/pubspec.yaml`, chạy `flutter doctor` để kiểm tra Web toolchain. Không cần cài Android Studio để chạy Web.
+4. Mở PowerShell mới. Nếu máy cá nhân chặn `npm.ps1`, đặt `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` rồi mở terminal mới; không đổi chính sách máy do tổ chức quản lý. Máy hiện tại đã dùng RemoteSigned và chạy được `npm`.
+
+Clone vào thư mục mới chưa có repository; không chạy clone đè dự án đang dùng:
+
+```powershell
+git clone https://github.com/pqchien1905/WEARLY.git
+cd WEARLY
+node --version
+npm --version
+flutter --version
+node tools/init-env.cjs
+docker compose config --quiet
+docker compose up -d --wait postgres redis
+cd backend
+npm ci
+npm run prisma:validate
+npm run prisma:generate
+npm run prisma:deploy
+npm run prisma:seed
+npm run start:dev
+```
+
+`init-env` sinh secrets ngẫu nhiên và tạo root/backend `.env`, từ chối ghi đè. Mặc định máy mới dùng localhost5432/6379; nếu các cổng đó đã bị chiếm, chọn cổng khác rồi cập nhật đồng bộ `POSTGRES_PUBLISHED_PORT`, `REDIS_PUBLISHED_PORT` ở root `.env` và `DATABASE_URL`, `REDIS_PORT` trong backend `.env` trước khi chạy. Chỉ đổi password env không đổi password của volume PostgreSQL đã khởi tạo; không xóa volume để né lỗi kết nối.
+
+Terminal thứ hai tại root clone: `.\tools\frontend.ps1 api`. Mở `http://localhost:8080`, Swagger `http://localhost:3000/api/docs`. Từ backend, `npm run prisma:studio` mở giao diện database theo URL CLI in ra. Đăng ký tài khoản, rồi từ root dùng `node tools/grant-admin.cjs email-cua-ban@example.com` để cấp ADMIN cho chính tài khoản cần quản trị; đăng nhập lại tại `/#/admin`.
+
+Các bước trên chạy catalog/tài khoản/giỏ/COD. Ảnh và worker cần storage/helper theo mục **Containers và storage**; provider AI chưa bật. `.tools` không nằm trên Git, vì vậy SDK/helper binary của máy cũ không được mang theo khi clone. Không cần cài PostgreSQL hoặc Memurai trực tiếp khi đã chọn Docker cho hai dịch vụ này.
+
 ## Công cụ và trạng thái máy ngày 18/10/2026
 
 Node 24.22.0 LTS, Flutter/Dart portable đã có trong .tools; đã thêm vào user PATH. Git for Windows 2.55.0.5, WSL 3.0.3 và Docker Desktop 4.95.0 đã cài. Docker CLI 29.8.2, Compose 5.6.0 kiểm tra được.

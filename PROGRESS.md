@@ -1,5 +1,17 @@
 # Tiến độ bàn giao WEARLY
 
+## Nghiệm thu hiện tại — 20/10/2026
+
+Lượt này **có tiến triển**: bổ sung [bảng đối chiếu yêu cầu](docs/acceptance.md), kiểm tra lịch sử secrets/render tài liệu/Swagger và sửa hướng dẫn máy mới cùng các con số migration lỗi thời. Code ứng dụng/schema không thay đổi so với main95c66ff; không thêm tính năng ngoài phạm vi để kéo dài mục tiêu.
+
+- Kiểm thử hiện hành: backend lint/build và11/11unit đạt;53/53E2E PostgreSQL+Redis+MinIO đạt; Flutter analyzer sạch,299tests đạt (2live opt-in bỏ qua trong suite thường). Cả3lệnh exit0.
+- Chrome thật: Swagger63operations trên47paths, Bearer dialog,4Mermaid render thành SVG; customer login không có liên kết admin, direct/#/admin mở đúng admin login,0pageerrors. Đã xem ảnh hai giao diện.
+- Gitleaks8.30.1 checksum chính thức đã kiểm tra:61commits/2.32MB,0findings; scan redacted, không che bằng custom ignore.15assets ban đầu khớp nguyên Git blob sau di chuyển.
+- Windows: PostgreSQL/Memurai Running, npm chạy được với RemoteSigned, tài khoản quản trị đã chỉ định tồn tại/active/ADMIN. Không in mật khẩu, không sửa dữ liệu người dùng.
+- Tài liệu: bổ sung clone/cài Node/Docker/Flutter/env/Prisma/seed/chạy trên máy Windows mới; backend README và database docs cập nhật đủ8migrations.
+
+Đang rà soát cuối trước kết luận. Phạm vi bàn giao là local theo Master Prompt và các yêu cầu bổ sung đã liệt kê, không phải triển khai production hoặc biến mọi tính năng demo/tương lai thành API. Các phần email/reset, promotions, catalog uploads, audit/COD settlement, AI/online payment và hạ tầng production vẫn được nêu rõ trong handoff/migration-plan; không giả lập là đã triển khai. Giữ lại toàn bộ DB/container/bằng chứng; không xóa dữ liệu.
+
 ## Cập nhật mới nhất: kiểm chứng cài mới và Docker
 
 Lượt này **có tiến triển**: đã tạo công cụ xác minh migrations/seed trên DB mới biệt lập; build và chạy API/worker Docker với dữ liệu thật; gỡ nốt liên kết quản trị ở footer cửa hàng; bổ sung [bàn giao A–H](docs/handoff.md), cập nhật setup/README/sơ đồ modules. Những đoạn phía dưới giữ lại kết quả lượt trước.

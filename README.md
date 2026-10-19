@@ -10,6 +10,7 @@
 - [Ánh xạ mock → API](docs/migration-plan.md)
 - [Bàn giao hiện tại: kết quả kiểm thử và phần còn thiếu](docs/handoff.md)
 - [Tiến độ công việc](PROGRESS.md)
+- [Đối chiếu yêu cầu và bằng chứng nghiệm thu local](docs/acceptance.md)
 - [Lịch sử frontend](README_FRONTEND.md)
 
 ```text

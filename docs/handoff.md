@@ -2,6 +2,8 @@
 
 Luồng cửa hàng và quản trị đã chạy với PostgreSQL thật. Flutter được giữ nguyên công nghệ; API là nguồn dữ liệu cho các chức năng đã tích hợp. Báo cáo này thay số liệu lịch sử trong `backend-report.md`, không tuyên bố sẵn sàng production hoặc mọi tính năng thương mại/AI đã hoàn tất.
 
+Cập nhật20/10: [đối chiếu nghiệm thu](acceptance.md) đã kiểm tra từng nhóm yêu cầu và yêu cầu bổ sung; chạy lại53E2E +11unit +299Flutter tests đều đạt. Chrome mở Swagger63operations/Bearer, render4Mermaid và xác nhận đăng nhập riêng. Gitleaks quét61commits reachable không phát hiện secrets; không dùng baseline bỏ qua. Hướng dẫn cài mới Windows đã bổ sung trong setup.
+
 ## A. Cấu trúc thực tế
 
 ```text

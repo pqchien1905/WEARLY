@@ -102,13 +102,17 @@ Indexes: email/SKU/slugs, product(active,createdAt,id), category/brand, variant(
 - `20261018000100_constraints`: số lượng/giá/tổng đơn/rating và default address.
 - `20261018000200_private_images`: thêm width/height, SHA256, consentAt, purgedAt và index/constraint; không thay hoặc xóa dữ liệu cũ.
 - `20261018000300_image_cleanup_retry`: thêm purgeRetryAt và index để retry công bằng, không sửa migration đã áp dụng.
+- `20261018050000_review_product_index`: phân trang đánh giá công khai theo product/createdAt/id.
+- `20261019050000_review_user_index`: phân trang đánh giá cá nhân theo user/createdAt/id.
+- `20261019060000_style_preferences`: hồ sơ phong cách theo user, ngân sách Decimal và version.
+- `20261019170000_address_create_receipts`: receipt user/key/hash, FK SET NULL để retry không làm sống lại địa chỉ đã xóa.
 - `npm run prisma:deploy`: áp dụng migration đã commit, không reset.
 - `npm run prisma:migrate -- --name descriptive_change`: tạo migration mới trong development.
 - `npm run prisma:generate`: generate client riêng; Prisma 7 không tự chạy generate/seed sau migrate.
 - `npm run prisma:seed`: 4 danh mục, Wearly brand, 32 sản phẩm và 256 SKU từ fixture Flutter; upsert với update rỗng, không đặt lại giá/tồn/tài khoản đã sửa.
 - `npm run prisma:studio`: giao diện DB local. Không phơi Studio ra Internet.
 
-Seed không tạo admin với mật khẩu mặc định. Tạo tài khoản qua API, sau đó developer có quyền database đổi role trong Prisma Studio khi cần kiểm thử quản trị.
+Seed không tạo admin với mật khẩu mặc định. Tạo tài khoản qua API, sau đó từ root chạy `node tools/grant-admin.cjs email-cua-ban@example.com`; helper cấp quyền cho tài khoản hiện có và thu hồi phiên cũ. Đăng nhập lại sau khi đổi quyền.
 
 ImageAsset giữ metadata reservation, verifiedAt sau ghi S3, deletedAt để thu hồi quyền truy cập và purgedAt sau xóa object thành công. Cột mới nullable để tương thích metadata cũ. Cleanup và công bố AI dùng lock theo image ID; quota upload dùng lock theo user. Xem [vòng đời ảnh](private-images.md).
 

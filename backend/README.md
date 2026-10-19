@@ -12,6 +12,6 @@ Worker: `npm run build` rồi `npm run worker` trong terminal riêng. Redis bắ
 
 `AI_QUEUE_PREFIX` mặc định `wearly`; giữ nguyên prefix giữa các lần khởi động để xử lý cùng hàng đợi. Lỗi provider được chuyển thành mã an toàn trước khi BullMQ lưu vào Redis.
 
-Private upload JPEG/PNG, ownership, consent, quota và cleanup đã có. Chạy helper `tools/start-storage.ps1` từ root; thêm `-WithStorage` vào test helper để kiểm thử MinIO thật. Worker xử lý retention mỗi60s cả khi AI provider Disabled. Giữ đủ4 migrations, bucket private/unversioned; xem [private-images.md](../docs/private-images.md).
+Private upload JPEG/PNG, ownership, consent, quota và cleanup đã có. Chạy helper `tools/start-storage.ps1` từ root; thêm `-WithStorage` vào test helper để kiểm thử MinIO thật. Worker xử lý retention mỗi60s cả khi AI provider Disabled. Giữ toàn bộ8 migrations hiện có, bucket private/unversioned; xem [private-images.md](../docs/private-images.md).
 
-[Xem hướng dẫn đầy đủ](../docs/setup.md), [API](../docs/api.md), [giới hạn nghiệm thu](../docs/backend-report.md).
+[Xem hướng dẫn đầy đủ](../docs/setup.md), [API](../docs/api.md), [bàn giao và giới hạn nghiệm thu](../docs/handoff.md).
