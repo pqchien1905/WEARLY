@@ -10,7 +10,6 @@ import 'package:nep_storefront/core/network/api_client.dart';
 import 'remote_account_test.dart' show sessionJson;
 import 'remote_commerce_test.dart' show cartJson, orderJson;
 import 'remote_session_test.dart' show jsonResponse;
-import 'remote_style_preferences_test.dart' show styleJson;
 
 void main() {
   testWidgets(
@@ -83,7 +82,7 @@ void main() {
     },
   );
   testWidgets(
-    'remote checkout retries safely, shows persisted COD order and cancels it',
+    'remote checkout works during style outage, retries COD safely and cancels',
     (tester) async {
       var created = false, cancelled = false;
       Map<String, Object?> snapshot() => {
@@ -97,7 +96,7 @@ void main() {
         client: MockClient((r) async {
           final path = r.url.path;
           if (path.endsWith('/users/me/style')) {
-            return jsonResponse(styleJson());
+            return jsonResponse({}, 503);
           }
           if (path.endsWith('/auth/login')) return jsonResponse(sessionJson());
           if (path.endsWith('/auth/logout')) return jsonResponse({});

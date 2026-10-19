@@ -9,6 +9,45 @@ import 'remote_style_preferences_test.dart' show styleJson;
 
 void main() {
   test(
+    'style failure after address creation does not lose confirmed address',
+    () async {
+      final rows = <Map<String, Object?>>[];
+      var writes = 0;
+      final api = ApiClient(
+        baseUrl: 'http://localhost/api/v1',
+        client: MockClient((r) async {
+          if (r.url.path.endsWith('/style')) {
+            return rows.isEmpty
+                ? jsonResponse(styleJson())
+                : jsonResponse({}, 503);
+          }
+          if (r.method == 'POST') {
+            writes++;
+            rows.add({
+              'id': 'confirmed-address',
+              ...jsonDecode(r.body) as Map<String, dynamic>,
+            });
+            return jsonResponse(rows.single, 201);
+          }
+          return jsonResponse(rows);
+        }),
+      );
+      addTearDown(api.close);
+      final result = await RemoteAccountDetailsRepository(api).saveAddress(
+        const DeliveryAddress(
+          id: '',
+          label: 'Nhà',
+          recipient: 'An',
+          phone: '0901234567',
+          address: '12 Nguyễn Huệ',
+        ),
+      );
+      expect(result.addresses.single.id, 'confirmed-address');
+      expect(result.defaultAddressId, 'confirmed-address');
+      expect(writes, 1);
+    },
+  );
+  test(
     'address create, update and default/delete reflect server UUIDs and Vietnamese data',
     () async {
       final rows = <Map<String, Object?>>[];

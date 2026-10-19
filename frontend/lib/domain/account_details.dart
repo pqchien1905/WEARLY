@@ -39,11 +39,21 @@ class AccountDetails {
   AccountDetails({
     List<DeliveryAddress> addresses = const [],
     this.defaultAddressId,
-    this.style = const StylePreferences(),
-  }) : addresses = List.unmodifiable(addresses);
+    StylePreferences style = const StylePreferences(),
+    this.styleError,
+  }) : addresses = List.unmodifiable(addresses),
+       _style = style;
   final List<DeliveryAddress> addresses;
   final String? defaultAddressId;
-  final StylePreferences style;
+  final StylePreferences _style;
+  // A style outage must not discard successfully loaded delivery addresses.
+  // Consumers must show the error instead of editing an invented default.
+  final Object? styleError;
+  StylePreferences get style {
+    if (styleError case final error?) throw error;
+    return _style;
+  }
+
   DeliveryAddress? get defaultAddress =>
       addresses.where((a) => a.id == defaultAddressId).firstOrNull;
 }

@@ -18,15 +18,24 @@ class StylePage extends ConsumerWidget {
     current: '/account/style',
     child: AccountDataView(
       freshWhileLoading: ref.watch(remoteApiProvider),
-      builder: (data) => _StyleEditor(
-        key: ValueKey((
-          ref.watch(accountProvider)?.email,
-          ref.watch(remoteApiProvider)
-              ? ref.read(apiClientProvider).tokens.generation
-              : 0,
-        )),
-        initial: data.style,
-      ),
+      builder: (data) => data.styleError != null
+          ? StatePanel(
+              title: 'Chưa mở được hồ sơ phong cách',
+              message: accountError(data.styleError!),
+              action: AppButton(
+                'Thử lại',
+                onPressed: () => ref.invalidate(accountDetailsProvider),
+              ),
+            )
+          : _StyleEditor(
+              key: ValueKey((
+                ref.watch(accountProvider)?.email,
+                ref.watch(remoteApiProvider)
+                    ? ref.read(apiClientProvider).tokens.generation
+                    : 0,
+              )),
+              initial: data.style,
+            ),
     ),
   );
 }

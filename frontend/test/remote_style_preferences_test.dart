@@ -116,6 +116,24 @@ Future<void> chooseSize(WidgetTester tester, String size) async {
 }
 
 void main() {
+  testWidgets(
+    'style load failure stays explicit and retries without an editable default',
+    (tester) async {
+      var failing = true;
+      await mountStyle(
+        tester,
+        (_) async => failing
+            ? jsonResponse({}, 503)
+            : jsonResponse(styleJson(size: 'XL', version: 4)),
+      );
+      expect(find.text('Chưa mở được hồ sơ phong cách'), findsOneWidget);
+      expect(find.byType(DropdownButtonFormField<String>), findsNothing);
+      failing = false;
+      await tapStyle(tester, find.widgetWithText(FilledButton, 'Thử lại'));
+      expect(find.text('XL'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
   test(
     'remote style read and save preserve version, VND and address data',
     () async {
@@ -187,8 +205,9 @@ void main() {
         ),
       );
       addTearDown(api.close);
-      await expectLater(
-        RemoteAccountDetailsRepository(api).read(),
+      final details = await RemoteAccountDetailsRepository(api).read();
+      expect(
+        () => details.style,
         throwsA(
           isA<ApiException>().having((e) => e.code, 'code', 'INVALID_RESPONSE'),
         ),

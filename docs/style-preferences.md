@@ -16,7 +16,7 @@ GET `/api/v1/users/me/style` và PUT cùng đường dẫn đều yêu cầu Bea
 
 PUT trả cùng các lựa chọn với `version` tăng lên1; lần lưu tiếp gửi phiên bản vừa nhận. Budget là chuỗi nguyên VND, chỉ nhận800000/1500000/2500000. Size XS/S/M/L/XL/XXL; phong cách trống/Tối giản/Thanh lịch/Thư giãn; màu trống/Trắng/Đen/Mận/Xanh/Nâu/Hồng đất/Tím/Đỏ. Dữ liệu sai trả400, phiên bản cũ409. Khóa theo user và transaction giữ đúng kết quả khi tạo/lưu đồng thời.
 
-`StylePreference` có userId UUID PK/FK, budget Decimal(14,0), version và timestamps; xóa theo User. Migration chỉ thêm bảng, không sửa/xóa dữ liệu cũ. AccountDetails hiện đọc cả địa chỉ và phong cách; lỗi đọc được hiển thị, không âm thầm thay bằng mặc định.
+`StylePreference` có userId UUID PK/FK, budget Decimal(14,0), version và timestamps; xóa theo User. Migration chỉ thêm bảng, không sửa/xóa dữ liệu cũ. AccountDetails đọc cả địa chỉ và phong cách nhưng giữ lỗi phong cách riêng: lỗi này không làm mất địa chỉ đã tải, không chặn checkout hoặc biến lần lưu địa chỉ đã xác nhận thành thất bại. Trang phong cách hiển thị lỗi/thử lại, không cho sửa một bộ giá trị mặc định giả. Lỗi phiên đăng nhập vẫn chặn dữ liệu cũ.
 
 ## Kiểm thử
 

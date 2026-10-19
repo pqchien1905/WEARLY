@@ -27,11 +27,27 @@ class RemoteAccountDetailsRepository implements AccountDetailsRepository {
 
   @override
   Future<AccountDetails> read() async {
+    Object? styleError;
+    Future<StylePreferences> readStyle() async {
+      try {
+        return _style(await _request('GET', 'users/me/style'));
+      } on ApiException catch (error) {
+        if (error.code == 'SESSION_CHANGED') rethrow;
+        styleError = error;
+        return const StylePreferences();
+      }
+    }
+
     final data = await Future.wait([
       _request('GET', 'users/me/addresses'),
-      _request('GET', 'users/me/style'),
+      readStyle(),
     ]);
-    return _details(data[0] as List, _style(data[1]));
+    if (api.tokens.generation != _generation) throw sessionChanged;
+    return _details(
+      data[0] as List,
+      data[1] as StylePreferences,
+      styleError: styleError,
+    );
   }
 
   StylePreferences _style(Object? value) {
@@ -61,7 +77,11 @@ class RemoteAccountDetailsRepository implements AccountDetailsRepository {
     }
   }
 
-  AccountDetails _details(List rows, StylePreferences style) {
+  AccountDetails _details(
+    List rows,
+    StylePreferences style, {
+    Object? styleError,
+  }) {
     final addresses = rows
         .map(
           (a) => DeliveryAddress(
@@ -75,6 +95,7 @@ class RemoteAccountDetailsRepository implements AccountDetailsRepository {
         .toList();
     return AccountDetails(
       style: style,
+      styleError: styleError,
       addresses: addresses,
       defaultAddressId:
           rows.where((a) => a['isDefault'] == true).firstOrNull?['id']
