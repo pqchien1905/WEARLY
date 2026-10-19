@@ -24,11 +24,13 @@
 
 ### Task 1: Isolated bootstrap verification
 Files: tools/verify-bootstrap.cjs, bounded evidence in .tools/handoff, optional targeted fixes only if actual failures prove necessary.
-- [ ] Implement verifier with target guards and runtime assertions; this is a verification tool, not new product behavior. Test guard refusal with invalid configuration before DB mutation.
-- [ ] Run against fresh local DB; inspect migration/schema/seed evidence. If product failure appears, reproduce before fixing and run affected suite. Expected: drift-free migrations, exact seed counts, preserved snapshots.
+- [x] Implement verifier with target guards and runtime assertions; this is a verification tool, not new product behavior. Test guard refusal with invalid configuration before DB mutation.
+- [x] Run against fresh local DB; inspect migration/schema/seed evidence. If product failure appears, reproduce before fixing and run affected suite. Expected: drift-free migrations, exact seed counts, preserved snapshots.
 
 ### Task 2: Handoff audit and integration
 Files: docs/backend-report.md or dedicated current report, docs/setup.md, README.md, PROGRESS.md.
-- [ ] Read actual controllers/config/diagrams/files and classify each Master Prompt acceptance item with current evidence; keep missing/unverified items explicit.
-- [ ] Verify Docker API/worker build/runtime in isolated local infrastructure if feasible; otherwise preserve precise remaining gate and continue independently useful work.
-- [ ] Run final read-only review of changes, address Important findings once with appropriate regression evidence, integrate under prior authorization. Do not mark overall goal complete until all required gates are proved.
+- [x] Read actual controllers/config/diagrams/files and classify each Master Prompt acceptance item with current evidence; keep missing/unverified items explicit.
+- [x] Verify Docker API/worker build/runtime in isolated local infrastructure if feasible; otherwise preserve precise remaining gate and continue independently useful work.
+- [x] Run final read-only review of changes, address Important findings once with appropriate regression evidence, integrate under prior authorization. Do not mark overall goal complete until all required gates are proved.
+
+Completed on main through238746c. Final review:2 Important cleanup findings fixed in one pass with5 RED→GREEN regression tests and successful real Docker rerun;1 Minor deferred (synthetic UPDATE row-count assertions). Evidence and remaining limits: docs/handoff.md, PROGRESS.md. No databases, volumes or scratch evidence deleted.
