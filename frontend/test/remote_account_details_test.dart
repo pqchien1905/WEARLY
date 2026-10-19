@@ -5,6 +5,7 @@ import 'package:nep_storefront/core/network/api_client.dart';
 import 'package:nep_storefront/data/remote_account_details.dart';
 import 'package:nep_storefront/domain/account_details.dart';
 import 'remote_session_test.dart' show jsonResponse;
+import 'remote_style_preferences_test.dart' show styleJson;
 
 void main() {
   test(
@@ -15,6 +16,7 @@ void main() {
       final api = ApiClient(
         baseUrl: 'http://localhost/api/v1',
         client: MockClient((r) async {
+          if (r.url.path.endsWith('/style')) return jsonResponse(styleJson());
           if (r.method == 'GET') return jsonResponse(rows);
           if (r.method == 'DELETE') {
             rows.removeWhere((a) => a['id'] == r.url.path.split('/').last);
@@ -108,8 +110,9 @@ void main() {
     final api = ApiClient(
       baseUrl: 'http://localhost/api/v1',
       client: MockClient(
-        (r) async =>
-            r.method == 'GET' ? jsonResponse([]) : jsonResponse({}, 400),
+        (r) async => r.method == 'GET'
+            ? jsonResponse(r.url.path.endsWith('/style') ? styleJson() : [])
+            : jsonResponse({}, 400),
       ),
     );
     await expectLater(
@@ -126,10 +129,10 @@ void main() {
     );
     api.close();
   });
-  test('unsupported style persistence fails explicitly', () async {
+  test('rejected style persistence fails explicitly', () async {
     final api = ApiClient(
       baseUrl: 'http://localhost/api/v1',
-      client: MockClient((_) async => throw StateError('No request expected')),
+      client: MockClient((_) async => jsonResponse({}, 400)),
     );
     await expectLater(
       RemoteAccountDetailsRepository(api).saveStyle(const StylePreferences()),

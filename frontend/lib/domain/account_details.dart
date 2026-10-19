@@ -15,9 +15,10 @@ class StylePreferences {
     this.style = '',
     this.color = '',
     this.budget = 1500000,
+    this.version = 0,
   });
   final String size, style, color;
-  final int budget;
+  final int budget, version;
   static const sizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
   static const styles = ['', 'Tối giản', 'Thanh lịch', 'Thư giãn'];
   static const colors = [

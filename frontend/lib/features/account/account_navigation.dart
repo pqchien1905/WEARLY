@@ -71,8 +71,13 @@ class AccountFrame extends StatelessWidget {
 }
 
 class AccountDataView extends ConsumerWidget {
-  const AccountDataView({super.key, required this.builder});
+  const AccountDataView({
+    super.key,
+    required this.builder,
+    this.freshWhileLoading = false,
+  });
   final Widget Function(AccountDetails) builder;
+  final bool freshWhileLoading;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final remote = ref.watch(remoteApiProvider);
@@ -92,6 +97,7 @@ class AccountDataView extends ConsumerWidget {
     return ref
         .watch(accountDetailsProvider)
         .when(
+          skipLoadingOnRefresh: !freshWhileLoading,
           data: builder,
           loading: () => const Padding(
             padding: EdgeInsets.all(32),

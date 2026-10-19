@@ -12,7 +12,12 @@ final accountDetailsRepositoryProvider = Provider<AccountDetailsRepository>((
 ) {
   ref.watch(accountProvider.select((user) => user?.email));
   if (ref.watch(remoteApiProvider)) {
-    return RemoteAccountDetailsRepository(ref.watch(apiClientProvider));
+    return RemoteAccountDetailsRepository(
+      ref.watch(apiClientProvider),
+      onLateStyleCompletion: () {
+        if (ref.mounted) ref.invalidate(accountDetailsProvider);
+      },
+    );
   }
   return MockAccountDetailsRepository();
 });
@@ -32,7 +37,7 @@ class AccountDetailsController extends AsyncNotifier<AccountDetails> {
     return email == null ? AccountDetails() : repo.read();
   }
 
-  Future<void> _write(
+  Future<AccountDetails> _write(
     Future<AccountDetails> Function(AccountDetailsRepository) action,
   ) async {
     final identity = ref.read(accountProvider)?.email;
@@ -47,6 +52,7 @@ class AccountDetailsController extends AsyncNotifier<AccountDetails> {
         ref.read(accountProvider)?.email == identity &&
         identical(repo, ref.read(accountDetailsRepositoryProvider))) {
       state = AsyncData(result);
+      return result;
     } else {
       throw StateError('Phiên tài khoản đã thay đổi. Vui lòng mở lại hồ sơ.');
     }
@@ -56,6 +62,6 @@ class AccountDetailsController extends AsyncNotifier<AccountDetails> {
       _write((r) => r.saveAddress(address));
   Future<void> deleteAddress(String id) => _write((r) => r.deleteAddress(id));
   Future<void> setDefault(String id) => _write((r) => r.setDefault(id));
-  Future<void> saveStyle(StylePreferences preferences) =>
-      _write((r) => r.saveStyle(preferences));
+  Future<StylePreferences> saveStyle(StylePreferences preferences) async =>
+      (await _write((r) => r.saveStyle(preferences))).style;
 }

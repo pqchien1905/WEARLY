@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/account_details.dart';
 import '../../app/account_state.dart';
+import '../../app/api_providers.dart';
+import '../../core/network/api_client.dart';
 import '../../core/design/tokens.dart';
 import '../../core/format.dart';
 import '../../core/widgets/primitives.dart';
@@ -15,8 +17,14 @@ class StylePage extends ConsumerWidget {
     title: 'Phong cách, theo ý bạn.',
     current: '/account/style',
     child: AccountDataView(
+      freshWhileLoading: ref.watch(remoteApiProvider),
       builder: (data) => _StyleEditor(
-        key: ValueKey(ref.watch(accountProvider)?.email),
+        key: ValueKey((
+          ref.watch(accountProvider)?.email,
+          ref.watch(remoteApiProvider)
+              ? ref.read(apiClientProvider).tokens.generation
+              : 0,
+        )),
         initial: data.style,
       ),
     ),
@@ -35,16 +43,38 @@ class _StyleEditorState extends ConsumerState<_StyleEditor> {
       style = widget.initial.style,
       color = widget.initial.color;
   late int budget = widget.initial.budget;
+  late int version = widget.initial.version;
   bool busy = false, saved = false;
+  bool reconcile = false;
+  bool reloadRequested = false;
   String? error;
+  @override
+  void didUpdateWidget(covariant _StyleEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!busy &&
+        !identical(oldWidget.initial, widget.initial) &&
+        (widget.initial.version != version || reconcile || reloadRequested)) {
+      size = widget.initial.size;
+      style = widget.initial.style;
+      color = widget.initial.color;
+      budget = widget.initial.budget;
+      version = widget.initial.version;
+      saved = false;
+      reconcile = false;
+      reloadRequested = false;
+      error = null;
+    }
+  }
+
   Future<void> save({bool openStylist = false}) async {
+    if (busy || reconcile) return;
     setState(() {
       busy = true;
       saved = false;
       error = null;
     });
     try {
-      await ref
+      final persisted = await ref
           .read(accountDetailsProvider.notifier)
           .saveStyle(
             StylePreferences(
@@ -52,16 +82,25 @@ class _StyleEditorState extends ConsumerState<_StyleEditor> {
               style: style,
               color: color,
               budget: budget,
+              version: version,
             ),
           );
       if (!mounted) return;
+      version = persisted.version;
       if (openStylist) {
         context.go('/ai-stylist');
       } else {
         setState(() => saved = true);
       }
     } catch (e) {
-      if (mounted) setState(() => error = accountError(e));
+      if (mounted) {
+        setState(() {
+          error = accountError(e);
+          reconcile =
+              ref.read(remoteApiProvider) &&
+              (e is! ApiException || e.status != 400);
+        });
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -74,6 +113,7 @@ class _StyleEditorState extends ConsumerState<_StyleEditor> {
     ValueChanged<String> onChanged,
     String empty,
   ) => DropdownButtonFormField<String>(
+    key: ValueKey((label, value)),
     initialValue: value,
     isExpanded: true,
     decoration: InputDecoration(labelText: label),
@@ -82,7 +122,7 @@ class _StyleEditorState extends ConsumerState<_StyleEditor> {
           (v) => DropdownMenuItem(value: v, child: Text(v.isEmpty ? empty : v)),
         )
         .toList(),
-    onChanged: busy
+    onChanged: busy || reconcile
         ? null
         : (v) => setState(() {
             onChanged(v!);
@@ -95,15 +135,18 @@ class _StyleEditorState extends ConsumerState<_StyleEditor> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const DemoNotice(
-          text:
-              'Chỉ dùng những sở thích bạn tự chọn. Không phân tích cơ thể hay suy đoán từ ảnh. Hồ sơ được xóa khi đăng xuất hoặc tải lại trang.',
+        DemoNotice(
+          text: ref.watch(remoteApiProvider)
+              ? 'Lựa chọn được lưu theo tài khoản và giữ lại khi đăng nhập lại. Chỉ dùng sở thích bạn tự chọn, không phân tích cơ thể hay suy đoán từ ảnh.'
+              : 'Chỉ dùng những sở thích bạn tự chọn. Không phân tích cơ thể hay suy đoán từ ảnh. Hồ sơ được xóa khi đăng xuất hoặc tải lại trang.',
         ),
         const SizedBox(height: 28),
         Text('Bắt đầu từ điều bạn thích', style: T.display(26)),
         const SizedBox(height: 12),
-        const Text(
-          'Lưu lựa chọn để áp dụng nhanh trong Stylist. Bạn vẫn có thể đổi ngân sách và size cho mỗi cuộc trò chuyện.',
+        Text(
+          ref.watch(remoteApiProvider)
+              ? 'Ghi lại size, màu và ngân sách bạn thường chọn. Bạn có thể cập nhật bất cứ lúc nào.'
+              : 'Lưu lựa chọn để áp dụng nhanh trong Stylist. Bạn vẫn có thể đổi ngân sách và size cho mỗi cuộc trò chuyện.',
         ),
         const SizedBox(height: 28),
         select(
@@ -119,7 +162,9 @@ class _StyleEditorState extends ConsumerState<_StyleEditor> {
           style,
           StylePreferences.styles,
           (v) => style = v,
-          'Để Stylist gợi ý',
+          ref.watch(remoteApiProvider)
+              ? 'Không ưu tiên phong cách'
+              : 'Để Stylist gợi ý',
         ),
         const SizedBox(height: 20),
         select(
@@ -131,13 +176,14 @@ class _StyleEditorState extends ConsumerState<_StyleEditor> {
         ),
         const SizedBox(height: 20),
         DropdownButtonFormField<int>(
+          key: ValueKey(budget),
           initialValue: budget,
           isExpanded: true,
           decoration: const InputDecoration(labelText: 'Ngân sách mỗi outfit'),
           items: StylePreferences.budgets
               .map((v) => DropdownMenuItem(value: v, child: Text(money(v))))
               .toList(),
-          onChanged: busy
+          onChanged: busy || reconcile
               ? null
               : (v) => setState(() {
                   budget = v!;
@@ -149,12 +195,28 @@ class _StyleEditorState extends ConsumerState<_StyleEditor> {
           spacing: 12,
           runSpacing: 12,
           children: [
-            AppButton('Lưu hồ sơ phong cách', busy: busy, onPressed: save),
             AppButton(
-              'Lưu & mở Stylist',
-              outlined: true,
-              onPressed: busy ? null : () => save(openStylist: true),
+              'Lưu hồ sơ phong cách',
+              busy: busy,
+              onPressed: reconcile ? null : save,
             ),
+            if (!ref.watch(remoteApiProvider))
+              AppButton(
+                'Lưu & mở Stylist',
+                outlined: true,
+                onPressed: busy ? null : () => save(openStylist: true),
+              ),
+            if (ref.watch(remoteApiProvider))
+              TextButton.icon(
+                onPressed: busy
+                    ? null
+                    : () {
+                        reloadRequested = true;
+                        ref.invalidate(accountDetailsProvider);
+                      },
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Tải lại hồ sơ'),
+              ),
           ],
         ),
         if (saved || error != null)
@@ -163,9 +225,20 @@ class _StyleEditorState extends ConsumerState<_StyleEditor> {
             child: Semantics(
               liveRegion: true,
               child: Text(
-                error ?? 'Đã lưu phong cách trong phiên demo.',
+                error ??
+                    (ref.watch(remoteApiProvider)
+                        ? 'Đã lưu hồ sơ phong cách.'
+                        : 'Đã lưu phong cách trong phiên demo.'),
                 style: TextStyle(color: error == null ? T.success : T.danger),
               ),
+            ),
+          ),
+        if (reconcile)
+          const Padding(
+            padding: EdgeInsets.only(top: 12),
+            child: Text(
+              'Tải lại hồ sơ để kiểm tra kết quả trước khi lưu tiếp. Thay đổi chưa lưu sẽ được bỏ.',
+              style: T.small,
             ),
           ),
         const SizedBox(height: 24),

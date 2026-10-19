@@ -10,6 +10,7 @@ import 'package:nep_storefront/core/network/api_client.dart';
 import 'remote_account_test.dart' show sessionJson;
 import 'remote_commerce_test.dart' show cartJson, orderJson;
 import 'remote_session_test.dart' show jsonResponse;
+import 'remote_style_preferences_test.dart' show styleJson;
 
 void main() {
   testWidgets(
@@ -95,6 +96,9 @@ void main() {
         baseUrl: 'http://localhost/api/v1',
         client: MockClient((r) async {
           final path = r.url.path;
+          if (path.endsWith('/users/me/style')) {
+            return jsonResponse(styleJson());
+          }
           if (path.endsWith('/auth/login')) return jsonResponse(sessionJson());
           if (path.endsWith('/auth/logout')) return jsonResponse({});
           if (path.endsWith('/cart')) {
@@ -252,12 +256,7 @@ void main() {
         child: NepApp(router: router),
       ),
     );
-    for (final path in [
-      '/ai-stylist',
-      '/virtual-try-on',
-      '/account/style',
-      '/forgot-password',
-    ]) {
+    for (final path in ['/ai-stylist', '/virtual-try-on', '/forgot-password']) {
       router.go(path);
       await tester.pumpAndSettle();
       expect(

@@ -27,7 +27,6 @@ class RemoteRouteGate extends ConsumerWidget {
     if ([
       '/ai-stylist',
       '/virtual-try-on',
-      '/account/style',
       '/account/try-ons',
       '/forgot-password',
     ].any((prefix) => path == prefix || path.startsWith('$prefix/'))) {
