@@ -171,3 +171,15 @@ Chrome/PostgreSQL thật đạt: đi từ tài khoản vào lịch sử, sửa �
 Các phần chưa triển khai vẫn gồm promotions/style preferences, khôi phục mật khẩu/email, uploads catalog, audit/đối soát COD, AI/provider/payment thật; ảnh/phản hồi/kiểm duyệt đánh giá là các phần mở rộng riêng. Không đánh dấu toàn bộ dự án đã hoàn tất.
 
 Rà soát cuối sửa một lỗi thông báo: xác nhận xóa không còn hứa có thể viết lại đối với đánh giá của sản phẩm ẩn hoặc legacy chưa đủ điều kiện. Thông báo nêu rõ không thể hoàn tác. Hai kiểm thử giao diện375/1440 đã tái hiện lỗi trước sửa. Phạm vi tiếp tục yêu cầu tải lại ở trình duyệt khác; không tự sửa dữ liệu lịch sử sai định dạng hoặc triển khai ảnh/phản hồi/kiểm duyệt trong đợt này.
+
+## Hồ sơ phong cách lưu thật — 2026-10-19
+
+Mở **Tài khoản → Phong cách của tôi** trong chế độ API. Size, phong cách, màu ưu tiên và ngân sách được lưu theo tài khoản trong PostgreSQL; không mất khi đăng xuất hoặc reload. GET/PUT `/users/me/style` kiểm tra danh tính, giá trị lựa chọn và expectedVersion. Lần lưu đầu/cập nhật đồng thời được tuần tự hóa, bản cũ trả409; GET mặc định không tạo hàng. Bảng StylePreference có userId PK/FK, budget Decimal và version, đã migrate vào DB test/native bằng migration cộng thêm.
+
+Flutter mở lại route phong cách bằng phiên khách hàng, giữ các lựa chọn/bố cục đã có; không còn thông báo lưu demo hay nút AI chưa hoạt động trong chế độ API. Lỗi/xung đột chưa rõ khóa lưu và yêu cầu tải lại; cập nhật baseline phiên bản sau thành công. Late completion sau timeout làm mới cache cùng phiên, không tự gửi lại hoặc đưa dữ liệu tài khoản cũ trở lại. AccountDetails đọc địa chỉ và phong cách, nên kiểm thử luồng checkout hiện có cũng được chạy.
+
+Kiểm chứng tự động:33 PostgreSQL E2E +11backend unit đạt (17worker/storage opt-in bỏ qua), backend lint/build đạt;290Flutter tests đạt (2live opt-in bỏ qua), analyzer sạch. Lỗi thiếu API/model đã được quan sát trước triển khai; lỗi reload giá trị dropdown và giữ thông báo lưu đã được tái hiện/sửa trong kiểm thử giao diện. Xem [style-preferences.md](style-preferences.md) để biết API, cách dùng và giới hạn.
+
+Chrome/PostgreSQL thật đạt: lưu, reload/đăng nhập giữ lựa chọn, lưu lần tiếp theo ở375px, bản cũ bị từ chối409 và tải lại rồi lưu được, tài khoản khác chỉ thấy mặc định. DB xác nhận chính xác các lựa chọn/version4, GET mặc định không tạo hàng và địa chỉ còn nguyên. Đã xem ảnh375/1440; không tràn bố cục hay lỗi Flutter. Kiểm thử mua hàng thật cũng đạt: hồ sơ, địa chỉ, giỏ và lịch sử COD giữ qua đăng nhập. Chỉ dọn fixture trên DB test.
+
+Còn lại: promotions, khôi phục mật khẩu/email, uploads catalog, audit/đối soát COD, AI/provider/payment thật và mở rộng đánh giá. Hồ sơ phong cách hiện chỉ lưu lựa chọn, chưa tự lọc sản phẩm hay tạo gợi ý AI.

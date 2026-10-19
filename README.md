@@ -54,6 +54,8 @@ Trong quản trị, mở **Danh mục** hoặc **Thương hiệu** để thêm m
 
 Khách có đơn **đã giao** có thể chọn **Xem đánh giá** trên trang sản phẩm để gửi 1–5 sao và nội dung. Đánh giá hiển thị ngay; vào **Tài khoản → Đánh giá của tôi** để xem, sửa hoặc xóa, kể cả xóa đánh giá của sản phẩm ngừng bán. [Hướng dẫn đánh giá](docs/reviews.md).
 
+**Tài khoản → Phong cách của tôi** lưu size, phong cách, màu ưu tiên và ngân sách vào PostgreSQL, giữ qua lần đăng nhập sau. [Hướng dẫn hồ sơ phong cách](docs/style-preferences.md).
+
 Hai khu vực có giao diện và phiên đăng nhập riêng; đăng xuất một bên giữ nguyên phiên bên kia. ADMIN có thể đăng nhập riêng ở cửa hàng để mua sắm. Sau khi tải lại trang cần đăng nhập lại; dữ liệu vẫn được lưu trên máy chủ. Yêu thích lưu theo tài khoản trên PostgreSQL: bấm trái tim ở sản phẩm hoặc **Lưu yêu thích** trong giỏ; mở `http://localhost:8080/#/wishlist` để xem/bỏ. Danh sách tối đa200 mục, sản phẩm không còn mở bán được báo rõ và vẫn bỏ được.
 
 Chạy `.\tools\frontend.ps1 run` để xem demo độc lập. AI và khôi phục mật khẩu chưa nối vào chế độ API; chưa có thanh toán online.

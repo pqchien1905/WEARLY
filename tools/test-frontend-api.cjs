@@ -29,6 +29,7 @@ const browser = process.argv.includes('--browser');
 const admin = process.argv.includes('--admin');
 const wishlist = process.argv.includes('--wishlist');
 const reviews = process.argv.includes('--reviews');
+const style = process.argv.includes('--style');
 function flutter(args) {
   const binary = path.join(root, '.tools/flutter/bin/flutter.bat');
   // All arguments below are local constants, loopback URLs or generated UUIDs.
@@ -76,6 +77,29 @@ async function main() {
       const delivered = await db.order.findUniqueOrThrow({ where: { id: order.id }, include: { payment: true } });
       if (delivered.status !== 'DELIVERED' || delivered.payment.status !== 'PENDING') throw new Error('Persisted order/COD state mismatch');
       console.log('PASS database assertions: product, SKU, gallery, stock, order delivered with COD pending.');
+    } else if (style) {
+      const password = 'Browser-only-Password-2026';
+      const send = async (method, endpoint, body, token) => {
+        const response = await fetch(url + '/' + endpoint, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
+        if (!response.ok) throw new Error('Style fixture request failed: ' + endpoint + ' ' + response.status);
+        return response.json();
+      };
+      const email = fixture + '@example.com', otherEmail = 'browser-' + fixture + '@example.com';
+      const buyer = await send('POST', 'auth/register', { name: 'Khách hồ sơ phong cách', email, password });
+      const other = await send('POST', 'auth/register', { name: 'Khách hồ sơ mới', email: otherEmail, password });
+      const address = await send('POST', 'users/me/addresses', { recipient: 'Khách kiểm thử', phone: '0901234567', address: '12 Nguyễn Huệ, TP.HCM', label: 'Nhà' }, buyer.accessToken);
+      await flutter(['build', 'web', '--release', '--dart-define=USE_REMOTE_API=true', '--dart-define=API_BASE_URL=' + url]);
+      await require('./verify-style-browser.cjs')({ root, email, otherEmail, password,
+        changeStyle: async () => {
+          const before = await send('GET', 'users/me/style', null, buyer.accessToken);
+          await send('PUT', 'users/me/style', { size: 'XS', style: 'Thanh lịch', color: 'Đen', budget: '2500000', expectedVersion: before.version }, buyer.accessToken);
+        },
+      });
+      const saved = await db.stylePreference.findUniqueOrThrow({ where: { userId: buyer.user.id } });
+      if (saved.size !== 'XL' || saved.style !== 'Thanh lịch' || saved.color !== 'Đen' || saved.budget.toFixed(0) !== '2500000' || saved.version !== 4) throw new Error('Style profile persistence mismatch');
+      if (await db.stylePreference.count({ where: { userId: other.user.id } }) !== 0) throw new Error('Reading defaults created a profile');
+      if (!(await db.address.findFirst({ where: { id: address.id, userId: buyer.user.id } }))) throw new Error('Style write altered address data');
+      console.log('PASS database assertions: version4 exact preferences, other account remains default, address preserved.');
     } else if (reviews) {
       const password = 'Browser-only-Password-2026';
       const post = async (path, body, token, headers = {}) => {

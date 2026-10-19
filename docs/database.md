@@ -6,6 +6,7 @@ CLI, client, PostgreSQL adapter đều khóa **7.10.1**. Schema ở `backend/pri
 erDiagram
   User ||--o{ RefreshToken : sessions
   User ||--o{ Address : owns
+  User ||--o| StylePreference : chooses
   User ||--o| Cart : owns
   User ||--o{ Order : places
   User ||--o{ WishlistItem : saves
@@ -76,15 +77,16 @@ erDiagram
 
 | Nhóm | Bảng | Quy tắc |
 |---|---|---|
-| Tài khoản | User, RefreshToken, Address | UUID PK; email unique lowercase ở DTO; token chỉ SHA-256; partial unique index chỉ một địa chỉ mặc định/user |
+| Tài khoản | User, RefreshToken, Address, StylePreference | UUID PK; email unique lowercase ở DTO; token chỉ SHA-256; một địa chỉ mặc định/user; StylePreference dùng userId PK/FK, budget Decimal, version chống ghi đè |
 | Catalog | Category, Brand, Product, ProductVariant, ProductImage | slug/SKU unique; unique (productId,size,color); ảnh unique (productId,position) |
 | Kho | Inventory, InventoryMovement | 1 inventory/SKU; quantity>=0; version tăng sau mutation; movement delta/reason/order |
 | Giỏ | Cart, CartItem | 1 cart/user; unique (cartId,variantId); quantity 1..99 |
 | Đơn | Order, OrderItem, Payment | unique (userId,idempotencyKey); immutable item/address snapshot; 1 payment/order |
-| Chuẩn bị mở rộng | Coupon, WishlistItem, Review | Chưa có service public; unique code, unique user/product; rating 1..5 |
+| Yêu thích/đánh giá | WishlistItem, Review | Đã có API và Flutter; unique user/product, review cần đơn đã giao để công khai/thêm/sửa |
+| Chuẩn bị mở rộng | Coupon | Chưa có workflow promotions; unique code |
 | AI | ImageAsset, AIJob, TryOnResult, OutboxEvent | object keys private; verified/deleted/expiry; 1 result và 1 outbox/job |
 
-Tổng cộng 22 model. Quan hệ n-n user/product qua WishlistItem và Review; cart/variant qua CartItem; order/variant qua OrderItem. Các foreign key đều có trong migration, không dùng chuỗi ID tự phát cho quan hệ.
+Tổng cộng 23 model. Quan hệ n-n user/product qua WishlistItem và Review; cart/variant qua CartItem; order/variant qua OrderItem. StylePreference là quan hệ 1-0..1 với User, xóa theo tài khoản; GET mặc định không tạo bản ghi. Các foreign key đều có trong migration, không dùng chuỗi ID tự phát cho quan hệ.
 
 Enum: Role(CUSTOMER,ADMIN), OrderStatus(PENDING,CONFIRMED,SHIPPED,DELIVERED,CANCELLED), PaymentStatus(PENDING,PAID,FAILED,REFUNDED,CANCELLED), AIJobStatus(PENDING,PROCESSING,COMPLETED,FAILED).
 

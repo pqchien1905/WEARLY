@@ -9,6 +9,7 @@ Base URL: `http://localhost:3000/api/v1`. Swagger: `http://localhost:3000/api/do
 | POST | /auth/logout | Bearer; revoke session family |
 | GET | /auth/me | Bearer |
 | GET, PATCH | /users/me | Bearer |
+| GET, PUT | /users/me/style | Bearer; size, phong cách, màu, ngân sách; PUT yêu cầu expectedVersion; xem style-preferences.md |
 | GET, POST | /users/me/addresses | Owner |
 | PATCH, DELETE | /users/me/addresses/:id | Owner |
 | GET | /products | Public; active products |
