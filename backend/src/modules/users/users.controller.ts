@@ -3,13 +3,14 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
   Put,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Identity } from '../../common/decorators/auth';
 import { UsersService } from './users.service';
 import { AddressDto, ProfileDto, UpdateAddressDto } from './dto/user.dto';
@@ -41,11 +42,19 @@ export class UsersController {
   @Get('addresses') addresses(@CurrentUser() u: Identity) {
     return this.service.addresses(u.id);
   }
-  @Post('addresses') create(
+  @ApiHeader({
+    name: 'Idempotency-Key',
+    required: false,
+    description:
+      '16–128 ASCII letters, digits, underscore or hyphen; reuse for the same create attempt.',
+  })
+  @Post('addresses')
+  create(
     @CurrentUser() u: Identity,
     @Body() dto: AddressDto,
+    @Headers('idempotency-key') key: string | undefined,
   ) {
-    return this.service.saveAddress(u.id, dto);
+    return this.service.saveAddress(u.id, dto, undefined, key);
   }
   @Patch('addresses/:id') patch(
     @CurrentUser() u: Identity,
