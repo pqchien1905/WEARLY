@@ -11,6 +11,9 @@ const requireBackend = createRequire(path.join(root, 'backend/package.json'));
 const config = requireBackend('dotenv').parse(fs.readFileSync(path.join(root, '.env')));
 const started = [], report = { status: 'running', checks: [] };
 let output;
+function checkpoint() {
+  if (output) fs.writeFileSync(path.join(output, 'containers.json'), JSON.stringify({ ...report, containersRetained: [...started] }, null, 2));
+}
 async function docker(args, env = process.env) { return (await run('docker', args, { env, windowsHide: true, timeout: 60000, maxBuffer: 2 * 1024 * 1024 })).stdout.trim(); }
 async function main() {
   const database = process.argv[2];
@@ -29,23 +32,39 @@ async function main() {
   const secrets = [env.DATABASE_URL, config.POSTGRES_PASSWORD, env.JWT_ACCESS_SECRET, env.JWT_REFRESH_SECRET, config.S3_SECRET_ACCESS_KEY].filter(Boolean);
   const sanitize = s => secrets.reduce((text, secret) => text.split(secret).join('[redacted]'), s);
   report.database = database; report.queuePrefix = prefix;
+  report.containerNames = [prefix + '-api', prefix + '-worker'];
+  report.startedAt = new Date().toISOString();
+  checkpoint();
+  let interrupted;
+  const onInterrupt = () => { interrupted = 'SIGINT'; };
+  const onTerminate = () => { interrupted = 'SIGTERM'; };
+  function checkInterruption() {
+    if (interrupted) throw Object.assign(new Error('Verification interrupted'), { code: 'HANDOFF_INTERRUPTED' });
+  }
+  process.on('SIGINT', onInterrupt);
+  process.on('SIGTERM', onTerminate);
   try {
     const apiId = await docker(['run', '-d', '--name', prefix + '-api', '--label', 'wearly.verification=' + suffix, '--network', 'wearly_default', '-p', '127.0.0.1:3001:3000', ...flags, 'wearly-handoff-api:local', 'sh', '-c', 'npm run prisma:deploy && node dist/main.js'], env);
     started.push(apiId);
+    checkpoint(); checkInterruption();
     const workerId = await docker(['run', '-d', '--name', prefix + '-worker', '--label', 'wearly.verification=' + suffix, '--network', 'wearly_default', ...flags, 'wearly-handoff-worker:local'], env);
     started.push(workerId);
+    checkpoint(); checkInterruption();
     let ready = false;
     for (let i = 0; i < 30; i++) {
+      checkInterruption();
       assert.equal(await docker(['inspect', '--format', '{{.State.Running}}', apiId]), 'true', 'API container exited');
       try { const r = await fetch('http://127.0.0.1:3001/api/v1/health/ready', { signal: AbortSignal.timeout(1500) }); ready = r.ok; } catch { /* bounded startup polling */ }
       if (ready) break;
       await new Promise(resolve => setTimeout(resolve, 500));
     }
     assert(ready, 'Container API readiness timed out'); report.checks.push('API migration startup + PostgreSQL/Redis readiness');
-    const spec = await (await fetch('http://127.0.0.1:3001/api/docs-json')).json();
+    checkInterruption();
+    const spec = await (await fetch('http://127.0.0.1:3001/api/docs-json', { signal: AbortSignal.timeout(10000) })).json();
     assert(spec.paths['/api/v1/users/me/style']?.put); assert(spec.paths['/api/v1/admin/products']?.post);
     report.openapiPaths = Object.keys(spec.paths).length;
     async function api(method, endpoint, body, token, key, expected = 200) {
+      checkInterruption();
       const response = await fetch('http://127.0.0.1:3001/api/v1/' + endpoint, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}), ...(key ? { 'Idempotency-Key': key } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(10000) });
       assert.equal(response.status, expected, method + ' ' + endpoint);
       return response.json();
@@ -66,7 +85,8 @@ async function main() {
     assert.equal(order.status, 'PENDING');
     report.checks.push('container auth/RBAC, address replay, real cart/COD order and order replay');
     const { Client } = requireBackend('pg');
-    const db = new Client({ host: '127.0.0.1', port: bootstrap.port, user: config.POSTGRES_USER, password: config.POSTGRES_PASSWORD, database });
+    checkInterruption();
+    const db = new Client({ host: '127.0.0.1', port: bootstrap.port, user: config.POSTGRES_USER, password: config.POSTGRES_PASSWORD, database, connectionTimeoutMillis: 5000, query_timeout: 10000 });
     await db.connect();
     try {
       assert.equal((await db.query('SELECT status FROM "Payment" WHERE "orderId"=$1', [order.id])).rows[0].status, 'PENDING');
@@ -78,6 +98,7 @@ async function main() {
       await db.query('COMMIT');
       let row;
       for (let i = 0; i < 40; i++) {
+        checkInterruption();
         row = (await db.query('SELECT status,"errorCode",attempts FROM "AIJob" WHERE id=$1', [jobId])).rows[0];
         if (row.status === 'FAILED') break;
         await new Promise(resolve => setTimeout(resolve, 250));
@@ -88,14 +109,33 @@ async function main() {
       assert.equal(await docker(['inspect', '--format', '{{.State.Running}}', workerId]), 'true');
       report.checks.push('separate worker consumed outbox via Redis, Disabled provider failed without fake result');
     } finally { await db.end(); }
-    report.status = 'passed'; console.log('PASS container API, persisted COD, replay protection and separate worker.');
+    checkInterruption();
+    report.status = 'stopping';
+  } catch (error) {
+    report.status = 'failed'; report.error = error.code || error.name || 'Error';
+    throw error;
   } finally {
-    for (const [index, id] of started.entries()) {
-      try { const logs = await run('docker', ['logs', id], { windowsHide: true, maxBuffer: 2 * 1024 * 1024 }); fs.writeFileSync(path.join(output, `container-${index}.log`), sanitize(logs.stdout + logs.stderr)); } catch { report.logCaptureError = true; }
-      await docker(['stop', '--time', '15', id]);
+    report.cleanup = [];
+    checkpoint();
+    try {
+      for (const [index, id] of started.entries()) {
+        const outcome = { id, stopped: false };
+        report.cleanup.push(outcome);
+        try { const logs = await run('docker', ['logs', id], { windowsHide: true, timeout: 10000, maxBuffer: 2 * 1024 * 1024 }); fs.writeFileSync(path.join(output, `container-${index}.log`), sanitize(logs.stdout + logs.stderr)); } catch { outcome.logCaptureError = true; }
+        try { await docker(['stop', '--time', '15', id]); outcome.stopped = true; }
+        catch (error) { outcome.stopError = error.code || error.name || 'Error'; report.status = 'failed'; report.error ||= 'CLEANUP_FAILED'; }
+        checkpoint();
+      }
+      if (interrupted) { report.status = 'failed'; report.signal = interrupted; report.error ||= 'HANDOFF_INTERRUPTED'; }
+      if (report.status !== 'failed') report.status = 'passed';
+      report.finishedAt = new Date().toISOString();
+      checkpoint();
+    } finally {
+      process.removeListener('SIGINT', onInterrupt);
+      process.removeListener('SIGTERM', onTerminate);
     }
-    report.containersRetained = started; report.finishedAt = new Date().toISOString();
-    fs.writeFileSync(path.join(output, 'containers.json'), JSON.stringify(report, null, 2));
   }
+  if (report.status !== 'passed') throw Object.assign(new Error('Verification cleanup failed'), { code: report.error });
+  console.log('PASS container API, persisted COD, replay protection and separate worker; created containers stopped.');
 }
-main().catch(error => { if (output) { report.status = 'failed'; report.error = error.code || error.name || 'Error'; fs.writeFileSync(path.join(output, 'containers.json'), JSON.stringify(report, null, 2)); } console.error('Container verification failed (' + (error.code || error.name) + '); inspect retained local logs.'); process.exitCode = 1; });
+main().catch(error => { report.status = 'failed'; report.error ||= error.code || error.name || 'Error'; checkpoint(); console.error('Container verification failed (' + report.error + '); inspect retained local logs.'); process.exitCode = 1; });

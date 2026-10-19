@@ -148,6 +148,8 @@ node tools/verify-containers.cjs TEN_DATABASE_VUA_IN_RA
 
 Thay `TEN_DATABASE_VUA_IN_RA` bằng tên `wearly_handoff_..._test` trong kết quả bootstrap. Công cụ dùng network Compose `wearly_default`, tạo DB mới bằng tài khoản Docker có CREATEDB; tài khoản ứng dụng native không có quyền này. Bootstrap xác minh đủ migrations, schema không lệch và seed lần hai giữ nguyên các bản ghi đã sửa. Container verifier dùng DB đó, tạo fixture mới, giữ lại dữ liệu và container đã dừng; báo cáo/log tại `.tools/handoff/<database>`. Không reset, drop, truncate hoặc xóa volume. Các báo cáo chứa metadata/hash, không chứa credential. Đây là công cụ phát triển local, không dùng với production.
 
+Helper ghi checkpoint tên/ID container trước và trong quá trình chạy. Ctrl+C yêu cầu dừng có kiểm soát; chờ helper hoàn tất. Nếu Docker không phản hồi, kiểm tra `cleanup[].stopError` trong `containers.json` và dừng đúng ID test còn chạy; không reset Docker. Kill cưỡng bức tiến trình hoặc mất điện không thể bảo đảm cleanup tự chạy. Regression cho các nhánh ngắt/lỗi: `node --test tools/verify-containers.test.cjs`.
+
 ```powershell
 cd 'D:\Fashion Shop'
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\backend.ps1 check

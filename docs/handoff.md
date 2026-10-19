@@ -83,12 +83,17 @@ PostgreSQL17/pgAdmin đã cài trực tiếp, service ở5432; Memurai ở6379. 
 | Live Flutter/API shopping | Chạy riêng đã đạt: mất phản hồi address sau commit, retry chỉ1 địa chỉ, đặt COD; Chrome/DB thật |
 | Bootstrap DB mới | 8 migrations, schema diff0, seed lần hai giữ snapshot24 bảng |
 | Docker | API và worker build thành công; container API/worker thực thi các kiểm tra tại mục E |
+| Công cụ kiểm thử container | 5 regression tests tái hiện trước sửa và đạt sau sửa: SIGINT/SIGTERM, ngắt lúc tạo worker, dừng container đầu thất bại, giới hạn thời gian lấy log |
 | Dependency audit | `npm audit --omit=dev`:0; audit toàn bộ:20 moderate,0 high/critical |
 | Credential scan | Không tìm giá trị secrets đang có trong root/backend `.env` ở503 tracked files lúc audit; không phải quét toàn bộ lịch sử Git hoặc chứng nhận không có secret khác |
 
 20 cảnh báo dependency cùng lan từ `sprintf-js` qua argparse/js-yaml và bộ Jest. [Advisory GHSA-hp3w-g68c-fv3c](https://github.com/advisories/GHSA-hp3w-g68c-fv3c) chưa có bản vá tại thời điểm kiểm tra. Không áp dụng `npm audit fix --force` vì gợi ý hạ major Jest/ts-jest. Dockerfile hiện cài cả devDependencies nên image local vẫn chứa bộ kiểm thử; kết quả audit production0 không có nghĩa image không còn cảnh báo. Cần tách build/runtime và thẩm định image trước production.
 
 Logs lượt này nằm trong `.superpowers/sdd/2026-10-19-handoff-verification/`, bootstrap/container evidence trong `.tools/handoff/`; đều local/ignored. Các test chỉ chứng minh luồng được bao phủ, chưa xác minh tải lớn, khôi phục backup, mobile hoặc mọi trình duyệt.
+
+Rà soát cuối tìm2 lỗi Important trong helper container: Ctrl+C không dọn tiến trình và lỗi stop đầu tiên bỏ qua container còn lại. Đã sửa lưu checkpoint tên/ID, xử lý SIGINT/SIGTERM, giới hạn thời gian lấy log, thử stop từng container độc lập, giữ lỗi gốc và chỉ báo PASS sau khi dừng thành công. Có thể chạy regression riêng bằng `node --test tools/verify-containers.test.cjs`. Nếu Docker không phản hồi, báo cáo ghi ID và stopError để người vận hành xử lý; không xóa container hoặc volume.
+
+Minor còn ghi nhận: các UPDATE giả lập trong bootstrap chưa assert số dòng bị tác động. Với seed hiện tại kiểm tra đã đạt, nhưng đổi slug/SKU seed trong tương lai cần bổ sung assertion này trước khi dựa vào kết luận “giữ chỉnh sửa”. Không coi đây là chứng minh seed mới bất kỳ đều đúng.
 
 ## H. Các phần chưa hoàn tất
 

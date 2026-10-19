@@ -14,6 +14,8 @@ Quyết định: giữ DB/container/log làm bằng chứng theo yêu cầu khô
 
 Còn mở: rủi ro dependency dev/image, reset mật khẩu/email, promotions, upload catalog, audit/đối soát COD, AI remote và online payment; các phần hạ tầng production chưa kiểm chứng. Không tuyên bố toàn bộ dự án hoàn tất. Bước kế tiếp: hoàn thành rà soát thay đổi hiện tại, xử lý phát hiện có bằng chứng, tích hợp và tiếp tục các khoảng trống có thể làm an toàn trong local.
 
+Rà soát cuối phát hiện2 lỗi Important trong helper kiểm thử container (ngắt Ctrl+C bỏ lại container chạy; lỗi stop đầu tiên bỏ qua worker). Đã tái hiện5 regression thất bại trước sửa, cả5 đạt sau sửa: checkpoint container, SIGINT/SIGTERM và cleanup độc lập có giới hạn thời gian. Minor hoãn: bootstrap chưa assert số dòng UPDATE giả lập; cần bổ sung khi thay seed identifiers. Các phần production, provider thật, MinIO container, lịch sử secrets và nền tảng khác giữ trạng thái chưa xác minh; reviewer chỉ đọc bằng chứng, không chạy lại thao tác ghi.
+
 ## Kết quả lượt trước
 
 Cập nhật 19/10/2026. Mục tiêu đang hoạt động: hoàn thiện dự án để bàn giao và kiểm thử, chủ động sửa lỗi có bằng chứng; không xóa dữ liệu người dùng, không triển khai production.
