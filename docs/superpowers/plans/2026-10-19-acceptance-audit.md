@@ -25,12 +25,12 @@
 
 ### Task 1: Strengthen acceptance evidence
 
-- [ ] Install checksum-verified official Gitleaks under ignored .tools and scan all reachable Git history with redaction; classify findings without exposing values.
-- [ ] Load Swagger in headless Chrome, inspect endpoints/auth UI/resources/errors; validate four Mermaid sources with a local parser/render if available.
-- [ ] Inspect required source/config/test artifacts and compile a requirement-by-requirement acceptance matrix; fix only proven gaps with regression evidence where behavior changes.
+- [x] Install checksum-verified official Gitleaks under ignored .tools and scan all reachable Git history with redaction; classify findings without exposing values.
+- [x] Load Swagger in headless Chrome, inspect endpoints/auth UI/resources/errors; validate four Mermaid sources with a local parser/render if available.
+- [x] Inspect required source/config/test artifacts and compile a requirement-by-requirement acceptance matrix; fix only proven gaps with regression evidence where behavior changes.
 
 ### Task 2: Review and hand off
 
-- [ ] Update actual setup, handoff report and PROGRESS with results, decisions, commands, limitations and remaining required work.
-- [ ] One read-only final review, one Important/Critical fix pass, affected checks; integrate under existing authorization.
-- [ ] Complete the goal only if all explicit local handoff requirements and later user changes are proved; otherwise leave active with concrete next work.
+- [x] Update actual setup, handoff report and PROGRESS with results, decisions, commands, limitations and remaining required work.
+- [x] One read-only final review: no Important/Critical findings; no product fix/retest pass needed. Integrate under existing authorization.
+- [x] Completion audit: all explicit local handoff requirements and later user changes proved in docs/acceptance.md. Optional roadmap work remains openly deferred; final integration and goal status recorded in PROGRESS/ledger.
