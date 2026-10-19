@@ -163,14 +163,17 @@ class RemoteAccountDetailsRepository implements AccountDetailsRepository {
         body: attempt.body,
         headers: {'Idempotency-Key': key},
         onLateCompletion: () {
-          if (api.tokens.generation == _generation) {
+          // An active retry will read the address book itself. Invalidating its
+          // controller here would reject that valid write as an older result.
+          if (api.tokens.generation == _generation && !_creatingAddress) {
             onLateAddressCompletion?.call();
           }
         },
       );
       confirmed = true;
       final details = await read();
-      _addressAttempts.remove(key);
+      // Keep this key bound to its original payload for the session, even if
+      // the controller later discards this result after a concurrent refresh.
       return details;
     } on ApiException catch (error) {
       if (!confirmed && error.status == 400) _addressAttempts.remove(key);

@@ -79,7 +79,7 @@ erDiagram
 
 | Nhóm | Bảng | Quy tắc |
 |---|---|---|
-| Tài khoản | User, RefreshToken, Address, StylePreference | UUID PK; email unique lowercase ở DTO; token chỉ SHA-256; một địa chỉ mặc định/user; StylePreference dùng userId PK/FK, budget Decimal, version chống ghi đè |
+| Tài khoản | User, RefreshToken, Address, AddressCreateReceipt, StylePreference | UUID PK; receipt có PK(userId,key); email unique lowercase ở DTO; token chỉ SHA-256; một địa chỉ mặc định/user; StylePreference dùng userId PK/FK, budget Decimal, version chống ghi đè |
 | Catalog | Category, Brand, Product, ProductVariant, ProductImage | slug/SKU unique; unique (productId,size,color); ảnh unique (productId,position) |
 | Kho | Inventory, InventoryMovement | 1 inventory/SKU; quantity>=0; version tăng sau mutation; movement delta/reason/order |
 | Giỏ | Cart, CartItem | 1 cart/user; unique (cartId,variantId); quantity 1..99 |

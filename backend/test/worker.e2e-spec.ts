@@ -186,8 +186,12 @@ redisDescribe('AI worker with PostgreSQL and Redis', () => {
       if (
         ['COMPLETED', 'FAILED'].includes(row.status) &&
         ['completed', 'failed'].includes(state ?? '')
-      )
-        return { row, queued: queued! };
+      ) {
+        // getState() reads Redis again; it does not refresh the hash snapshot
+        // fetched by getJob(). The worker may finish between those reads.
+        const settled = await queue.getJob(id);
+        if (settled) return { row, queued: settled };
+      }
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
     throw new Error('Job did not reach a terminal state in its isolated queue');

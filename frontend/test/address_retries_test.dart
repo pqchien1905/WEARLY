@@ -33,6 +33,89 @@ Map<String, dynamic> savedAddress() => {
 };
 
 void main() {
+  for (final explicitRefresh in [false, true]) {
+    test(
+      'late completion during retry recovers even with explicit refresh=$explicitRefresh',
+      () async {
+        final original = Completer<http.Response>(),
+            retry = Completer<http.Response>();
+        final rows = <Map<String, dynamic>>[];
+        String? originalBody;
+        var posts = 0;
+        final api = ApiClient(
+          baseUrl: 'http://localhost/api/v1',
+          timeout: const Duration(milliseconds: 100),
+          client: MockClient((r) async {
+            if (r.url.path.endsWith('/login')) {
+              return jsonResponse(sessionJson());
+            }
+            if (r.url.path.endsWith('/style')) return jsonResponse(styleJson());
+            if (r.method != 'POST') return jsonResponse(rows);
+            posts++;
+            originalBody ??= r.body;
+            if (r.body != originalBody) return jsonResponse({}, 409);
+            if (rows.isEmpty) rows.add(savedAddress());
+            if (posts == 1) return original.future;
+            if (posts == 2) return retry.future;
+            return jsonResponse(rows.single, 201);
+          }),
+        );
+        final container = ProviderContainer(
+          overrides: [
+            remoteApiProvider.overrideWithValue(true),
+            apiClientProvider.overrideWithValue(api),
+            sessionTokensProvider.overrideWithValue(api.tokens),
+          ],
+        );
+        addTearDown(() {
+          container.dispose();
+          api.close();
+        });
+        await container
+            .read(accountProvider.notifier)
+            .signIn('', 'an@example.com', 'password');
+        final subscription = container.listen(
+          accountDetailsProvider,
+          (_, _) {},
+          fireImmediately: true,
+        );
+        addTearDown(subscription.close);
+        await container.read(accountDetailsProvider.future);
+        final controller = container.read(accountDetailsProvider.notifier);
+        await expectLater(
+          controller.saveAddress(draft, creationKey: key),
+          throwsA(isA<ApiException>().having((e) => e.code, 'code', 'TIMEOUT')),
+        );
+        final outcome = controller
+            .saveAddress(draft, creationKey: key)
+            .then<Object?>((_) => null, onError: (Object e) => e);
+        await Future<void>.delayed(Duration.zero);
+        expect(posts, 2);
+        original.complete(jsonResponse(rows.single, 201));
+        await Future<void>.delayed(Duration.zero);
+        if (explicitRefresh) container.invalidate(accountDetailsProvider);
+        await container.read(accountDetailsProvider.future);
+        retry.complete(jsonResponse(rows.single, 201));
+        final result = await outcome;
+        if (explicitRefresh) {
+          expect(result, isA<StateError>());
+          await controller.saveAddress(draft, creationKey: key);
+          expect(posts, 3);
+        } else {
+          expect(result, isNull);
+        }
+        expect(
+          container
+              .read(accountDetailsProvider)
+              .requireValue
+              .addresses
+              .single
+              .id,
+          'address-1',
+        );
+      },
+    );
+  }
   for (final failure in ['lost response', 'follow-up read']) {
     test(
       'create retry preserves exact key and first default after $failure',
