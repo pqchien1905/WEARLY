@@ -7,16 +7,31 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Identity } from '../../common/decorators/auth';
 import { UsersService } from './users.service';
 import { AddressDto, ProfileDto, UpdateAddressDto } from './dto/user.dto';
+import { SaveStyleDto } from './dto/style.dto';
+import { StyleService } from './style.service';
 @ApiTags('users')
 @ApiBearerAuth()
 @Controller('users/me')
 export class UsersController {
-  constructor(private readonly service: UsersService) {}
+  constructor(
+    private readonly service: UsersService,
+    private readonly styles: StyleService,
+  ) {}
+  @Get('style') style(@CurrentUser() u: Identity) {
+    return this.styles.get(u.id);
+  }
+  @Put('style') saveStyle(
+    @CurrentUser() u: Identity,
+    @Body() dto: SaveStyleDto,
+  ) {
+    return this.styles.save(u.id, dto);
+  }
   @Get() me(@CurrentUser() u: Identity) {
     return this.service.me(u.id);
   }
