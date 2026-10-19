@@ -212,10 +212,6 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                         onPressed: () => context.go('/forgot-password'),
                         child: const Text('Quên mật khẩu?'),
                       ),
-                      TextButton(
-                        onPressed: () => context.go('/admin/login'),
-                        child: const Text('Đăng nhập quản trị'),
-                      ),
                     ],
                   ),
                 ],
