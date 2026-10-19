@@ -1,3 +1,5 @@
+import 'dart:math';
+
 class DeliveryAddress {
   const DeliveryAddress({
     required this.id,
@@ -60,8 +62,19 @@ class AccountDetails {
 
 abstract interface class AccountDetailsRepository {
   Future<AccountDetails> read();
-  Future<AccountDetails> saveAddress(DeliveryAddress address);
+  Future<AccountDetails> saveAddress(
+    DeliveryAddress address, {
+    String? creationKey,
+  });
   Future<AccountDetails> deleteAddress(String id);
   Future<AccountDetails> setDefault(String id);
   Future<AccountDetails> saveStyle(StylePreferences preferences);
+}
+
+String newAddressCreationKey() {
+  final random = Random.secure();
+  return List.generate(
+    24,
+    (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+  ).join();
 }

@@ -21,7 +21,10 @@ class MockAccountDetailsRepository implements AccountDetailsRepository {
   }
 
   @override
-  Future<AccountDetails> saveAddress(DeliveryAddress input) async {
+  Future<AccountDetails> saveAddress(
+    DeliveryAddress input, {
+    String? creationKey,
+  }) async {
     if (input.label.trim().isEmpty ||
         input.recipient.trim().isEmpty ||
         !RegExp(r'^0\d{9}$').hasMatch(input.phone.trim()) ||

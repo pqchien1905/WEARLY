@@ -6,6 +6,8 @@ CLI, client, PostgreSQL adapter đều khóa **7.10.1**. Schema ở `backend/pri
 erDiagram
   User ||--o{ RefreshToken : sessions
   User ||--o{ Address : owns
+  User ||--o{ AddressCreateReceipt : deduplicates
+  Address |o--o| AddressCreateReceipt : created_by
   User ||--o| StylePreference : chooses
   User ||--o| Cart : owns
   User ||--o{ Order : places
@@ -86,7 +88,7 @@ erDiagram
 | Chuẩn bị mở rộng | Coupon | Chưa có workflow promotions; unique code |
 | AI | ImageAsset, AIJob, TryOnResult, OutboxEvent | object keys private; verified/deleted/expiry; 1 result và 1 outbox/job |
 
-Tổng cộng 23 model. Quan hệ n-n user/product qua WishlistItem và Review; cart/variant qua CartItem; order/variant qua OrderItem. StylePreference là quan hệ 1-0..1 với User, xóa theo tài khoản; GET mặc định không tạo bản ghi. Các foreign key đều có trong migration, không dùng chuỗi ID tự phát cho quan hệ.
+Tổng cộng 24 model. Quan hệ n-n user/product qua WishlistItem và Review; cart/variant qua CartItem; order/variant qua OrderItem. StylePreference là quan hệ 1-0..1 với User, xóa theo tài khoản; GET mặc định không tạo bản ghi. AddressCreateReceipt dùng PK(userId,key), hash nội dung và FK addressId nullable/unique; xóa địa chỉ chỉ SET NULL để yêu cầu cũ không tạo lại địa chỉ. Các foreign key đều có trong migration, không dùng chuỗi ID tự phát cho quan hệ.
 
 Enum: Role(CUSTOMER,ADMIN), OrderStatus(PENDING,CONFIRMED,SHIPPED,DELIVERED,CANCELLED), PaymentStatus(PENDING,PAID,FAILED,REFUNDED,CANCELLED), AIJobStatus(PENDING,PROCESSING,COMPLETED,FAILED).
 

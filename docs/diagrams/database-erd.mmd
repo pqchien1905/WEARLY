@@ -1,6 +1,8 @@
 erDiagram
   User ||--o{ RefreshToken : sessions
   User ||--o{ Address : owns
+  User ||--o{ AddressCreateReceipt : deduplicates
+  Address |o--o| AddressCreateReceipt : created_by
   User ||--o| StylePreference : chooses
   User ||--o| Cart : owns
   User ||--o{ Order : places

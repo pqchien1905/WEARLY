@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/account_details.dart';
+import '../../app/account_state.dart';
 import '../../app/api_providers.dart';
+import '../../core/network/api_client.dart';
 import '../../core/design/tokens.dart';
 import '../../core/widgets/primitives.dart';
 import 'account_navigation.dart';
@@ -19,6 +21,9 @@ class _AddressPageState extends ConsumerState<AddressPage> {
       context: context,
       builder: (_) => _AddressEditor(address: address),
     );
+    if (mounted && saved != true && ref.read(remoteApiProvider)) {
+      ref.invalidate(accountDetailsProvider);
+    }
     if (mounted && saved == true) {
       toast(
         context,
@@ -205,7 +210,20 @@ class _AddressEditorState extends ConsumerState<_AddressEditor> {
   late final phone = TextEditingController(text: widget.address?.phone);
   late final address = TextEditingController(text: widget.address?.address);
   bool busy = false;
+  bool uncertain = false;
+  final creationKey = newAddressCreationKey();
+  late final String? identity;
+  late final int sessionGeneration;
   String? error;
+  @override
+  void initState() {
+    super.initState();
+    identity = ref.read(accountProvider)?.email;
+    sessionGeneration = ref.read(remoteApiProvider)
+        ? ref.read(apiClientProvider).tokens.generation
+        : 0;
+  }
+
   @override
   void dispose() {
     for (final c in [label, recipient, phone, address]) {
@@ -216,6 +234,16 @@ class _AddressEditorState extends ConsumerState<_AddressEditor> {
 
   Future<void> save() async {
     if (!form.currentState!.validate() || busy) return;
+    if (ref.read(accountProvider)?.email != identity ||
+        (ref.read(remoteApiProvider) &&
+            ref.read(apiClientProvider).tokens.generation !=
+                sessionGeneration)) {
+      setState(
+        () => error =
+            'Phiên tài khoản đã thay đổi. Hãy đóng và mở lại sổ địa chỉ.',
+      );
+      return;
+    }
     setState(() {
       busy = true;
       error = null;
@@ -231,10 +259,19 @@ class _AddressEditorState extends ConsumerState<_AddressEditor> {
               phone: phone.text,
               address: address.text,
             ),
+            creationKey: creationKey,
           );
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      if (mounted) setState(() => error = accountError(e));
+      if (mounted) {
+        setState(() {
+          error = accountError(e);
+          uncertain =
+              widget.address == null &&
+              ref.read(remoteApiProvider) &&
+              (e is! ApiException || e.status != 400);
+        });
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -274,18 +311,21 @@ class _AddressEditorState extends ConsumerState<_AddressEditor> {
                 label: 'Tên gợi nhớ',
                 hint: 'Nhà, Văn phòng…',
                 controller: label,
+                readOnly: busy || uncertain,
                 validator: requiredValue,
               ),
               const SizedBox(height: 16),
               AppField(
                 label: 'Người nhận',
                 controller: recipient,
+                readOnly: busy || uncertain,
                 validator: requiredValue,
               ),
               const SizedBox(height: 16),
               AppField(
                 label: 'Điện thoại nhận hàng',
                 controller: phone,
+                readOnly: busy || uncertain,
                 keyboardType: TextInputType.phone,
                 validator: (v) => RegExp(r'^0\d{9}$').hasMatch(v?.trim() ?? '')
                     ? null
@@ -295,6 +335,7 @@ class _AddressEditorState extends ConsumerState<_AddressEditor> {
               AppField(
                 label: 'Địa chỉ nhận hàng',
                 controller: address,
+                readOnly: busy || uncertain,
                 maxLines: 3,
                 validator: (v) => (v?.trim().length ?? 0) >= 8
                     ? null
@@ -312,8 +353,17 @@ class _AddressEditorState extends ConsumerState<_AddressEditor> {
                   ),
                 ),
               const SizedBox(height: 24),
+              if (uncertain)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 16),
+                  child: Text(
+                    'Chưa xác nhận được kết quả. Thử lại cùng yêu cầu để tránh tạo trùng; hoặc đóng để kiểm tra sổ địa chỉ.',
+                  ),
+                ),
               AppButton(
-                ref.watch(remoteApiProvider)
+                uncertain
+                    ? 'Thử lại yêu cầu này'
+                    : ref.watch(remoteApiProvider)
                     ? 'Lưu địa chỉ'
                     : 'Lưu địa chỉ demo',
                 busy: busy,

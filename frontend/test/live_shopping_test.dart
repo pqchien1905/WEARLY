@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:nep_storefront/core/network/api_client.dart';
 import 'package:nep_storefront/data/remote_account.dart';
 import 'package:nep_storefront/data/remote_account_details.dart';
@@ -7,6 +8,28 @@ import 'package:nep_storefront/domain/account.dart';
 import 'package:nep_storefront/domain/account_details.dart';
 import 'package:nep_storefront/domain/commerce.dart';
 
+// Drop one response only AFTER the real API committed its address creation.
+class LostAddressResponseClient extends http.BaseClient {
+  final inner = http.Client();
+  bool dropped = false;
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final response = await inner.send(request);
+    if (!dropped &&
+        request.method == 'POST' &&
+        request.url.path.endsWith('/addresses') &&
+        response.statusCode == 201) {
+      dropped = true;
+      await response.stream.drain<void>();
+      throw http.ClientException('Simulated lost response after server commit');
+    }
+    return response;
+  }
+
+  @override
+  void close() => inner.close();
+}
+
 void main() {
   const url = String.fromEnvironment('LIVE_SHOPPING_API_URL');
   const fixture = String.fromEnvironment('LIVE_SHOPPING_FIXTURE');
@@ -14,7 +37,7 @@ void main() {
     'real PostgreSQL persists profile, addresses, cart and COD history across login',
     () async {
       expect(fixture, startsWith('flutter-test-'));
-      final api = ApiClient(baseUrl: url);
+      final api = ApiClient(baseUrl: url, client: LostAddressResponseClient());
       addTearDown(api.close);
       final accounts = RemoteAccountRepository(api);
       final email = '$fixture@example.com';
@@ -36,15 +59,23 @@ void main() {
       expect(saved.name, 'Nguyễn Đã Lưu');
       expect(saved.phone, '0901234567');
       final addresses = RemoteAccountDetailsRepository(api);
-      var details = await addresses.saveAddress(
-        const DeliveryAddress(
-          id: '',
-          label: 'Nhà',
-          recipient: 'Nguyễn Đã Lưu',
-          phone: '0901234567',
-          address: '12 Nguyễn Huệ, TP.HCM',
-        ),
+      const addressDraft = DeliveryAddress(
+        id: '',
+        label: 'Nhà',
+        recipient: 'Nguyễn Đã Lưu',
+        phone: '0901234567',
+        address: '12 Nguyễn Huệ, TP.HCM',
       );
+      final creationKey = newAddressCreationKey();
+      await expectLater(
+        addresses.saveAddress(addressDraft, creationKey: creationKey),
+        throwsA(isA<ApiException>()),
+      );
+      var details = await addresses.saveAddress(
+        addressDraft,
+        creationKey: creationKey,
+      );
+      expect(details.addresses, hasLength(1));
       final addressId = details.defaultAddressId!;
       details = await addresses.saveAddress(
         DeliveryAddress(

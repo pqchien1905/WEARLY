@@ -1,17 +1,26 @@
+import 'dart:convert';
 import '../core/network/api_client.dart';
 import '../domain/account_details.dart';
 
 class RemoteAccountDetailsRepository implements AccountDetailsRepository {
-  RemoteAccountDetailsRepository(this.api, {this.onLateStyleCompletion})
-    : _generation = api.tokens.generation;
+  RemoteAccountDetailsRepository(
+    this.api, {
+    this.onLateStyleCompletion,
+    this.onLateAddressCompletion,
+  }) : _generation = api.tokens.generation;
   final ApiClient api;
   final int _generation;
   final void Function()? onLateStyleCompletion;
+  final void Function()? onLateAddressCompletion;
+  final _addressAttempts =
+      <String, ({String input, Map<String, Object?> body})>{};
+  bool _creatingAddress = false;
 
   Future<Object?> _request(
     String method,
     String path, {
     Map<String, Object?>? body,
+    Map<String, String>? headers,
     void Function()? onLateCompletion,
   }) async {
     if (api.tokens.generation != _generation) throw sessionChanged;
@@ -19,6 +28,7 @@ class RemoteAccountDetailsRepository implements AccountDetailsRepository {
       method,
       path,
       body: body,
+      headers: headers,
       onLateCompletion: onLateCompletion,
     );
     if (api.tokens.generation != _generation) throw sessionChanged;
@@ -104,23 +114,70 @@ class RemoteAccountDetailsRepository implements AccountDetailsRepository {
   }
 
   @override
-  Future<AccountDetails> saveAddress(DeliveryAddress address) async {
+  Future<AccountDetails> saveAddress(
+    DeliveryAddress address, {
+    String? creationKey,
+  }) async {
+    if (api.tokens.generation != _generation) throw sessionChanged;
     final creating = address.id.isEmpty;
-    final first = creating && (await read()).addresses.isEmpty;
-    await _request(
-      creating ? 'POST' : 'PATCH',
-      creating
-          ? 'users/me/addresses'
-          : 'users/me/addresses/${Uri.encodeComponent(address.id)}',
-      body: {
-        'label': address.label.trim(),
-        'recipient': address.recipient.trim(),
-        'phone': address.phone.trim(),
-        'address': address.address.trim(),
-        if (first) 'isDefault': true,
-      },
-    );
-    return read();
+    final input = <String, Object?>{
+      'label': address.label.trim(),
+      'recipient': address.recipient.trim(),
+      'phone': address.phone.trim(),
+      'address': address.address.trim(),
+    };
+    if (!creating) {
+      await _request(
+        'PATCH',
+        'users/me/addresses/${Uri.encodeComponent(address.id)}',
+        body: input,
+      );
+      return read();
+    }
+    if (_creatingAddress) {
+      throw const ApiException('BUSY', 'Vui lòng chờ lưu địa chỉ hoàn tất.');
+    }
+    _creatingAddress = true;
+    final key = creationKey ?? newAddressCreationKey();
+    var confirmed = false;
+    try {
+      var attempt = _addressAttempts[key];
+      final signature = jsonEncode(input);
+      if (attempt != null && attempt.input != signature) {
+        throw const ApiException(
+          'PENDING_ADDRESS',
+          'Thử lại đúng yêu cầu địa chỉ đang chờ xác nhận.',
+        );
+      }
+      if (attempt == null) {
+        final first = (await read()).addresses.isEmpty;
+        attempt = (
+          input: signature,
+          body: {...input, if (first) 'isDefault': true},
+        );
+        _addressAttempts[key] = attempt;
+      }
+      await _request(
+        'POST',
+        'users/me/addresses',
+        body: attempt.body,
+        headers: {'Idempotency-Key': key},
+        onLateCompletion: () {
+          if (api.tokens.generation == _generation) {
+            onLateAddressCompletion?.call();
+          }
+        },
+      );
+      confirmed = true;
+      final details = await read();
+      _addressAttempts.remove(key);
+      return details;
+    } on ApiException catch (error) {
+      if (!confirmed && error.status == 400) _addressAttempts.remove(key);
+      rethrow;
+    } finally {
+      _creatingAddress = false;
+    }
   }
 
   @override

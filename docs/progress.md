@@ -187,3 +187,9 @@ Còn lại: promotions, khôi phục mật khẩu/email, uploads catalog, audit/
 Rà soát cuối phát hiện lỗi phong cách có thể làm mất kết quả đọc địa chỉ, chặn checkout hoặc báo lỗi sau khi tạo địa chỉ thành công. Đã tái hiện bằng kiểm thử rồi tách trạng thái lỗi phong cách trong AccountDetails; trang phong cách vẫn báo lỗi và không hiện form mặc định giả. Checkout tiếp tục đặt COD khi riêng endpoint phong cách trả503, địa chỉ đã tạo vẫn được trả về với UUID thật. Sau sửa:292 Flutter tests đạt (2live opt-in bỏ qua), analyzer sạch; live shopping PostgreSQL chạy lại đạt.
 
 Các quyết định sau rà soát: sửa kế hoạch gom lỗi để bảo toàn địa chỉ; thành phần đọc phong cách sau này phải xử lý styleError. AI/suy đoán cơ thể/tự lọc vẫn ngoài phạm vi và chưa cá nhân hóa catalog. Rủi ro cũ khi chính POST địa chỉ mất phản hồi chưa nằm trong sửa này: gửi lại thủ công có thể tạo trùng, cần idempotency/reconciliation riêng. Không còn phát hiện Important/Critical chưa xử lý trong thay đổi này, không có Minor được nêu.
+
+## Tạo địa chỉ an toàn khi thử lại — 19/10/2026
+
+Đã xử lý tiếp rủi ro POST địa chỉ mất phản hồi ở trên: receipt theo user/key và hash nội dung trong cùng transaction, replay không tạo thêm/không ghi đè sửa đổi, tombstone không làm sống lại địa chỉ đã xóa. Flutter giữ mã/nội dung/default của lần tạo trong form, khóa bản nháp chưa rõ kết quả và chỉ thử lại khi người dùng bấm. Lỗi400 cho sửa, thay phiên chặn gửi dữ liệu cũ; demo vẫn dùng được. [Hợp đồng và giới hạn](address-retries.md).
+
+Ba kiểm thử PostgreSQL đã tái hiện lỗi trước sửa, sau đó36E2E +11unit đạt;297 Flutter tests đạt (2live opt-in bỏ qua), analyzer sạch. Live shopping thực sự làm mất phản hồi sau khi POST đã commit, retry ra đúng một địa chỉ rồi hoàn tất kiểm thử giỏ/COD. Migration cộng thêm đã áp dụng DB test và native, không reset dữ liệu. Tiến độ mục tiêu bàn giao tiếp tục cập nhật tại [PROGRESS.md](../PROGRESS.md).

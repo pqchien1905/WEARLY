@@ -6,7 +6,7 @@ Lượt trước **có tiến triển**: hồ sơ phong cách đã nối Postgre
 
 ## Đang xử lý
 
-- Sửa tạo trùng địa chỉ khi POST mất phản hồi hoặc đọc lại thất bại: mã yêu cầu bền ở backend và giữ nguyên yêu cầu khi thử lại trong Flutter.
+- Đã triển khai chống trùng khi POST mất phản hồi hoặc đọc lại thất bại: receipt ở PostgreSQL và giữ nguyên mã/nội dung khi thử lại trong Flutter. 36 PostgreSQL E2E +11unit đạt;297 Flutter tests đạt, analyzer sạch. Luồng API thật đã cố ý làm mất phản hồi sau commit rồi thử lại, chỉ còn một địa chỉ và đặt COD thành công. Đang rà soát cuối trước tích hợp.
 - Đối chiếu các tiêu chí bàn giao trong Master Prompt với code, runtime, migration, tài liệu và kiểm thử thực tế. Chưa tuyên bố toàn bộ dự án hoàn thành.
 
 ## Kiểm chứng bàn giao còn phải tổng hợp

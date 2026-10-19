@@ -17,6 +17,9 @@ final accountDetailsRepositoryProvider = Provider<AccountDetailsRepository>((
       onLateStyleCompletion: () {
         if (ref.mounted) ref.invalidate(accountDetailsProvider);
       },
+      onLateAddressCompletion: () {
+        if (ref.mounted) ref.invalidate(accountDetailsProvider);
+      },
     );
   }
   return MockAccountDetailsRepository();
@@ -58,8 +61,8 @@ class AccountDetailsController extends AsyncNotifier<AccountDetails> {
     }
   }
 
-  Future<void> saveAddress(DeliveryAddress address) =>
-      _write((r) => r.saveAddress(address));
+  Future<void> saveAddress(DeliveryAddress address, {String? creationKey}) =>
+      _write((r) => r.saveAddress(address, creationKey: creationKey));
   Future<void> deleteAddress(String id) => _write((r) => r.deleteAddress(id));
   Future<void> setDefault(String id) => _write((r) => r.setDefault(id));
   Future<StylePreferences> saveStyle(StylePreferences preferences) async =>
