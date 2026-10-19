@@ -45,15 +45,17 @@ flowchart TD
   App["AppModule"] --> Config["ConfigModule: validated env"]
   App --> Security["AuthGuard + ThrottlerGuard + validation + filter"]
   App --> Auth["AuthModule"]
-  App --> Users["UsersModule: profile + addresses"]
+  App --> Users["UsersModule: profile + addresses + style"]
   App --> Catalog["ProductsModule: products + categories + brands"]
   App --> Cart["CartModule"]
   App --> Orders["OrdersModule"]
+  App --> Wishlist["WishlistModule"]
+  App --> Reviews["ReviewsModule: verified purchase + own history"]
   App --> Admin["AdminModule: guarded management"]
   App --> Health["HealthModule"]
   App --> AI["AiModule"]
   App --> Uploads["UploadsModule: consent + quotas + ownership"]
-  Auth & Users & Catalog & Cart & Orders & Admin & Health & AI & Uploads --> Prisma["PrismaModule / PrismaService"]
+  Auth & Users & Catalog & Cart & Orders & Wishlist & Reviews & Admin & Health & AI & Uploads --> Prisma["PrismaModule / PrismaService"]
   AI --> Adapter["TryOnProvider: Disabled by default"]
   AI --> Storage["StorageService"]
   Uploads --> Storage
@@ -67,7 +69,7 @@ flowchart TD
   Retention --> Storage
 ```
 
-Auth chịu trách nhiệm Argon2id, JWT, session hash, rotation/replay/logout. Users quản lý hồ sơ/địa chỉ theo owner. Products trả catalog active, filters cùng SKU và facets. Cart lấy giá/tồn hiện hành. Orders tính tiền, snapshot, transaction và hoàn kho. Admin có guard RBAC trên toàn controller. Health tách liveness/readiness. AI kiểm tra provider, consent và ownership; outbox tránh mất enqueue khi Redis lỗi.
+Auth chịu trách nhiệm Argon2id, JWT, session hash, rotation/replay/logout. Users quản lý hồ sơ/địa chỉ theo owner, receipt chống tạo địa chỉ trùng khi retry và hồ sơ phong cách có version. Products trả catalog active, filters cùng SKU và facets. Cart lấy giá/tồn hiện hành. Orders tính tiền, snapshot, transaction và hoàn kho. Wishlist lưu yêu thích theo tài khoản; Reviews kiểm tra đơn đã giao, quyền sửa/xóa và lịch sử đánh giá cá nhân. Admin có guard RBAC trên toàn controller. Health tách liveness/readiness. AI kiểm tra provider, consent và ownership; outbox tránh mất enqueue khi Redis lỗi.
 
 ## Luồng dữ liệu và ranh giới
 

@@ -1,5 +1,7 @@
 # Báo cáo nền tảng backend Wearly — 18/10/2026
 
+> Báo cáo lịch sử. Số liệu và kết quả kiểm chứng hiện tại ngày19/10/2026 ở [handoff.md](handoff.md): 24 models, 8 migrations, 47 OpenAPI paths và kiểm tra bootstrap/API/worker Docker.
+
 **Cập nhật Flutter API shopping:** Đã nối đăng ký/đăng nhập/refresh/logout, hồ sơ, CRUD địa chỉ, giỏ hàng, COD, lịch sử phân trang/chi tiết và hủy đơn. UI Flutter được giữ, remote mode dùng `tools/frontend.ps1 api`. Kiểm thử PostgreSQL thật và Chrome bao gồm đăng nhập lại để khôi phục dữ liệu, hủy đơn trả kho và resize375/1440px. Không thay backend/schema trong đợt này. Các số liệu foundation bên dưới là lịch sử; kết quả mới tại [progress.md](progress.md).
 
 ## A. Cấu trúc thực tế

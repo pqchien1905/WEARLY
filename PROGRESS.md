@@ -1,5 +1,21 @@
 # Tiến độ bàn giao WEARLY
 
+## Cập nhật mới nhất: kiểm chứng cài mới và Docker
+
+Lượt này **có tiến triển**: đã tạo công cụ xác minh migrations/seed trên DB mới biệt lập; build và chạy API/worker Docker với dữ liệu thật; gỡ nốt liên kết quản trị ở footer cửa hàng; bổ sung [bàn giao A–H](docs/handoff.md), cập nhật setup/README/sơ đồ modules. Những đoạn phía dưới giữ lại kết quả lượt trước.
+
+- Bootstrap đạt: đủ8 migrations, schema không lệch, seed32 sản phẩm/256 SKU; seed lần hai giữ nguyên snapshot24 bảng sau các chỉnh sửa giả lập. DB `.tools/handoff/wearly_handoff_1792428128410_caec0914_test` được giữ làm bằng chứng, không reset/drop DB nào.
+- Docker API/worker build và runtime đạt: health,47 OpenAPI paths, auth/RBAC, address replay, cart/COD/order replay; worker riêng tiêu thụ outbox Redis, provider Disabled trả lỗi đúng và không tạo kết quả AI giả. Container kiểm thử đã dừng, dữ liệu/containers giữ lại. Docker engine hiện hoạt động.
+- Flutter sau thay đổi footer:299 tests đạt,2 live opt-in bỏ qua trong suite thường; analyzer và Web API release build đạt. Backend không đổi so với lần53 E2E +11 unit/lint/build đạt.
+- Audit dependency: production0; toàn bộ20 moderate cùng nguồn sprintf-js trong bộ Jest, chưa có bản vá. Không tự hạ major Jest. Docker local còn chứa devDependencies; chưa được coi là image production an toàn.
+- Credential scan không thấy các giá trị secrets đang có trong503 tracked files; phạm vi này không bao gồm toàn bộ lịch sử Git.
+
+Quyết định: giữ DB/container/log làm bằng chứng theo yêu cầu không xóa dữ liệu; thêm PATH local khi gọi seed ngoài npm; dùng kiểm tra runtime cho công cụ xác minh, không viết test lặp lại implementation. Chỉ gỡ liên kết quản trị, các guard/routes tiếp tục hoạt động. Chi phí: dữ liệu kiểm thử chiếm thêm đĩa, cần người quản lý quyết định dọn sau này.
+
+Còn mở: rủi ro dependency dev/image, reset mật khẩu/email, promotions, upload catalog, audit/đối soát COD, AI remote và online payment; các phần hạ tầng production chưa kiểm chứng. Không tuyên bố toàn bộ dự án hoàn tất. Bước kế tiếp: hoàn thành rà soát thay đổi hiện tại, xử lý phát hiện có bằng chứng, tích hợp và tiếp tục các khoảng trống có thể làm an toàn trong local.
+
+## Kết quả lượt trước
+
 Cập nhật 19/10/2026. Mục tiêu đang hoạt động: hoàn thiện dự án để bàn giao và kiểm thử, chủ động sửa lỗi có bằng chứng; không xóa dữ liệu người dùng, không triển khai production.
 
 Lượt trước **có tiến triển**: hồ sơ phong cách đã nối PostgreSQL, kiểm thử Chrome và sửa lỗi phong cách ảnh hưởng checkout; `main` tại `fcd3bc5`. Bằng chứng: 292 Flutter tests, 33 PostgreSQL E2E, 11 backend unit; chi tiết trong [docs/progress.md](docs/progress.md).

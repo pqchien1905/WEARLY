@@ -8,7 +8,8 @@
 - [API thực tế và Swagger](docs/api.md)
 - [Upload ảnh riêng tư, quyền truy cập và cleanup](docs/private-images.md)
 - [Ánh xạ mock → API](docs/migration-plan.md)
-- [Báo cáo triển khai, kiểm thử và phần còn thiếu](docs/backend-report.md)
+- [Bàn giao hiện tại: kết quả kiểm thử và phần còn thiếu](docs/handoff.md)
+- [Tiến độ công việc](PROGRESS.md)
 - [Lịch sử frontend](README_FRONTEND.md)
 
 ```text
@@ -48,7 +49,7 @@ Nếu terminal đang ở `D:\Fashion Shop\frontend`, chạy `..\tools\frontend.p
 Mở Chrome tại `http://localhost:8080`: đăng ký/đăng nhập, hồ sơ, địa chỉ, giỏ hàng, đặt COD, lịch sử và hủy đơn dùng dữ liệu PostgreSQL.
 
 - Khách hàng: `http://localhost:8080/#/login`.
-- Quản trị: `http://localhost:8080/#/admin/login`, dành cho tài khoản ADMIN để quản lý sản phẩm, danh mục, thương hiệu, biến thể, tồn kho, đơn hàng và xem khách hàng.
+- Quản trị: nhập trực tiếp `http://localhost:8080/#/admin`; nếu chưa có phiên quản trị sẽ chuyển đến `/admin/login`. Dành cho tài khoản ADMIN để quản lý sản phẩm, danh mục, thương hiệu, biến thể, tồn kho, đơn hàng và xem khách hàng. Giao diện cửa hàng không có liên kết đăng nhập quản trị.
 
 Trong quản trị, mở **Danh mục** hoặc **Thương hiệu** để thêm mới và đổi tên. Sau đó chọn chúng trong biểu mẫu sản phẩm. Danh mục ở trang chủ/cửa hàng lấy từ API; đổi tên giữ nguyên đường dẫn và sản phẩm đã liên kết.
 

@@ -38,7 +38,7 @@ npm run start:dev
 
 Swagger http://localhost:3000/api/docs, health http://localhost:3000/api/v1/health, readiness /api/v1/health/ready. Backend fail startup nếu DB không kết nối được. `npm run build; npm start` để chạy compiled code.
 
-**Sau cập nhật upload và restart:** source/dist và4 migrations đã cập nhật. Lần trước execution policy chặn reload API/worker; các tiến trình dev đó đã kết thúc khi Windows restart. Chạy lại MinIO helper, `npm start` và `npm run worker` trong hai terminal để dùng bản mới. PostgreSQL/Memurai là Windows services tự khởi động. `node tools/smoke-backend.cjs` từ root kiểm tra compiled API trên cổng tạm và tự đóng.
+**Cập nhật 19/10/2026:** có 8 migrations, gồm đánh giá, hồ sơ phong cách và receipt chống tạo địa chỉ trùng. Sau khi lấy code mới, chạy generate/deploy/build trước khi khởi động lại API/worker. PostgreSQL/Memurai là Windows services tự khởi động; MinIO dùng helper bên dưới. `node tools/smoke-backend.cjs` từ root kiểm tra compiled API trên cổng tạm và tự đóng.
 
 Terminal riêng:
 
@@ -121,7 +121,7 @@ docker compose up -d --wait postgres redis
 
 Trên máy này `.env` đặt `POSTGRES_PUBLISHED_PORT=5433`, `REDIS_PUBLISHED_PORT=6380` để không tranh cổng với service Windows. Bản `.env.example` mặc định 5432/6379 dành cho máy chỉ dùng Docker. Hai PostgreSQL có volume/dữ liệu riêng; chạy migration/seed cho đúng database, không kỳ vọng dữ liệu native tự xuất hiện trong container. Khi chạy backend trên host với database Docker, đặt DATABASE_URL port 5433 và REDIS_PORT=6380 trong process/backend env. Container API/worker luôn dùng hostname postgres:5432 và redis:6379.
 
-Đã chạy thực tế `docker compose up -d --wait postgres redis`: cả hai container Healthy; PostgreSQL17.11 trả query version thành công, Redis trả PONG. Cổng host127.0.0.1:5433/6380 đã xác nhận; Windows PostgreSQL/Memurai vẫn Running ở5432/6379. Đây là DB Docker mới, chưa migrate/seed; backend/.env vẫn dùng database native đã có dữ liệu. API/worker/MinIO container chưa build/chạy trong lần sửa Docker này.
+Đã chạy thực tế `docker compose up -d --wait postgres redis`: cả hai container Healthy; PostgreSQL17.11 trả query version thành công, Redis trả PONG. Cổng host127.0.0.1:5433/6380 đã xác nhận; Windows PostgreSQL/Memurai vẫn dùng5432/6379. Ngày19/10 đã build API/worker bằng hai Dockerfile, chạy trên database test Docker mới và xác minh auth, phân quyền, địa chỉ, giỏ, COD, replay và worker/outbox Redis. Database mặc định của Compose không được dùng cho lần xác minh này; backend/.env vẫn dùng native. MinIO container chưa kiểm chứng trong lượt này; storage E2E dùng MinIO native. Chi tiết [bàn giao hiện tại](handoff.md).
 
 ```powershell
 docker compose --profile app up -d --build
@@ -135,6 +135,18 @@ MinIO console http://localhost:9001, API9000. Dừng đúng process MinIO native
 Named volumes giữ DB/Redis/MinIO. Không chạy `docker compose down -v` nếu muốn giữ dữ liệu.
 
 ## Kiểm thử
+
+Kiểm chứng cài mới trên Docker PostgreSQL (cần `npm ci` trong backend, root `.env`, Docker services ở trên và cổng3001 trống):
+
+```powershell
+node tools/verify-bootstrap.cjs --docker --check-config
+node tools/verify-bootstrap.cjs --docker
+docker build -t wearly-handoff-api:local -f backend/Dockerfile backend
+docker build -t wearly-handoff-worker:local -f backend/Dockerfile.worker backend
+node tools/verify-containers.cjs TEN_DATABASE_VUA_IN_RA
+```
+
+Thay `TEN_DATABASE_VUA_IN_RA` bằng tên `wearly_handoff_..._test` trong kết quả bootstrap. Công cụ dùng network Compose `wearly_default`, tạo DB mới bằng tài khoản Docker có CREATEDB; tài khoản ứng dụng native không có quyền này. Bootstrap xác minh đủ migrations, schema không lệch và seed lần hai giữ nguyên các bản ghi đã sửa. Container verifier dùng DB đó, tạo fixture mới, giữ lại dữ liệu và container đã dừng; báo cáo/log tại `.tools/handoff/<database>`. Không reset, drop, truncate hoặc xóa volume. Các báo cáo chứa metadata/hash, không chứa credential. Đây là công cụ phát triển local, không dùng với production.
 
 ```powershell
 cd 'D:\Fashion Shop'
