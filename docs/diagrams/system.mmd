@@ -3,9 +3,11 @@ flowchart LR
   API --> P["Prisma 7 + adapter-pg"]
   P --> DB[("PostgreSQL")]
   API -->|"AIJob + OutboxEvent transaction"| DB
-  W["AI worker / outbox dispatcher"] --> DB
+  W["Worker: AI / recovery / retention"] --> DB
   W --> Q[("Redis / BullMQ")]
   Q --> W
   W -. "future provider adapter" .-> AI["AI provider / optional FastAPI"]
+  API -->|"password recovery jobs"| Q
+  W -->|"recovery mail when enabled"| SMTP["Configured SMTP server"]
   W -->|"results + retention cleanup"| S3["Private S3 / MinIO"]
-  API -->|"validated upload + owned signed URL"| S3
+  API -->|"private upload + owned signed URL; catalog upload + verified read"| S3

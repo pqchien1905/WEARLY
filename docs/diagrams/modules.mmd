@@ -1,26 +1,36 @@
-flowchart TD
+flowchart LR
   App["AppModule"] --> Config["ConfigModule: validated env"]
   App --> Security["AuthGuard + ThrottlerGuard + validation + filter"]
   App --> Auth["AuthModule"]
+  Auth --> Recovery["RecoveryModule: one-use tokens + session revocation"]
   App --> Users["UsersModule: profile + addresses + style"]
   App --> Catalog["ProductsModule: products + categories + brands"]
   App --> Cart["CartModule"]
   App --> Orders["OrdersModule"]
   App --> Wishlist["WishlistModule"]
   App --> Reviews["ReviewsModule: verified purchase + own history"]
-  App --> Admin["AdminModule: guarded management"]
+  App --> Admin["AdminModule: guarded management + transactional audit"]
+  App --> Content["ContentModule: private draft + published snapshot"]
+  App --> Media["CatalogMediaModule: ADMIN upload + verified public read"]
   App --> Health["HealthModule"]
   App --> AI["AiModule"]
   App --> Uploads["UploadsModule: consent + quotas + ownership"]
-  Auth & Users & Catalog & Cart & Orders & Wishlist & Reviews & Admin & Health & AI & Uploads --> Prisma["PrismaModule / PrismaService"]
+  Auth & Recovery & Users & Catalog & Cart & Orders & Wishlist & Reviews & Admin & Content & Media & Health & AI & Uploads --> Prisma["PrismaModule / PrismaService"]
+  Recovery --> Queue["Redis / BullMQ: recovery queue"]
+  Recovery --> Mail["RecoveryMailer: SMTP"]
   AI --> Adapter["TryOnProvider: Disabled by default"]
   AI --> Storage["StorageService"]
   Uploads --> Storage
+  Media --> Storage
   Worker["WorkerModule: separate process"] --> Prisma
   Worker --> Processor["AiProcessor + outbox dispatcher"]
   Processor --> Adapter
   Processor --> Storage
-  Processor --> Queue["BullMQ"]
-  Worker --> Retention["RetentionWorker / ImageLifecycleService"]
+  Processor --> AiQueue["Redis / BullMQ: AI queue"]
+  Worker --> RecoveryWorker["RecoveryWorker: queue consumer + token retention"]
+  RecoveryWorker --> Recovery
+  RecoveryWorker --> Queue
+  Worker --> Retention["RetentionWorker: private + failed catalog cleanup"]
+  Retention --> Media
   Retention --> Prisma
   Retention --> Storage

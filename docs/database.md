@@ -37,7 +37,43 @@ erDiagram
   User { uuid id PK
     string email UK
     string passwordHash
+    datetime passwordChangedAt
     Role role
+  }
+  PasswordResetToken { uuid id PK
+    uuid userId FK
+    string tokenHash UK
+    datetime expiresAt
+    datetime consumedAt
+  }
+  AdminAuditEvent { uuid id PK
+    uuid actorId
+    AdminAuditAction action
+    uuid targetId
+    datetime createdAt
+  }
+  StoreContent { uuid id PK
+    string key UK
+    string banner
+    string policy
+    int version
+    string publishedBanner
+    string publishedPolicy
+    int publishedVersion
+    datetime publishedAt
+  }
+  CatalogAsset { uuid id PK
+    uuid productId
+    uuid actorId
+    uuid requestKey
+    string inputHash
+    string objectKey UK
+    string sha256
+    json receipt
+    datetime verifiedAt
+    datetime deletedAt
+    datetime purgedAt
+    datetime purgeRetryAt
   }
   Product { uuid id PK
     string slug UK
@@ -93,7 +129,7 @@ erDiagram
 
 Tổng cộng 28 model. Quan hệ n-n user/product qua WishlistItem và Review; cart/variant qua CartItem; order/variant qua OrderItem. StylePreference là quan hệ 1-0..1 với User, xóa theo tài khoản; GET mặc định không tạo bản ghi. AddressCreateReceipt dùng PK(userId,key), hash nội dung và FK addressId nullable/unique; xóa địa chỉ chỉ SET NULL để yêu cầu cũ không tạo lại địa chỉ. Các foreign key đều có trong migration. Riêng actorId/targetId của AdminAuditEvent và actorId/productId của CatalogAsset là UUID lịch sử không FK/cascade, để việc xóa thực thể không xóa nhật ký hoặc ảnh được snapshot đơn hàng tham chiếu.
 
-Enum: Role(CUSTOMER,ADMIN), OrderStatus(PENDING,CONFIRMED,SHIPPED,DELIVERED,CANCELLED), PaymentStatus(PENDING,PAID,FAILED,REFUNDED,CANCELLED), AIJobStatus(PENDING,PROCESSING,COMPLETED,FAILED).
+Enum: Role(CUSTOMER,ADMIN), OrderStatus(PENDING,CONFIRMED,SHIPPED,DELIVERED,CANCELLED), PaymentStatus(PENDING,PAID,FAILED,REFUNDED,CANCELLED), AIJobStatus(PENDING,PROCESSING,COMPLETED,FAILED), AdminAuditAction(13 loại thao tác quản trị/nội dung/upload).
 
 Tiền Decimal(14,0), VND nguyên; API truyền chuỗi chính xác. Timestamp UTC, createdAt/updatedAt trên thực thể thay đổi; log/snapshot chỉ có createdAt. Không chứa bytes ảnh, password/access/refresh token thô hay API key.
 
@@ -105,6 +141,7 @@ Indexes: email/SKU/slugs, product(active,createdAt,id), category/brand, variant(
 - `20261020100000_admin_audit`: thêm AdminAuditEvent và enum10 thao tác; không thay đổi bảng/dữ liệu cũ.
 - `20261020110000_store_content`: thêm StoreContent với constraint publication đầy đủ/version; thêm hai enum audit lưu nháp/xuất bản. Không ghi nội dung mẫu vào DB.
 - `20261020120000_password_recovery`: thêm PasswordResetToken (hash, expiry, consumedAt, user FK) và User.passwordChangedAt nullable; không đổi mật khẩu hay thu hồi phiên hiện có.
+- `20261020130000_catalog_upload`: thêm CatalogAsset, unique(actorId,requestKey), objectKey unique, constraints metadata và audit PRODUCT_IMAGE_UPLOADED; không sửa gallery hoặc ảnh cũ.
 - `20261018000100_constraints`: số lượng/giá/tổng đơn/rating và default address.
 - `20261018000200_private_images`: thêm width/height, SHA256, consentAt, purgedAt và index/constraint; không thay hoặc xóa dữ liệu cũ.
 - `20261018000300_image_cleanup_retry`: thêm purgeRetryAt và index để retry công bằng, không sửa migration đã áp dụng.

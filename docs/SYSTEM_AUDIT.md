@@ -48,6 +48,7 @@ No production deployment or production data changes are authorized.
 | A16 | High | Raw PostgreSQL adapter serialization conflicts bypass P2034-only retry and return500 on concurrent cart additions | FIXED: explicit 40001/40P01 adapter conflict detection, five-attempt bound, generic409 when exhausted; red/green unit tests, 50 real concurrent pairs and full E2E passed |
 | A17 | Medium | Recovery Redis producer shutdown fails after a stalled established connection | FIXED during implementation: command/deadline bounds and forced disconnect; real TCP proxy regression passes and Jest exits normally |
 | A18 | Medium | Private image cleanup permanently skips purged tombstones, leaving bytes if a remote PUT completes after DELETE | FIXED: revoked tombstones reconciled every24h,5min failure retry, never-purged priority/batch50; real PG/MinIO red→green regression, API remains404 |
+| A19 | Low | Architecture diagrams omitted recovery/content/catalog modules and new standalone tables; migration list omitted catalog assets | FIXED: source/embedded diagrams synchronized, all28 models represented, four diagrams parsed/rendered in Chrome; architecture and migration notes updated |
 
 No Critical issue has been confirmed. High items remain open; the goal is
 **not complete**, and production readiness has not been established.
@@ -130,6 +131,23 @@ directory. A09 remains open for production/off-host/private-image recovery.
   passed on `wearly_handoff_1792482185306_60f38cdd_test`.
 - Evidence `.tools/goal-toolchain-*`; historical audit counts below describe
   earlier revisions. This is dependency advisory coverage, not a penetration test.
+
+### Completion evidence review
+
+- Current architecture now shows recovery queue/SMTP, content publication,
+  catalog upload/public read and both retention paths. ERD includes historical
+  audit/catalog identifiers without falsely drawing foreign-key relationships.
+- All four Mermaid sources parsed/rendered in Chrome; embedded copies match
+  the source files, all28 Prisma models appear, no browser page errors.
+  Evidence `.tools/goal-diagrams-JwkoJd/result.json` and rendered SVG/PNG.
+- Rechecked root/backend local configuration without printing values:
+  recovery disabled, SMTP/reset URL and AI provider configuration absent.
+  Source still binds DisabledTryOnProvider; online payments have an interface
+  without a gateway. These are incomplete integrations, not passing features.
+- No new local implementation defect was identified in this review after the
+  documentation correction. Provider contracts/accounts, promotion/settlement
+  rules and deployment topology remain required for the open work. The seven
+  completion gates are not all met; A06/A07/A09 remain open.
 
 ## Baseline verification observed in this session
 

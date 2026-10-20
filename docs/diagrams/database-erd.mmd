@@ -32,7 +32,43 @@ erDiagram
   User { uuid id PK
     string email UK
     string passwordHash
+    datetime passwordChangedAt
     Role role
+  }
+  PasswordResetToken { uuid id PK
+    uuid userId FK
+    string tokenHash UK
+    datetime expiresAt
+    datetime consumedAt
+  }
+  AdminAuditEvent { uuid id PK
+    uuid actorId
+    AdminAuditAction action
+    uuid targetId
+    datetime createdAt
+  }
+  StoreContent { uuid id PK
+    string key UK
+    string banner
+    string policy
+    int version
+    string publishedBanner
+    string publishedPolicy
+    int publishedVersion
+    datetime publishedAt
+  }
+  CatalogAsset { uuid id PK
+    uuid productId
+    uuid actorId
+    uuid requestKey
+    string inputHash
+    string objectKey UK
+    string sha256
+    json receipt
+    datetime verifiedAt
+    datetime deletedAt
+    datetime purgedAt
+    datetime purgeRetryAt
   }
   Product { uuid id PK
     string slug UK

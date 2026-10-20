@@ -54,6 +54,7 @@ Xem [hướng dẫn ảnh catalog](catalog-images.md).
 | `catalog-media`, CatalogAsset migration, storage/retention worker | ADMIN upload, public verified read, idempotency, khóa gallery, audit và dọn upload thất bại |
 | Flutter multipart/admin product editor/FashionImage | Chọn file, preview, retry cùng key, gallery baseline, đường dẫn ảnh ổn định |
 | `backend/package{,-lock}.json`, `test/toolchain.spec.ts` | Loại bỏ dependency có advisory trong coverage loader; kiểm chứng tương thích YAML thực tế |
+| `docs/architecture.md`, `database.md`, `diagrams/*.mmd` | Đồng bộ kiến trúc/worker với source, đủ28 model và migration catalog; bốn sơ đồ đã render trong Chrome |
 
 ## Kết quả và giới hạn
 

@@ -26,11 +26,25 @@ Goal: execute the attached system completion objective. Status: **IN PROGRESS**.
 - Final Web API release build passed with default `http://localhost:3000/api/v1`;
   handoff published at `docs/SYSTEM_HANDOFF.md`.
 
-## In progress
+## Pending inputs and remaining verification
 
 - Resolve provider/promotion requirements and scope the remaining integrations.
-- Audit remaining retention and operational failure paths.
+- Local retention/dependency/documentation follow-ups are verified. Remaining
+  production failure paths depend on the target topology and recovery resources.
 - External provider/promotion/settlement questions remain pending.
+
+## Completed — architecture evidence review
+
+- Corrected architecture/module diagrams for recovery SMTP/queues, content and
+  catalog media; expanded ERD to all28 models and documented the catalog
+  migration. Historical identifiers remain explicitly non-FK.
+- Four Mermaid diagrams parsed/rendered in Chrome without page errors.
+  Embedded diagrams match standalone sources; module layout inspected.
+  Evidence `.tools/goal-diagrams-JwkoJd/`. This documentation change does not
+  change runtime code or invalidate the prior build/test evidence.
+- Rechecked local config using presence booleans only: SMTP/reset URL and AI
+  provider are absent; recovery disabled. No new answers or deployment target
+  were supplied. Open integrations/production acceptance remain unverified.
 
 ## Completed — iteration five
 
