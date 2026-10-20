@@ -19,7 +19,8 @@ Giữ Flutter, Riverpod, go_router và bố cục hiện có. `USE_REMOTE_API=tr
 | wishlistProvider demo / remoteWishlistProvider | GET /wishlist; PUT/DELETE /wishlist/:productId | Lưu thật theo tài khoản, snapshot tối đa200 mục; card/detail/cart và trang danh sách đã nối; không bulk-clear |
 | StylistRepository.reply | Future /ai/stylist/messages | Chưa có API/provider/retrieval |
 | TryOnRepository.create/cancel | POST/GET /ai/try-on/jobs; POST/GET/DELETE /uploads/images | Upload/delete/retention/quota có; provider Disabled, Flutter chưa nối; hủy qua xóa ảnh, chưa cancel riêng job |
-| Admin state promotions/content/audit | Coupon schema, các endpoint admin có trong api.md | Nội dung, promotions, audit workflow chưa có backend |
+| Admin state content/audit | GET/PUT /admin/content, POST /admin/content/publish, GET /admin/activity | Nháp/xuất bản và lịch sử13 loại thao tác đã lưu thật, có RBAC và kiểm thử |
+| Admin state promotions | Coupon schema | BLOCKED: cần thống nhất UI phần trăm với schema số tiền VND trước khi áp dụng vào đơn |
 
 ## Contract mapping
 

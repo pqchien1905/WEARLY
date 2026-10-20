@@ -53,10 +53,11 @@ Xem [hướng dẫn ảnh catalog](catalog-images.md).
 | Flutter auth/reset route/forms và helper Chrome | Request thật, token không giữ trong URL, password confirmation, kết quả không chắc chắn, bảo vệ phiên mới |
 | `catalog-media`, CatalogAsset migration, storage/retention worker | ADMIN upload, public verified read, idempotency, khóa gallery, audit và dọn upload thất bại |
 | Flutter multipart/admin product editor/FashionImage | Chọn file, preview, retry cùng key, gallery baseline, đường dẫn ảnh ổn định |
+| `backend/package{,-lock}.json`, `test/toolchain.spec.ts` | Loại bỏ dependency có advisory trong coverage loader; kiểm chứng tương thích YAML thực tế |
 
 ## Kết quả và giới hạn
 
-- Backend lint/build đạt; **16 unit + 80 E2E** đạt.
+- Backend lint/build đạt; **17 unit + 80 E2E** đạt.
 - Flutter analyze sạch; **317 tests** đạt, gồm rời phiên lúc xuất bản;
   2 live opt-in không chạy trong suite
   thường. Năm suite Chrome/API riêng đạt.
@@ -66,8 +67,8 @@ Xem [hướng dẫn ảnh catalog](catalog-images.md).
 - DB mới có đủ 12 migrations, schema diff zero, seed replay giữ dữ liệu sửa.
 - Backup local mới nhất phục hồi vào DB mới, khớp 29 bảng, columns/lengths, enums,
   constraints và indexes; source không đổi. API smoke trên bản phục hồi đạt.
-- Production npm audit **0**; toàn bộ dependency tree vẫn có **20 Moderate**
-  thuộc công cụ phát triển. Gitleaks history và tracked diff không phát hiện
+- Production và toàn bộ dependency tree npm audit đều **0** sau sửa coverage
+  loader. Gitleaks history và tracked diff không phát hiện
   secrets. Không coi đây là pentest hoặc chứng nhận an toàn tuyệt đối.
 - Có warning deprecation từ Prisma/pg khi chạy một số truy vấn; chưa gây test
   failure, cần kiểm tra trước nâng major pg.
@@ -123,6 +124,12 @@ chặn và không đổi quota.80 E2E đạt; API/worker image mới qua contain
 trên `wearly_handoff_1792481891987_07599963_test`. Không đổi schema; bằng chứng
 DB/object restore ở trên vẫn thuộc lượt catalog.
 
+Lượt dependency: override riêng YAML của coverage loader loại bỏ chuỗi
+argparse1/sprintf-js, không hạ Jest/ts-jest. Test đọc YAML kế thừa và từ chối
+YAML sai,17 unit và80 E2E đều đạt. Ba image cài sạch từ lockfile mới và
+container checks đạt trên `wearly_handoff_1792482185306_60f38cdd_test`.
+Audit toàn bộ giảm từ20 xuống0; review không tìm thấy vấn đề tương thích.
+
 ## Còn thiếu
 
 | Hạng mục | Trạng thái / thông tin cần có |
@@ -157,8 +164,9 @@ Mở `http://localhost:8080`; quản trị tại `/#/admin`. Swagger ở
 `http://localhost:3000/api/docs`. Worker/storage và máy mới: xem
 [setup.md](setup.md). Không ghi đè `.env`, không reset DB.
 
-Migration mới `20261020100000_admin_audit`, `20261020110000_store_content`
-và `20261020120000_password_recovery` thêm lịch sử/nội dung/token và cutoff
+Migration mới `20261020100000_admin_audit`, `20261020110000_store_content`,
+`20261020120000_password_recovery` và `20261020130000_catalog_upload`
+thêm lịch sử/nội dung/token/ảnh catalog và cutoff
 nullable, không đổi mật khẩu hoặc dữ liệu nghiệp vụ cũ. Chỉ áp dụng vào DB test; DB phát triển hiện có
 cần chạy `prisma:deploy` trước khi dùng bản mới. Lệnh ở trên dành cho môi trường
 local đã cấu hình; không phải phê duyệt triển khai production.

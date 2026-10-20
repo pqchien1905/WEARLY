@@ -34,7 +34,7 @@ No production deployment or production data changes are authorized.
 | A02 | Medium | Oversized JSON returned 500; malformed JSON could echo request bytes | FIXED: 413 and safe unstructured 400 messages; three malformed inputs tested, including body-echoing errors found by independent review |
 | A03 | Medium | Admin product/SKU requests with missing related UUIDs reach unhandled Prisma FK errors | FIXED: 400 INVALID_REFERENCE; E2E proves gallery transaction rollback and no orphan product/SKU |
 | A04 | Medium | API/worker Docker runtime includes build tooling and test dependencies | FIXED: separate migration target and production runtime; actual API/worker verified non-root, without Jest/TypeScript/Prisma CLI/source/.env |
-| A05 | Medium | Full npm audit reports 20 Moderate findings in dev dependency chain | OPEN tooling-only: runtime production audit is zero; no forced toolchain downgrade |
+| A05 | Medium | Full npm audit reported 20 Moderate findings through the coverage YAML loader | FIXED: scoped js-yaml4.3.2 override removes argparse1/sprintf-js; full and production audits zero, compatibility/unit/E2E/clean image builds verified |
 | A06 | High | Password recovery/email was absent | Local implementation VERIFIED: public request/reset, PostgreSQL tokens, real local SMTP/Redis worker, Flutter/Chrome; external provider delivery remains BLOCKED on configuration |
 | A07 | High | Try-On/Stylist UI is gated in API mode; no real AI provider | Provider/account/contract required for real output; never substitute demo output |
 | A08 | Medium | Promotions, catalog-specific upload and COD settlement were incomplete | Catalog upload VERIFIED with PostgreSQL/MinIO/Flutter/Chrome/container. Promotions BLOCKED on conflicting UI percent/schema VND contracts; COD settlement requires a confirmed rule. Activity and content draft/publication verified |
@@ -116,7 +116,22 @@ directory. A09 remains open for production/off-host/private-image recovery.
 - Evidence `.tools/goal-private-retention-*`. Earlier catalog DB/object recovery
   remains the latest recovery evidence; this follow-up did not change schema.
 
-## Verification observed in this session
+### Dependency tooling follow-up
+
+- Scoped only load-nyc-config's YAML dependency to4.3.2. Direct Jest/ts-jest
+  versions and the Swagger-specific override are unchanged. Lockfile removes
+  argparse1/sprintf-js; no forced downgrade.
+- Actual loader test verifies inherited YAML arrays, flags, numeric thresholds
+  and malformed-input rejection. Backend lint/build,17 unit and80 real E2E
+  tests passed; independent review found no actionable compatibility issue.
+- Full and production npm audits both report zero vulnerabilities. Three
+  images rebuilt using clean npm-ci from the new lockfile. Fresh twelve-
+  migration bootstrap and container API/worker/COD/content/catalog checks
+  passed on `wearly_handoff_1792482185306_60f38cdd_test`.
+- Evidence `.tools/goal-toolchain-*`; historical audit counts below describe
+  earlier revisions. This is dependency advisory coverage, not a penetration test.
+
+## Baseline verification observed in this session
 
 - Backend lint, build and 11 unit tests: passed.
 - Flutter analyze: no issues. Flutter tests: 299 passed, 2 live opt-in skipped.
@@ -154,8 +169,8 @@ directory. A09 remains open for production/off-host/private-image recovery.
 
 Operational caveats: Prisma's pg adapter emits a pg deprecation warning during
 some concurrent transaction tests; current tests pass, but recheck before a pg
-major update. Dev/migration images retain development dependencies and the 20
-Moderate advisory chain. Runtime source maps are compiled artifacts; `.env`
+major update. Dev/migration images retain development dependencies; the earlier
+20 Moderate findings are resolved by the tooling follow-up above. Runtime source maps are compiled artifacts; `.env`
 and source directories are absent. TLS, external mail/AI/payments and
 production infrastructure remain unverified.
 

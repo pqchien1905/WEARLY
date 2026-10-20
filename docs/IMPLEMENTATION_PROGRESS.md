@@ -75,6 +75,17 @@ Goal: execute the attached system completion objective. Status: **IN PROGRESS**.
   This proves local catalog recovery,
   not private Try-On, historical versions, off-host or production recovery.
 
+## Completed — dependency tooling follow-up
+
+- Removed the coverage loader's vulnerable argparse1/sprintf-js chain with a
+  scoped js-yaml4.3.2 override; direct test/runtime versions unchanged.
+- Real inherited-YAML/malformed-input compatibility test, lint/build,17 unit
+  and80 E2E tests passed. Independent review found no blocker.
+- Full and production npm audits now zero. Clean npm-ci builds of all three
+  images, fresh12-migration bootstrap and container runtime checks passed on
+  `wearly_handoff_1792482185306_60f38cdd_test`.
+- Evidence `.tools/goal-toolchain-*`. Earlier counts remain historical evidence.
+
 ## Completed — private retention follow-up
 
 - Real MinIO regression proved a late accepted PUT could survive an earlier
@@ -171,8 +182,9 @@ These do not block local repairs. Goal remains active.
 - Recovery compares canonical PostgreSQL constraint deparsing: pg_dump/restore
   changed redundant AND parentheses in ImageAsset_dimensions_check, with
   identical canonical expression. No constraints were weakened.
-- Roles/grants, S3 recovery and off-host backup operations remain outside the
-  completed local exercise; production readiness remains unclaimed.
+- Roles/grants, private-image recovery and off-host backup operations remain
+  outside the completed local exercise; catalog object recovery passed as
+  described above. Production readiness remains unclaimed.
 
 ## Evidence index
 
