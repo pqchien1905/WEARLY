@@ -60,7 +60,7 @@ Xem [hướng dẫn ảnh catalog](catalog-images.md).
 - Flutter analyze sạch; **317 tests** đạt, gồm rời phiên lúc xuất bản;
   2 live opt-in không chạy trong suite
   thường. Năm suite Chrome/API riêng đạt.
-- **9 regression tests** cho helper đạt. Kiểm tra URL preview thực tế đạt.
+- **13 regression tests** cho helper đạt. Kiểm tra URL preview thực tế đạt.
 - Build image API/worker/migration và chạy container thật đạt; runtime không có
   Jest, TypeScript, Prisma CLI, source hoặc `.env`; các container test đã dừng.
 - DB mới có đủ 12 migrations, schema diff zero, seed replay giữ dữ liệu sửa.
@@ -106,6 +106,16 @@ phát hiện và sửa form bị khóa khi gallery vừa đầy; regression đã
 Bootstrap `wearly_handoff_1792480803907_2ad86a6e_test`, restore
 `wearly_restore_1792480903411_6d6b1003_test`. API smoke trên bản restore đạt,
 kể cả đọc catalog object từ bucket nguồn còn giữ; chưa gọi đây là restore S3.
+
+Sau đó đã chạy **restore object catalog riêng**: xuất file vào archive rồi
+phục hồi sang bucket mới `wearly-restore-1792481409890-58861048-test`. API dùng
+DB đã restore và bucket mới trả đúng bytes; hash/MIME/size và anonymous403
+đạt, nguồn không đổi. Phạm vi một ảnh catalog tổng hợp; chưa kiểm chứng
+private Try-On, backup ngoài máy hoặc phục hồi production.
+
+Review công cụ phục hồi phát hiện lỗi Nest tự thoát trước cleanup khi khởi
+tạo thất bại; đã sửa, kiểm thử bằng tiến trình con và chạy lại phục hồi
+thành công vào `wearly-restore-1792481707240-02dceafb-test`.
 
 ## Còn thiếu
 

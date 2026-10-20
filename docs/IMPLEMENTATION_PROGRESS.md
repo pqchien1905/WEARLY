@@ -29,7 +29,7 @@ Goal: execute the attached system completion objective. Status: **IN PROGRESS**.
 ## In progress
 
 - Resolve provider/promotion requirements and scope the remaining integrations.
-- Verify local object-store recovery alongside the database recovery evidence.
+- Audit remaining retention and operational failure paths.
 - External provider/promotion/settlement questions remain pending.
 
 ## Completed — iteration five
@@ -57,6 +57,23 @@ Goal: execute the attached system completion objective. Status: **IN PROGRESS**.
   and reading the verified catalog object from the retained source bucket.
   This is not yet an object-store restore.
 - Default-API Flutter release rebuilt; production dependency audit zero.
+
+## Verified — local catalog object recovery
+
+- Guarded helper validates matching retained bootstrap/container/DB-recovery
+  evidence and a loopback private/unversioned test bucket. Refuses existing
+  targets; conditional object writes do not overwrite keys.
+- Actual local run exported and restored one synthetic326-byte catalog object.
+  Hash/MIME/size, anonymous403 and compiled API200 using the restored DB plus
+  new bucket passed. Source objects and both catalog snapshots unchanged.
+- New retained bucket `wearly-restore-1792481409890-58861048-test`; archive and
+  report under `.tools/handoff/wearly_handoff_1792480803907_2ad86a6e_test/objects-1792481409890-58861048/`.
+- Four guard/integrity/startup/cleanup regressions passed,13 helper tests total.
+  Review caught Nest's default process abort bypassing failure reporting; fixed
+  and verified with a real failing-provider child process. Final actual rerun
+  retained `objects-1792481707240-02dceafb` and the matching new test bucket.
+  This proves local catalog recovery,
+  not private Try-On, historical versions, off-host or production recovery.
 
 ## Completed — iteration four
 

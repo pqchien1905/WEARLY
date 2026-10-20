@@ -1,5 +1,12 @@
 # Tiến độ bàn giao WEARLY
 
+**Cập nhật goal20/10:** đang hoàn thiện toàn hệ thống trên nhánh
+`codex/system-completion-2026-10-20`. Nhật ký, audit, nội dung cửa hàng,
+khôi phục mật khẩu SMTP và upload catalog đã được bổ sung. Bằng chứng hiện
+hành và blockers: [tiến độ goal](docs/IMPLEMENTATION_PROGRESS.md),
+[bàn giao](docs/SYSTEM_HANDOFF.md). Các mục dưới đây là lịch sử trước goal,
+không phải kết luận hoàn tất hiện tại.
+
 ## Nghiệm thu hiện tại — 20/10/2026
 
 Lượt này **có tiến triển**: bổ sung [bảng đối chiếu yêu cầu](docs/acceptance.md), kiểm tra lịch sử secrets/render tài liệu/Swagger và sửa hướng dẫn máy mới cùng các con số migration lỗi thời. Code ứng dụng/schema không thay đổi so với main95c66ff; không thêm tính năng ngoài phạm vi để kéo dài mục tiêu.

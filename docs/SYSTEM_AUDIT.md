@@ -90,6 +90,18 @@ No Critical issue has been confirmed. High items remain open; the goal is
   needs separate evidence. Production dependency audit remains zero.
 - Evidence `.tools/goal-catalog-*`; [catalog images](catalog-images.md).
 
+### Local object recovery evidence
+
+`verify-object-recovery.cjs` passed against the retained catalog bootstrap and
+restored DB. One326-byte verified catalog object was exported to disk and
+restored into new private bucket `wearly-restore-1792481409890-58861048-test`.
+Exact hashes/MIME/size, anonymous403 and compiled API200 passed; source objects
+and both catalog metadata snapshots unchanged. Four guard/integrity/startup/
+cleanup tests pass. Review's Nest startup-abort finding fixed;13 helper tests
+and final actual run `objects-1792481707240-02dceafb` passed.
+Evidence `.tools/goal-object-recovery.log` and the source handoff's `objects-*`
+directory. A09 remains open for production/off-host/private-image recovery.
+
 ## Verification observed in this session
 
 - Backend lint, build and 11 unit tests: passed.

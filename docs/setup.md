@@ -251,6 +251,20 @@ bucket public. Xem [catalog-images.md](catalog-images.md). `-WithStorage`
 chạy cả private upload và catalog upload E2E; Chrome `--admin` cũng cần
 MinIO và bucket test. DB backup cần đi kèm object-store backup cho ảnh.
 
+Kiểm tra phục hồi ảnh catalog local sau bootstrap/container/DB restore:
+
+```powershell
+node tools/verify-object-recovery.cjs <wearly_handoff_..._test> <wearly_restore_..._test>
+```
+
+Chỉ nhận evidence thành công khớp nhau, endpoint loopback và bucket test
+private không versioning. Helper xuất các CatalogAsset đã verified (tối đa100
+ảnh/64MiB) ra `.tools/handoff/<source>/objects-*/`, phục hồi sang bucket mới
+không ghi đè, rồi khởi động API với DB đã restore/bucket mới để so bytes.
+Giữ nguyên nguồn, archive và bucket đích; không xóa object hoặc đổi policy.
+Không dùng lệnh này làm quy trình backup production hay chứng nhận ảnh
+Try-On, off-host recovery, encryption/key recovery hoặc RPO/RTO.
+
 ### Lỗi thường gặp
 
 - Flutter báo `double/int is not a subtype of bool?` sau khi bấm F12 hoặc thay đổi chiều rộng: đã sửa xung đột PageStorage giữa vị trí cuộn và các mục thu gọn. Trong terminal đang chạy `flutter run`, nhấn `R` viết hoa để hot restart và nạp bản sửa, xóa trạng thái lỗi cũ trong bộ nhớ.

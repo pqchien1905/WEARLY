@@ -1,5 +1,9 @@
 # Đối chiếu nghiệm thu local — 20/10/2026
 
+Đây là snapshot trước goal hoàn thiện toàn hệ thống. Kết quả mới và các
+blockers hiện tại ở [SYSTEM_HANDOFF.md](SYSTEM_HANDOFF.md) và
+[SYSTEM_AUDIT.md](SYSTEM_AUDIT.md); goal hiện tại chưa hoàn tất.
+
 ## Phạm vi được đối chiếu
 
 Nguồn yêu cầu: Master Prompt do người dùng gửi (14 mục, bản đính kèm1064c7c6-b822-43ba-a47a-80403e150132), các yêu cầu tiếp theo về PostgreSQL/pgAdmin, npm, lỗi F12, đăng nhập riêng, quyền ADMIN, đánh giá và ẩn liên kết quản trị; mục tiêu hiện tại là bàn giao và kiểm thử được, không triển khai production hoặc xóa dữ liệu người dùng.
