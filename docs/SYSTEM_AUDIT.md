@@ -1,0 +1,104 @@
+# System audit — 20/10/2026
+
+## Scope and evidence
+
+Objective: complete and verify the existing WEARLY system, preserving Flutter,
+NestJS, current business rules and user data. Source objective:
+`goal-objective.md` attached to the current Codex goal. Baseline commit:
+`6eebba0`; work branch: `codex/system-completion-2026-10-20`.
+
+This report supersedes prior acceptance claims only where new evidence is listed.
+No production deployment or production data changes are authorized.
+
+## Architecture and implemented flows
+
+- Flutter Web, Riverpod and go_router; remote repositories for catalog,
+  customer/admin sessions, profile, addresses, cart, COD orders, reviews,
+  wishlist and style preferences. Demo mode is explicit and separate.
+- NestJS 11, Node 24, Prisma 7, PostgreSQL 17. REST `/api/v1`, global
+  validation, RBAC, Argon2id passwords, JWT refresh rotation and server-side
+  session revocation.
+- Orders use serializable transactions, inventory conditions, order snapshots
+  and idempotency receipts. Prices are integer VND backed by decimal columns.
+- Private S3 images use ownership, content validation, quotas and expiry.
+  Redis/BullMQ worker handles outbox dispatch and retention. AI provider is
+  disabled; this does not constitute a working AI integration.
+- Eight migrations and existing bootstrap/seed verification scripts. Local
+  PostgreSQL and Memurai are available. MinIO was stopped at audit start.
+
+## Prioritized findings
+
+| ID | Priority | Finding | State / next action |
+|---|---|---|---|
+| A01 | Medium | Upload E2E cleanup throws before closing Nest/S3 when storage is unavailable; Jest remains alive | FIXED: finally closes resources; unavailable storage run exits in ~4s with failure |
+| A02 | Medium | Oversized JSON returned 500; malformed JSON could echo request bytes | FIXED: 413 and safe unstructured 400 messages; three malformed inputs tested, including body-echoing errors found by independent review |
+| A03 | Medium | Admin product/SKU requests with missing related UUIDs reach unhandled Prisma FK errors | FIXED: 400 INVALID_REFERENCE; E2E proves gallery transaction rollback and no orphan product/SKU |
+| A04 | Medium | API/worker Docker runtime includes build tooling and test dependencies | FIXED: separate migration target and production runtime; actual API/worker verified non-root, without Jest/TypeScript/Prisma CLI/source/.env |
+| A05 | Medium | Full npm audit reports 20 Moderate findings in dev dependency chain | OPEN tooling-only: runtime production audit is zero; no forced toolchain downgrade |
+| A06 | High | Real password recovery/email is absent | Implement existing recovery workflow; external mail delivery requires provider configuration |
+| A07 | High | Try-On/Stylist UI is gated in API mode; no real AI provider | Provider/account/contract required for real output; never substitute demo output |
+| A08 | Medium | Promotions, catalog-specific upload, COD settlement and admin audit workflows remain incomplete | Promotions BLOCKED on conflicting contracts: UI uses percent, Coupon schema uses VND amount; no checkout coupon exists. Clarification requested. Other extensions remain open |
+| A09 | High | Production operational verification is incomplete | Local backup/restore verified; production TLS/domain, secrets, topology, throttling, off-host backup/restore and target still require evidence |
+| A10 | Low | Bootstrap helper does not assert fixture UPDATE affected-row counts | FIXED: every fixture UPDATE must affect exactly one row; fresh bootstrap passed |
+| A11 | Medium | Shopping browser verifier races Flutter focus/input replacement and assumes label excludes hint | FIXED: wait for focus frames, match address label with optional hint; full Chrome shopping passed |
+| A12 | Low | Local preview crashes on malformed percent escapes or NUL paths | FIXED: invalid URL returns 400; live process probe confirms subsequent homepage still returns 200 |
+
+No Critical issue has been confirmed. High items remain open; the goal is
+**not complete**, and production readiness has not been established.
+
+## Verification observed in this session
+
+- Backend lint, build and 11 unit tests: passed.
+- Flutter analyze: no issues. Flutter tests: 299 passed, 2 live opt-in skipped.
+- Backend E2E with worker/storage: 47 passed, 6 failed because MinIO was not
+  listening; cleanup also failed and left Jest alive. This is a failed run.
+- `npm audit`: 20 Moderate, 0 High, 0 Critical. Raw local evidence:
+  `.tools/goal-dependency-audit.json`.
+- Logs: `.tools/goal-baseline-{analyze,flutter,e2e}.log`.
+
+### Verified after repairs
+
+- Backend lint/build and 11 unit tests passed; **55/55 E2E** passed with
+  PostgreSQL, Redis and MinIO (`.tools/goal-parser-green-e2e.log`).
+- Chrome customer journey passed registration/address/cart/COD/cancel/re-login,
+  375/1440px and resize; admin journey passed taxonomy/product/gallery/SKU/stock,
+  order transitions, persisted records and independent shopper/admin logout.
+- Chrome wishlist, review/history and style journeys passed, including account
+  isolation, persistence after reload, mobile layouts and stale style conflict.
+- API, worker and migration images built. Actual runtime checks and COD/outbox
+  verification passed; test containers stopped and retained.
+- Bootstrap with affected-row assertions passed on
+  `wearly_handoff_1792475082995_394e2eeb_test`: eight migrations, schema diff zero,
+  seed replay preserves all business tables.
+- Backup restored into **new** `wearly_restore_1792475826933_1e4e0c3e_test`:
+  data hashes/counts for all 25 public tables (including migrations), column
+  definitions/lengths, enum definitions, constraints and indexes match; source
+  unchanged. Compiled API read-only smoke also passed on an earlier restored
+  copy (`wearly_restore_1792475591507_edcf74ac_test`).
+- Nine Node helper regression tests passed (seven container failure paths, two
+  recovery safety guards). Production npm audit: **0** vulnerabilities.
+- Gitleaks scanned 63 reachable commits and the tracked working diff with no
+  findings. This is not a claim of a complete penetration test.
+- Recovery evidence is retained in `.tools/handoff/<source>/`; raw logs and
+  browser evidence are ignored local artifacts. No business DB was reset.
+
+Operational caveats: Prisma's pg adapter emits a pg deprecation warning during
+some concurrent transaction tests; current tests pass, but recheck before a pg
+major update. Dev/migration images retain development dependencies and the 20
+Moderate advisory chain. Runtime source maps are compiled artifacts; `.env`
+and source directories are absent. TLS, external mail/AI/payments and
+production infrastructure remain unverified.
+
+Independent review found the malformed JSON body-echo case, which was reproduced
+before repair and verified after repair. Follow-up review reported no blockers
+in the changed scope. This does not close the open functionality/production
+items above. Roles/grants, S3 recovery, off-host backups and load testing were
+not part of the local recovery verification.
+
+## Security review boundaries
+
+Reviewed auth/guard, validation, transaction, product queries, cart/orders,
+admin writes, upload ownership and worker error sanitization. Product search
+uses parameterized SQL; server prices/stock determine checkout. Tokens are
+memory-only in Flutter and not automatically persisted. Further operational,
+dependency and browser verification is tracked in IMPLEMENTATION_PROGRESS.md.

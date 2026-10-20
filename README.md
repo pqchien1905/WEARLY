@@ -3,6 +3,9 @@
 Ứng dụng Flutter hiện có và backend NestJS/PostgreSQL cho thương mại thời trang.
 
 - [Cài đặt và chạy trên Windows](docs/setup.md)
+- [Audit và sửa lỗi hệ thống hiện tại](docs/SYSTEM_AUDIT.md)
+- [Tiến độ goal và phần còn thiếu](docs/IMPLEMENTATION_PROGRESS.md)
+- [Bàn giao đợt hoàn thiện hệ thống](docs/SYSTEM_HANDOFF.md)
 - [Kiến trúc và quyết định thay đổi](docs/architecture.md)
 - [Database, migrations và tồn kho](docs/database.md)
 - [API thực tế và Swagger](docs/api.md)

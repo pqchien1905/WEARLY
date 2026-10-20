@@ -163,7 +163,9 @@ docker compose --profile app up -d --build
 docker compose --profile storage up -d minio
 ```
 
-API container tự deploy migrations sau PostgreSQL healthy; worker chờ API healthy. Root .env dùng localhost cho host. Compose override DATABASE_URL hostname postgres, REDIS_HOST=redis, storage=minio. Không copy DATABASE_URL container về cấu hình host.
+Service `migrate` chạy Prisma deploy sau PostgreSQL healthy và phải thoát thành công trước khi API chạy; worker chờ API healthy. Image API/worker chỉ chứa JavaScript đã build và dependencies runtime, chạy bằng user `node`; Prisma CLI/build/test nằm trong target `migration` riêng. Root .env dùng localhost cho host. Compose override DATABASE_URL hostname postgres, REDIS_HOST=redis, storage=minio. Không copy DATABASE_URL container về cấu hình host.
+
+Các stage và điều kiện khởi động dùng cơ chế [multi-stage build](https://docs.docker.com/build/building/multi-stage/) và [`service_completed_successfully`](https://docs.docker.com/compose/how-tos/startup-order/) của Docker. Khi cập nhật schema, build và chạy migration của phiên bản mới trước khi đưa API/worker mới vào phục vụ; không chạy migration bằng image runtime.
 
 MinIO console http://localhost:9001, API9000. Dừng đúng process MinIO native trước khi chạy container cùng cổng; dữ liệu hai môi trường riêng biệt. Tạo bucket theo S3_BUCKET và bucket hậu tố -test bằng `node tools/prepare-storage.cjs` khi endpoint local đã sẵn sàng. Giữ private và không versioning. API upload đã triển khai. `S3_PUBLIC_ENDPOINT` dùng ký URL cho browser/provider, khác endpoint nội bộ `minio`; production cần HTTPS/DNS có thể truy cập từ client/provider.
 
@@ -178,12 +180,36 @@ node tools/verify-bootstrap.cjs --docker --check-config
 node tools/verify-bootstrap.cjs --docker
 docker build -t wearly-handoff-api:local -f backend/Dockerfile backend
 docker build -t wearly-handoff-worker:local -f backend/Dockerfile.worker backend
+docker build --target migration -t wearly-handoff-migration:local -f backend/Dockerfile backend
 node tools/verify-containers.cjs TEN_DATABASE_VUA_IN_RA
 ```
 
 Thay `TEN_DATABASE_VUA_IN_RA` bằng tên `wearly_handoff_..._test` trong kết quả bootstrap. Công cụ dùng network Compose `wearly_default`, tạo DB mới bằng tài khoản Docker có CREATEDB; tài khoản ứng dụng native không có quyền này. Bootstrap xác minh đủ migrations, schema không lệch và seed lần hai giữ nguyên các bản ghi đã sửa. Container verifier dùng DB đó, tạo fixture mới, giữ lại dữ liệu và container đã dừng; báo cáo/log tại `.tools/handoff/<database>`. Không reset, drop, truncate hoặc xóa volume. Các báo cáo chứa metadata/hash, không chứa credential. Đây là công cụ phát triển local, không dùng với production.
 
 Helper ghi checkpoint tên/ID container trước và trong quá trình chạy. Ctrl+C yêu cầu dừng có kiểm soát; chờ helper hoàn tất. Nếu Docker không phản hồi, kiểm tra `cleanup[].stopError` trong `containers.json` và dừng đúng ID test còn chạy; không reset Docker. Kill cưỡng bức tiến trình hoặc mất điện không thể bảo đảm cleanup tự chạy. Regression cho các nhánh ngắt/lỗi: `node --test tools/verify-containers.test.cjs`.
+
+### Kiểm chứng backup và khôi phục local
+
+Sau bootstrap/container verification, chạy:
+
+```powershell
+node --test tools/verify-recovery.test.cjs
+node tools/verify-recovery.cjs TEN_DATABASE_VUA_IN_RA
+```
+
+Helper chỉ nhận DB test do bootstrap tạo và có báo cáo thành công, dùng Docker
+PostgreSQL với đúng cổng local. Nó tạo archive custom-format, sao chép về
+`.tools/handoff/<database>/`, rồi phục hồi vào **database mới**. Không có DROP,
+TRUNCATE hoặc restore đè dữ liệu. Mọi bảng, columns, constraints và indexes được
+so sánh; cả DB gốc, DB phục hồi và archive được giữ lại. Nguồn tham khảo:
+[`pg_dump`](https://www.postgresql.org/docs/17/app-pgdump.html) và
+[`pg_restore`](https://www.postgresql.org/docs/17/app-pgrestore.html).
+
+Đây là diễn tập với dữ liệu tổng hợp, chưa xác minh backup production, quyền
+restore của tài khoản vận hành, mã hóa/off-site retention hay khôi phục ảnh S3.
+Production cần diễn tập riêng trên hạ tầng được phê duyệt; không dùng helper này
+với database kinh doanh. Xem [audit hiện tại](SYSTEM_AUDIT.md) và
+[tiến độ hoàn thiện](IMPLEMENTATION_PROGRESS.md).
 
 ```powershell
 cd 'D:\Fashion Shop'

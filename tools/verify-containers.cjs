@@ -32,7 +32,7 @@ async function main() {
   const secrets = [env.DATABASE_URL, config.POSTGRES_PASSWORD, env.JWT_ACCESS_SECRET, env.JWT_REFRESH_SECRET, config.S3_SECRET_ACCESS_KEY].filter(Boolean);
   const sanitize = s => secrets.reduce((text, secret) => text.split(secret).join('[redacted]'), s);
   report.database = database; report.queuePrefix = prefix;
-  report.containerNames = [prefix + '-api', prefix + '-worker'];
+  report.containerNames = [prefix + '-migration', prefix + '-api', prefix + '-worker'];
   report.startedAt = new Date().toISOString();
   checkpoint();
   let interrupted;
@@ -44,12 +44,24 @@ async function main() {
   process.on('SIGINT', onInterrupt);
   process.on('SIGTERM', onTerminate);
   try {
-    const apiId = await docker(['run', '-d', '--name', prefix + '-api', '--label', 'wearly.verification=' + suffix, '--network', 'wearly_default', '-p', '127.0.0.1:3001:3000', ...flags, 'wearly-handoff-api:local', 'sh', '-c', 'npm run prisma:deploy && node dist/main.js'], env);
+    const migrationId = await docker(['run', '-d', '--name', prefix + '-migration', '--label', 'wearly.verification=' + suffix, '--network', 'wearly_default', ...flags, 'wearly-handoff-migration:local'], env);
+    started.push(migrationId);
+    checkpoint(); checkInterruption();
+    assert.equal(await docker(['wait', migrationId]), '0', 'Migration container failed');
+    report.checks.push('separate migration container completed successfully');
+    checkInterruption();
+    const apiId = await docker(['run', '-d', '--name', prefix + '-api', '--label', 'wearly.verification=' + suffix, '--network', 'wearly_default', '-p', '127.0.0.1:3001:3000', ...flags, 'wearly-handoff-api:local'], env);
     started.push(apiId);
     checkpoint(); checkInterruption();
     const workerId = await docker(['run', '-d', '--name', prefix + '-worker', '--label', 'wearly.verification=' + suffix, '--network', 'wearly_default', ...flags, 'wearly-handoff-worker:local'], env);
     started.push(workerId);
     checkpoint(); checkInterruption();
+    const inspectRuntime = "const fs=require('node:fs'),a=require('node:assert/strict');a.notEqual(process.getuid(),0);for(const p of ['jest','typescript','prisma','@nestjs/cli'])a.equal(fs.existsSync('node_modules/'+p),false,p+' in runtime');for(const p of ['src','test','.env'])a.equal(fs.existsSync(p),false,p+' in runtime');require('./dist/generated/prisma/client');";
+    for (const id of [apiId, workerId]) {
+      await docker(['exec', id, 'node', '-e', inspectRuntime]);
+      checkInterruption();
+    }
+    report.checks.push('non-root API/worker; no test/compiler/Prisma CLI/source/secrets in runtime');
     let ready = false;
     for (let i = 0; i < 30; i++) {
       checkInterruption();
@@ -58,7 +70,7 @@ async function main() {
       if (ready) break;
       await new Promise(resolve => setTimeout(resolve, 500));
     }
-    assert(ready, 'Container API readiness timed out'); report.checks.push('API migration startup + PostgreSQL/Redis readiness');
+    assert(ready, 'Container API readiness timed out'); report.checks.push('API PostgreSQL/Redis readiness');
     checkInterruption();
     const spec = await (await fetch('http://127.0.0.1:3001/api/docs-json', { signal: AbortSignal.timeout(10000) })).json();
     assert(spec.paths['/api/v1/users/me/style']?.put); assert(spec.paths['/api/v1/admin/products']?.post);

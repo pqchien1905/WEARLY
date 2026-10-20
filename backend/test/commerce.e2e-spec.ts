@@ -108,6 +108,28 @@ describe('Commerce with real PostgreSQL', () => {
       .expect(200);
     expect(swagger.body.paths['/api/v1/products']).toBeDefined();
   });
+  it('returns safe client errors for malformed and oversized JSON', async () => {
+    for (const body of ['{"password":"private-input",', 'private-input', '{"password":private-input}']) {
+      const malformed = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .set('Content-Type', 'application/json')
+        .send(body)
+        .expect(400);
+      expect(malformed.body.error).toMatchObject({
+        code: 'VALIDATION_ERROR',
+        retryable: false,
+      });
+      expect(JSON.stringify(malformed.body)).not.toContain('private-input');
+    }
+    const oversized = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ password: 'x'.repeat(110 * 1024) })
+      .expect(413);
+    expect(oversized.body.error).toMatchObject({
+      code: 'PAYLOAD_TOO_LARGE',
+      retryable: false,
+    });
+  });
   it('rejects public role injection, invalid login and unauthorized resources', async () => {
     await request(app.getHttpServer())
       .post('/api/v1/auth/register')

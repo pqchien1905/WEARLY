@@ -34,6 +34,17 @@ services:
       MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:?Set S3_SECRET_ACCESS_KEY}
     ports: ["127.0.0.1:9000:9000", "127.0.0.1:9001:9001"]
     volumes: [minio_data:/data]
+  migrate:
+    profiles: [app]
+    build:
+      context: ./backend
+      target: migration
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    restart: "no"
+    depends_on:
+      postgres: {condition: service_healthy}
   api:
     profiles: [app]
     build: ./backend
@@ -44,7 +55,6 @@ services:
       REDIS_PORT: 6379
       S3_ENDPOINT: http://minio:9000
       S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:9000}
-    command: ["sh", "-c", "npm run prisma:deploy && node dist/main.js"]
     ports: ["127.0.0.1:3000:3000"]
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
@@ -52,6 +62,7 @@ services:
       timeout: 3s
       retries: 30
     depends_on:
+      migrate: {condition: service_completed_successfully}
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
   worker:

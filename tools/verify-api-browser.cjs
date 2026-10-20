@@ -28,7 +28,15 @@ module.exports = async function verify({ root, fixture }) {
     async function route(value) { await page.evaluate(value => { location.hash = value; }, value); await page.waitForTimeout(400); }
     async function button(name) { const node = page.getByRole('button', { name, exact: true }); await node.scrollIntoViewIfNeeded(); await node.click(); }
     async function fill(name, value) {
-      const field = page.getByRole('textbox', { name, exact: true });
+      const field = page.getByRole('textbox', {
+        name: name === 'Tên gợi nhớ' ? /^Tên gợi nhớ(?: Nhà, Văn phòng…)?$/ : name,
+        exact: true,
+      });
+      // Focusing an obscured Flutter field can replace its semantics input.
+      // Let that transition finish before Playwright fills the current element.
+      await field.click();
+      await page.evaluate(() => new Promise(resolve =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve))));
       await field.fill(value);
       // Flutter synchronizes the HTML editing element with Dart on the next
       // frame. Do not immediately move focus and race that synchronization.

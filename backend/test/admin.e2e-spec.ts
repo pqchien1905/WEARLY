@@ -18,6 +18,39 @@ describe('Administration with PostgreSQL', () => {
     request(app.getHttpServer())
       [method]('/api/v1/' + path)
       .auth(auth, { type: 'bearer' });
+  it('rejects missing related records without replacing the existing gallery', async () => {
+    const before = await db.product.findUniqueOrThrow({
+      where: { id: productId }, include: { images: true },
+    });
+    const response = await call('patch', `admin/products/${productId}`)
+      .send({
+        categoryId: randomUUID(),
+        images: [{ url: 'https://example.com/replacement.jpg', alt: 'New' }],
+      })
+      .expect(400);
+    expect(response.body.error).toMatchObject({
+      code: 'INVALID_REFERENCE', retryable: false,
+    });
+    const after = await db.product.findUniqueOrThrow({
+      where: { id: productId }, include: { images: true },
+    });
+    expect(after.categoryId).toBe(before.categoryId);
+    expect(after.images).toEqual(before.images);
+    await call('post', 'admin/products')
+      .send({
+        slug: 'invalid-' + suffix, name: 'Invalid relation', description: '',
+        material: '', style: '', categoryId, brandId: randomUUID(),
+      })
+      .expect(400);
+    await call('post', 'admin/skus')
+      .send({
+        productId: randomUUID(), sku: 'invalid-' + suffix, size: 'M',
+        color: 'Black', colorHex: '#000000', price: '490000',
+      })
+      .expect(400);
+    expect(await db.product.count({ where: { slug: 'invalid-' + suffix } })).toBe(0);
+    expect(await db.productVariant.count({ where: { sku: 'invalid-' + suffix } })).toBe(0);
+  });
   beforeAll(async () => {
     if (
       !process.env.TEST_DATABASE_URL ||

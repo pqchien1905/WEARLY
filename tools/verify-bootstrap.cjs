@@ -78,12 +78,15 @@ async function main() {
       const actual = await count(table); assert.equal(actual, expectedCount, table); report.seedCounts[table] = actual;
     }
     // Explicit edits only in the freshly created database, never in development data.
-    await db.query('UPDATE "ProductVariant" SET price=123456 WHERE sku=$1', ['WRL-1-MAIN-M']);
-    await db.query('UPDATE "Inventory" SET quantity=7, version=version+1 WHERE "variantId"=(SELECT id FROM "ProductVariant" WHERE sku=$1)', ['WRL-1-MAIN-M']);
-    await db.query('UPDATE "Product" SET name=$1 WHERE slug=$2', ['Handoff edited product', 'nep-1']);
-    await db.query('UPDATE "Category" SET name=$1 WHERE slug=$2', ['Handoff edited category', 'ao']);
-    await db.query('UPDATE "Brand" SET name=$1 WHERE slug=$2', ['Handoff edited brand', 'wearly']);
-    await db.query('UPDATE "ProductImage" SET alt=$1 WHERE "productId"=(SELECT id FROM "Product" WHERE slug=$2)', ['Handoff edited image', 'nep-1']);
+    async function editOne(sql, values) {
+      assert.equal((await db.query(sql, values)).rowCount, 1, 'Seed fixture edit must affect exactly one row');
+    }
+    await editOne('UPDATE "ProductVariant" SET price=123456 WHERE sku=$1', ['WRL-1-MAIN-M']);
+    await editOne('UPDATE "Inventory" SET quantity=7, version=version+1 WHERE "variantId"=(SELECT id FROM "ProductVariant" WHERE sku=$1)', ['WRL-1-MAIN-M']);
+    await editOne('UPDATE "Product" SET name=$1 WHERE slug=$2', ['Handoff edited product', 'nep-1']);
+    await editOne('UPDATE "Category" SET name=$1 WHERE slug=$2', ['Handoff edited category', 'ao']);
+    await editOne('UPDATE "Brand" SET name=$1 WHERE slug=$2', ['Handoff edited brand', 'wearly']);
+    await editOne('UPDATE "ProductImage" SET alt=$1 WHERE "productId"=(SELECT id FROM "Product" WHERE slug=$2)', ['Handoff edited image', 'nep-1']);
     const passwordHash = await fromBackend('argon2').hash(randomUUID());
     await db.query('INSERT INTO "User" (id,email,"passwordHash",name,"updatedAt") VALUES ($1,$2,$3,$4,NOW())', [randomUUID(), database + '@example.test', passwordHash, 'Handoff synthetic customer']);
     const tables = (await db.query("SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE' AND table_name <> '_prisma_migrations' ORDER BY table_name")).rows.map(r => r.table_name);

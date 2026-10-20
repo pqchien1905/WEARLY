@@ -37,8 +37,32 @@ export class ApiExceptionFilter implements ExceptionFilter {
           503: 'SERVICE_UNAVAILABLE',
         }[status] ??
         'REQUEST_FAILED';
-      message = body.message ?? 'Request failed';
+      // Nest wraps JSON parser SyntaxError as an un-coded BadRequestException.
+      // Its message may contain request bytes (including a submitted password).
+      // Keep structured validation arrays and explicit application codes, but
+      // never echo an unstructured 400 message from middleware.
+      message =
+        status === 400 && !body.code && typeof body.message === 'string'
+          ? 'Invalid request data'
+          : (body.message ?? 'Request failed');
+    } else if (
+      exception instanceof Error &&
+      'type' in exception &&
+      exception.type === 'entity.too.large' &&
+      'status' in exception &&
+      exception.status === 413
+    ) {
+      // Express body-parser errors occur before controller validation. Do not
+      // echo their message/body or treat an arbitrary error.status as trusted.
+      status = 413;
+      code = 'PAYLOAD_TOO_LARGE';
+      message = 'Request body exceeds the allowed size';
     } else if (exception instanceof Prisma.PrismaClientKnownRequestError) {
+      if (exception.code === 'P2003') {
+        status = 400;
+        code = 'INVALID_REFERENCE';
+        message = 'A referenced record does not exist or is still in use';
+      }
       if (exception.code === 'P2002') {
         status = 409;
         code = 'CONFLICT';

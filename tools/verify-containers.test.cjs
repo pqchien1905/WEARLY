@@ -10,7 +10,7 @@ const { promisify } = require('node:util');
 const source = fs.readFileSync(path.join(__dirname, 'verify-containers.cjs'), 'utf8');
 const database = 'wearly_handoff_123456_abcdef12_test';
 
-async function scenario({ signal, signalAt = 'api', failFirstStop = false } = {}) {
+async function scenario({ signal, signalAt = 'api', failFirstStop = false, migrationFailure = false } = {}) {
   const processStub = new EventEmitter();
   Object.assign(processStub, { env: {}, argv: ['node', 'verify-containers.cjs', database] });
   const calls = [], checkpoints = [], messages = [];
@@ -19,11 +19,13 @@ async function scenario({ signal, signalAt = 'api', failFirstStop = false } = {}
   execFile[promisify.custom] = async (command, args, options) => {
     calls.push({ args, options });
     if (args[0] === 'run') {
-      const kind = args.includes('wearly-handoff-api:local') ? 'api' : 'worker';
+      const kind = args.includes('wearly-handoff-migration:local') ? 'migration'
+        : args.includes('wearly-handoff-api:local') ? 'api' : 'worker';
       creationCheckpoint = creationCheckpoint || checkpoints.some(r => r.queuePrefix);
       if (signal && signalAt === kind) handledSignal = processStub.emit(signal);
       return { stdout: kind + '-id', stderr: '' };
     }
+    if (args[0] === 'wait') return { stdout: migrationFailure ? '1' : '0', stderr: '' };
     if (args[0] === 'inspect') throw Object.assign(new Error('verification boundary failed'), { code: 'E_VERIFY' });
     if (args[0] === 'stop' && args.at(-1) === 'api-id' && failFirstStop) {
       throw Object.assign(new Error('stop boundary failed'), { code: 'E_STOP' });
@@ -62,8 +64,8 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
     const result = await scenario({ signal });
     assert.equal(result.handledSignal, true, 'signal must be intercepted');
     assert.equal(result.creationCheckpoint, true, 'run metadata must exist before docker run');
-    assert.deepEqual(result.calls.filter(c => c.args[0] === 'stop').map(c => c.args.at(-1)), ['api-id']);
-    assert.equal(result.calls.filter(c => c.args[0] === 'run').length, 1, 'do not start worker after interruption');
+    assert.deepEqual(result.calls.filter(c => c.args[0] === 'stop').map(c => c.args.at(-1)), ['migration-id', 'api-id']);
+    assert.equal(result.calls.filter(c => c.args[0] === 'run').length, 2, 'do not start worker after interruption');
     assert(result.checkpoints.some(r => r.containersRetained?.includes('api-id')));
     assert.equal(result.checkpoints.at(-1).status, 'failed');
     assert.notEqual(result.exitCode, 0);
@@ -74,24 +76,39 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
 test('signal while worker creation is in flight stops both known containers', async () => {
   const result = await scenario({ signal: 'SIGINT', signalAt: 'worker' });
   assert.equal(result.handledSignal, true);
-  assert.deepEqual(result.calls.filter(c => c.args[0] === 'stop').map(c => c.args.at(-1)), ['api-id', 'worker-id']);
-  assert.deepEqual(result.checkpoints.at(-1).containersRetained, ['api-id', 'worker-id']);
+  assert.deepEqual(result.calls.filter(c => c.args[0] === 'stop').map(c => c.args.at(-1)), ['migration-id', 'api-id', 'worker-id']);
+  assert.deepEqual(result.checkpoints.at(-1).containersRetained, ['migration-id', 'api-id', 'worker-id']);
 });
 
 test('a failed first stop does not skip second stop or erase original failure', async () => {
   const result = await scenario({ failFirstStop: true });
-  assert.deepEqual(result.calls.filter(c => c.args[0] === 'stop').map(c => c.args.at(-1)), ['api-id', 'worker-id']);
+  assert.deepEqual(result.calls.filter(c => c.args[0] === 'stop').map(c => c.args.at(-1)), ['migration-id', 'api-id', 'worker-id']);
   const report = result.checkpoints.at(-1);
   assert.equal(report.error, 'E_VERIFY');
-  assert.deepEqual(report.containersRetained, ['api-id', 'worker-id']);
-  assert.equal(report.cleanup[0].stopError, 'E_STOP');
-  assert.equal(report.cleanup[1].stopped, true);
+  assert.deepEqual(report.containersRetained, ['migration-id', 'api-id', 'worker-id']);
+  assert.equal(report.cleanup[1].stopError, 'E_STOP');
+  assert.equal(report.cleanup[2].stopped, true);
   assert.equal(report.status, 'failed');
 });
 
 test('log capture is bounded even on verification failure', async () => {
   const result = await scenario();
   const captures = result.calls.filter(c => c.args[0] === 'logs');
-  assert.equal(captures.length, 2);
+  assert.equal(captures.length, 3);
   for (const capture of captures) assert(capture.options.timeout > 0 && capture.options.timeout <= 15000);
+});
+
+test('migration failure prevents API and worker startup', async () => {
+  const result = await scenario({ migrationFailure: true });
+  assert.equal(result.calls.filter(c => c.args[0] === 'run').length, 1);
+  assert.deepEqual(result.calls.filter(c => c.args[0] === 'stop').map(c => c.args.at(-1)), ['migration-id']);
+  assert.equal(result.checkpoints.at(-1).status, 'failed');
+  assert.notEqual(result.exitCode, 0);
+});
+
+test('interruption during migration prevents runtime startup', async () => {
+  const result = await scenario({ signal: 'SIGTERM', signalAt: 'migration' });
+  assert.equal(result.handledSignal, true);
+  assert.equal(result.calls.filter(c => c.args[0] === 'run').length, 1);
+  assert.deepEqual(result.calls.filter(c => c.args[0] === 'stop').map(c => c.args.at(-1)), ['migration-id']);
 });

@@ -88,16 +88,19 @@ storageDescribe('Private uploads with real PostgreSQL and S3', () => {
   });
   afterAll(async () => {
     jest.restoreAllMocks();
-    if (db && storage && userId) {
-      const rows = await db.imageAsset.findMany({ where: { userId } });
-      await storage.deleteObjects(rows.map((row) => row.objectKey));
-      await db.imageAsset.updateMany({
-        where: { userId },
-        data: { deletedAt: new Date(), purgedAt: new Date() },
-      });
+    try {
+      if (db && storage && userId) {
+        const rows = await db.imageAsset.findMany({ where: { userId } });
+        await storage.deleteObjects(rows.map((row) => row.objectKey));
+        await db.imageAsset.updateMany({
+          where: { userId },
+          data: { deletedAt: new Date(), purgedAt: new Date() },
+        });
+      }
+    } finally {
+      s3?.destroy();
+      if (app) await app.close();
     }
-    s3?.destroy();
-    if (app) await app.close();
   });
   const upload = (
     auth = token,
