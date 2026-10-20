@@ -20,7 +20,9 @@ export class ProductImageDto {
   @ApiProperty()
   @IsString()
   @MaxLength(2000)
-  @Matches(/^(https:\/\/[^\s]+|assets\/images\/[a-zA-Z0-9_./-]+)$/)
+  @Matches(
+    /^(https:\/\/[^\s]+|assets\/images\/[a-zA-Z0-9_./-]+|catalog\/images\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i,
+  )
   url!: string;
   @ApiProperty() @IsString() @MaxLength(200) alt!: string;
   @ApiProperty({ required: false })

@@ -12,12 +12,14 @@ import { ImageLifecycleService } from '../modules/uploads/image-lifecycle.servic
 import { RetentionWorker } from './retention.worker';
 import { RecoveryModule } from '../modules/recovery/recovery.module';
 import { RecoveryWorker } from './recovery.worker';
+import { CatalogMediaModule } from '../modules/catalog-media/catalog-media.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
     PrismaModule,
     StorageModule,
     RecoveryModule,
+    CatalogMediaModule,
   ],
   providers: [
     AiProcessor,

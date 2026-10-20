@@ -31,6 +31,11 @@ const wishlist = process.argv.includes('--wishlist');
 const reviews = process.argv.includes('--reviews');
 const style = process.argv.includes('--style');
 const recovery = process.argv.includes('--recovery');
+if (admin) {
+  process.env.S3_BUCKET = test.TEST_S3_BUCKET || normal.S3_BUCKET + '-test';
+  if (!process.env.S3_BUCKET.endsWith('-test') || process.env.S3_BUCKET === normal.S3_BUCKET)
+    throw new Error('Catalog browser upload requires a dedicated test bucket.');
+}
 function flutter(args) {
   const binary = path.join(root, '.tools/flutter/bin/flutter.bat');
   // All arguments below are local constants, loopback URLs or generated UUIDs.
@@ -134,13 +139,16 @@ async function main() {
       const delivered = await db.order.findUniqueOrThrow({ where: { id: order.id }, include: { payment: true } });
       if (delivered.status !== 'DELIVERED' || delivered.payment.status !== 'PENDING') throw new Error('Persisted order/COD state mismatch');
       const activity = await db.adminAuditEvent.findMany({ where: { actorId: adminUser.user.id } });
-      for (const action of ['PRODUCT_CREATED', 'PRODUCT_UPDATED', 'SKU_CREATED', 'SKU_UPDATED', 'CATEGORY_CREATED', 'CATEGORY_RENAMED', 'BRAND_CREATED', 'BRAND_RENAMED', 'INVENTORY_ADJUSTED', 'ORDER_STATUS_CHANGED', 'CONTENT_DRAFT_SAVED', 'CONTENT_PUBLISHED']) {
+      if (!saved.images[0].url.startsWith('catalog/images/')) throw new Error('Uploaded catalog image did not persist as the cover');
+      const catalog = await db.catalogAsset.findMany({ where: { productId: saved.id } });
+      if (catalog.length !== 1 || !catalog[0].verifiedAt || catalog[0].deletedAt) throw new Error('Catalog asset was not verified exactly once');
+      for (const action of ['PRODUCT_CREATED', 'PRODUCT_UPDATED', 'PRODUCT_IMAGE_UPLOADED', 'SKU_CREATED', 'SKU_UPDATED', 'CATEGORY_CREATED', 'CATEGORY_RENAMED', 'BRAND_CREATED', 'BRAND_RENAMED', 'INVENTORY_ADJUSTED', 'ORDER_STATUS_CHANGED', 'CONTENT_DRAFT_SAVED', 'CONTENT_PUBLISHED']) {
         if (!activity.some(event => event.action === action)) throw new Error('Missing persisted admin activity: ' + action);
       }
       if (activity.filter(event => event.action === 'ORDER_STATUS_CHANGED' && event.targetId === order.id).length !== 3) throw new Error('Order activity cardinality mismatch');
       const content = await db.storeContent.findUniqueOrThrow({ where: { key: 'storefront' } });
       if (content.version !== 3 || content.publishedVersion !== 2 || content.banner !== 'Bản nháp tiếp theo' || content.publishedBanner !== 'Campaign kiểm thử' || content.publishedPolicy !== 'Chính sách kiểm thử đã xuất bản.') throw new Error('Draft/public content isolation mismatch');
-      console.log('PASS persistent admin history: authenticated actor and all twelve action categories; draft/public content isolation.');
+      console.log('PASS persistent admin history: authenticated actor and all thirteen action categories; draft/public content isolation and verified catalog cover.');
       console.log('PASS database assertions: product, SKU, gallery, stock, order delivered with COD pending.');
     } else if (style) {
       const password = 'Browser-only-Password-2026';
@@ -209,6 +217,12 @@ async function main() {
     try {
       const users = await db.user.findMany({ where: { email: { in: [fixture + '@example.com', 'browser-' + fixture + '@example.com', 'admin-' + fixture + '@example.com'] } }, select: { id: true } });
       const owner = { userId: { in: users.map(user => user.id) } };
+      if (admin) {
+        const { StorageService } = requireBackend('./dist/integrations/storage/storage.service');
+        const assets = await db.catalogAsset.findMany({ where: { actorId: owner.userId } });
+        await app.get(StorageService).deleteObjects(assets.map(asset => asset.objectKey));
+        await db.catalogAsset.deleteMany({ where: { id: { in: assets.map(asset => asset.id) } } });
+      }
       await db.$transaction(async tx => {
         const contentEvents = await tx.adminAuditEvent.findMany({
           where: { actorId: owner.userId, action: 'CONTENT_DRAFT_SAVED' }, select: { targetId: true },

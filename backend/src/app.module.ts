@@ -18,6 +18,7 @@ import { UploadsModule } from './modules/uploads/uploads.module';
 import { WishlistModule } from './modules/wishlist/wishlist.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { ContentModule } from './modules/content/content.module';
+import { CatalogMediaModule } from './modules/catalog-media/catalog-media.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
@@ -36,6 +37,7 @@ import { ContentModule } from './modules/content/content.module';
     WishlistModule,
     ReviewsModule,
     ContentModule,
+    CatalogMediaModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

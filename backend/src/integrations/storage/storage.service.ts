@@ -8,6 +8,8 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { normalizeImage, NormalizedImage } from './image-policy';
+import { MAX_IMAGE_BYTES } from './image-policy';
+import { Readable } from 'node:stream';
 @Injectable()
 export class StorageService implements OnModuleDestroy {
   private readonly client: S3Client;
@@ -67,6 +69,37 @@ export class StorageService implements OnModuleDestroy {
       }),
       { abortSignal: AbortSignal.timeout(8000) },
     );
+  }
+  async readImage(objectKey: string) {
+    const result = await this.client.send(
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: objectKey,
+        Range: `bytes=0-${MAX_IMAGE_BYTES}`,
+      }),
+      { abortSignal: AbortSignal.timeout(8000) },
+    );
+    const body = result.Body;
+    if (!(body instanceof Readable))
+      throw new Error('STORAGE_READ_UNAVAILABLE');
+    const timer = setTimeout(
+      () => body.destroy(new Error('STORAGE_READ_TIMEOUT')),
+      8000,
+    );
+    try {
+      const chunks: Buffer[] = [];
+      let size = 0;
+      for await (const chunk of body) {
+        const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        size += bytes.length;
+        if (size > MAX_IMAGE_BYTES) throw new Error('STORAGE_IMAGE_TOO_LARGE');
+        chunks.push(bytes);
+      }
+      return Buffer.concat(chunks);
+    } finally {
+      clearTimeout(timer);
+      body.destroy();
+    }
   }
   async deleteObjects(keys: string[]) {
     const unique = [...new Set(keys)];

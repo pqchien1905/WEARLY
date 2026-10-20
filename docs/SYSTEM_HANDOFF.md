@@ -24,6 +24,11 @@ phiên, chống race với login/refresh và bỏ request cũ sau reset. Chrome 
 chạy từ thư SMTP local đến đăng nhập bằng mật khẩu mới; gửi thư qua dịch vụ
 ngoài Internet còn chờ cấu hình. Xem [cấu hình khôi phục](password-recovery.md).
 
+Upload catalog đã nối file picker → API → MinIO → preview/public storefront.
+Ảnh được kiểm tra/làm sạch; retry không ghi trùng; thay đổi gallery và audit
+nguyên tử. Bỏ ảnh khỏi gallery không xóa bytes mà đơn cũ có thể tham chiếu.
+Xem [hướng dẫn ảnh catalog](catalog-images.md).
+
 ## Sửa đổi đã thực hiện
 
 | File/module | Kết quả |
@@ -46,18 +51,20 @@ ngoài Internet còn chờ cấu hình. Xem [cấu hình khôi phục](password-
 | `backend/src/modules/recovery`, `worker/recovery.worker.ts`, migration | SMTP, token hash/expiry, cutoff, session revocation, queue deadlines/retention |
 | `backend/src/common/transaction.ts`, auth service | Khóa login/reset và retry đúng raw PostgreSQL adapter conflict |
 | Flutter auth/reset route/forms và helper Chrome | Request thật, token không giữ trong URL, password confirmation, kết quả không chắc chắn, bảo vệ phiên mới |
+| `catalog-media`, CatalogAsset migration, storage/retention worker | ADMIN upload, public verified read, idempotency, khóa gallery, audit và dọn upload thất bại |
+| Flutter multipart/admin product editor/FashionImage | Chọn file, preview, retry cùng key, gallery baseline, đường dẫn ảnh ổn định |
 
 ## Kết quả và giới hạn
 
-- Backend lint/build đạt; **15 unit + 71 E2E** đạt.
-- Flutter analyze sạch; **310 tests** đạt, gồm rời phiên lúc xuất bản;
+- Backend lint/build đạt; **16 unit + 79 E2E** đạt.
+- Flutter analyze sạch; **317 tests** đạt, gồm rời phiên lúc xuất bản;
   2 live opt-in không chạy trong suite
   thường. Năm suite Chrome/API riêng đạt.
 - **9 regression tests** cho helper đạt. Kiểm tra URL preview thực tế đạt.
 - Build image API/worker/migration và chạy container thật đạt; runtime không có
   Jest, TypeScript, Prisma CLI, source hoặc `.env`; các container test đã dừng.
-- DB mới có đủ 11 migrations, schema diff zero, seed replay giữ dữ liệu sửa.
-- Backup local mới nhất phục hồi vào DB mới, khớp 28 bảng, columns/lengths, enums,
+- DB mới có đủ 12 migrations, schema diff zero, seed replay giữ dữ liệu sửa.
+- Backup local mới nhất phục hồi vào DB mới, khớp 29 bảng, columns/lengths, enums,
   constraints và indexes; source không đổi. API smoke trên bản phục hồi đạt.
 - Production npm audit **0**; toàn bộ dependency tree vẫn có **20 Moderate**
   thuộc công cụ phát triển. Gitleaks history và tracked diff không phát hiện
@@ -93,6 +100,13 @@ tiêu thụ để kiểm tra phục hồi bảng PasswordResetToken; toàn bộ2
 source giữ nguyên và API smoke trên bản restore đạt. Default-API Web release
 đã build lại.
 
+Lượt catalog: Chrome quản trị chạy picker/upload thật và đọc ảnh công khai,
+lưu ảnh bìa trên mobile, reload và xem storefront; đủ13 loại audit. Review
+phát hiện và sửa form bị khóa khi gallery vừa đầy; regression đã qua.
+Bootstrap `wearly_handoff_1792480803907_2ad86a6e_test`, restore
+`wearly_restore_1792480903411_6d6b1003_test`. API smoke trên bản restore đạt,
+kể cả đọc catalog object từ bucket nguồn còn giữ; chưa gọi đây là restore S3.
+
 ## Còn thiếu
 
 | Hạng mục | Trạng thái / thông tin cần có |
@@ -100,7 +114,7 @@ source giữ nguyên và API smoke trên bản restore đạt. Default-API Web r
 | Email khôi phục mật khẩu ngoài Internet | BLOCKED: cần cấu hình provider/sender và xác minh delivery; endpoint/frontend/SMTP local đã chạy thật |
 | Try-On/Stylist và thanh toán online | BLOCKED: provider, tài khoản, contract và môi trường kiểm chứng |
 | Khuyến mãi | BLOCKED: UI dùng %, schema dùng số tiền VND; đã hỏi quy tắc trước khi thay đổi tiền đơn hàng |
-| Catalog upload chuyên dụng, đối soát COD | Chưa hoàn tất; cần chốt phạm vi/quy tắc dựa trên thiết kế hiện có |
+| Đối soát COD | Chờ quy tắc xác nhận thu tiền; không tự đổi DELIVERED thành PAID |
 | Production | Chưa xác minh TLS/domain, secrets, tải lớn, nhiều instance, backup off-host, roles/grants và khôi phục S3; chưa có target/approval |
 
 Các blockers ở bảng là blockers của từng hạng mục, không phải tuyên bố goal

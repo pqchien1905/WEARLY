@@ -13,7 +13,7 @@ Giữ Flutter, Riverpod, go_router và bố cục hiện có. `USE_REMOTE_API=tr
 | OrderRepository.checkout | POST /orders, Idempotency-Key, addressId, expectedSubtotal, cartVersion | Remote COD; retry sau lỗi mạng giữ nguyên key/body; không gọi consumeStock |
 | OrderRepository.orders / setStatus | GET /orders, GET /orders/:id, POST /orders/:id/cancel; admin PATCH /orders/:id/status | Khách xem/hủy đơn chờ; ADMIN chuyển trạng thái theo bước và expectedVersion |
 | AccountRepository.signIn(register), save, signOut | POST /auth/register, /auth/login, PATCH /users/me, POST /auth/logout | Remote auth/refresh, hồ sơ name/phone, logout xóa cache ngay |
-| AccountRepository.requestPasswordReset | Chưa có endpoint | Cần mail provider/token có hạn, response không lộ tài khoản |
+| AccountRepository.requestPasswordReset / reset | POST /auth/forgot-password, /auth/reset-password | SMTP/worker/token có hạn và Flutter đã nối; external delivery chờ cấu hình, xem password-recovery.md |
 | AccountDetailsRepository.read/saveAddress/deleteAddress/setDefault | GET/POST/PATCH/DELETE /users/me/addresses; isDefault | Remote CRUD/default; checkout chọn UUID đã lưu |
 | AccountDetailsRepository.read/saveStyle | GET/PUT /users/me/style | Đã nối hồ sơ phong cách thật; snapshot version, ngân sách VND string, xung đột/lỗi chưa rõ yêu cầu tải lại |
 | wishlistProvider demo / remoteWishlistProvider | GET /wishlist; PUT/DELETE /wishlist/:productId | Lưu thật theo tài khoản, snapshot tối đa200 mục; card/detail/cart và trang danh sách đã nối; không bulk-clear |
@@ -25,7 +25,7 @@ Giữ Flutter, Riverpod, go_router và bố cục hiện có. `USE_REMOTE_API=tr
 
 Flutter query `max` → maxPrice; `stock` → inStock=true. Bộ lọc size/color/price/stock cùng áp dụng trên một variant. Sort newest/price-asc/price-desc/name. images chuyển ProductMedia; categoryId trên catalog JSON là slug legacy để UI dùng đúng nhãn. Variant.id là UUID, SKU giữ mã WRL. Giá `{amount:"490000",currency:"VND"}` → int 490000, không làm tròn số thập phân.
 
-Ảnh seed vẫn trỏ asset bundled để giữ thiết kế. FashionImage hỗ trợ URL HTTP/HTTPS khi có ảnh sản phẩm từ storage/CDN. Ảnh người dùng không dùng đường dẫn công khai đó.
+Ảnh seed vẫn trỏ asset bundled để giữ thiết kế. FashionImage hỗ trợ URL HTTP/HTTPS và `catalog/images/<UUID>` giải theo base API. Admin upload file vào sản phẩm đã lưu; public route chỉ phục vụ CatalogAsset đã xác minh. Ảnh người dùng không dùng đường dẫn công khai đó.
 
 ## Phiên đăng nhập và đặt hàng
 
@@ -35,8 +35,8 @@ Giá VND được đọc từ chuỗi số nguyên, không làm tròn. Checkout 
 
 ## Các bước còn lại
 
-1. Quản trị sản phẩm/SKU/kho/đơn/khách hàng và danh mục/thương hiệu đã nối API với quyền ADMIN. Danh mục công khai lấy từ API; đổi tên giữ đường dẫn. Còn audit đầy đủ, uploads catalog và đối soát COD.
-2. Wishlist, đánh giá sản phẩm (gồm Đánh giá của tôi) và hồ sơ phong cách đã nối API. Còn promotions, khôi phục mật khẩu và email provider; mở rộng đánh giá (ảnh, phản hồi cửa hàng, moderation) chưa có.
+1. Quản trị sản phẩm/SKU/kho/đơn/khách hàng và danh mục/thương hiệu đã nối API với quyền ADMIN. Danh mục công khai lấy từ API; đổi tên giữ đường dẫn. Audit13 loại thao tác, upload catalog và nội dung nháp/xuất bản đã nối. Đối soát COD còn chờ quy tắc xác nhận.
+2. Wishlist, đánh giá sản phẩm (gồm Đánh giá của tôi), hồ sơ phong cách và khôi phục mật khẩu đã nối API. Promotions và email provider ngoài Internet còn chờ; mở rộng đánh giá (ảnh, phản hồi cửa hàng, moderation) chưa có.
 3. Nối private upload hiện có → AI adapter thật → polling/cancel riêng job; đưa consent/delete/quota vào UI hiện tại.
 4. Payment provider, webhook và hạ tầng triển khai production. Chưa có cam kết production-ready.
 

@@ -238,13 +238,18 @@ PostgreSQL tạm không còn được dùng sau reboot. Backend hiện dùng Pos
 
 ### Khôi phục mật khẩu (cập nhật20/10)
 
-Có11migrations; chạy generate/deploy/build trước khi khởi động lại. SMTP
+Có12migrations; chạy generate/deploy/build trước khi khởi động lại. SMTP
 mặc định tắt; xem [password-recovery.md](password-recovery.md) để cấu hình API
 và worker. `node tools/test-frontend-api.cjs --recovery` chạy Chrome với SMTP
 local, không gửi email ra Internet. `test-backend.ps1` ưu tiên cấu hình hiện
 có trong `backend/.env.test`; override khác file hiện có bị từ chối trước khi
 tạo DB. DB test hiện tại là bản Docker riêng cho lượt recovery, native
 `wearly_test` cũ được giữ nguyên.
+
+Upload catalog dùng S3 hiện có và worker dọn reservation thất bại. Không mở
+bucket public. Xem [catalog-images.md](catalog-images.md). `-WithStorage`
+chạy cả private upload và catalog upload E2E; Chrome `--admin` cũng cần
+MinIO và bucket test. DB backup cần đi kèm object-store backup cho ảnh.
 
 ### Lỗi thường gặp
 

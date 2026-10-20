@@ -29,8 +29,34 @@ Goal: execute the attached system completion objective. Status: **IN PROGRESS**.
 ## In progress
 
 - Resolve provider/promotion requirements and scope the remaining integrations.
-- Scope and implement catalog image upload from the existing admin flow.
+- Verify local object-store recovery alongside the database recovery evidence.
 - External provider/promotion/settlement questions remain pending.
+
+## Completed — iteration five
+
+- CatalogAsset reservation/receipt and dedicated public read, ADMIN multipart
+  upload, input hash/replay, product/asset locking and transactional audit.
+- Bounded S3 reads, hash/size verification, strict normalization, failed-upload
+  cleanup that preserves verified bytes and reconciles late provider PUTs.
+- Flutter file picker, preview, immutable retry key, canonical gallery/baseline
+  reconciliation and managed image resolution across storefront/order widgets.
+- Review caught a full-gallery rejection leaving the form locked; fixed with
+  canonical reload and a concurrent-fill widget regression.
+- Backend lint/build,16 unit/79 real E2E passed; Flutter317 tests passed with
+  the final review regression. Browser helper had two synchronization failures
+  after successful uploads; fixed by focusing the actual Flutter field before
+  reading its value. Final Chrome admin run passed picker/upload/public preview,
+  cover save, reload, storefront and all13 audit categories.375px screenshot
+  inspected; no overflow.
+- Fresh12-migration bootstrap passed, three images built, container upload/
+  replay/public read plus existing runtime checks passed.29-table restore
+  matches all data/schema, source unchanged:
+  `wearly_handoff_1792480803907_2ad86a6e_test` →
+  `wearly_restore_1792480903411_6d6b1003_test`.
+- Compiled API smoke on that restored DB passed public/private route checks
+  and reading the verified catalog object from the retained source bucket.
+  This is not yet an object-store restore.
+- Default-API Flutter release rebuilt; production dependency audit zero.
 
 ## Completed — iteration four
 
@@ -70,7 +96,7 @@ Goal: execute the attached system completion objective. Status: **IN PROGRESS**.
 ## Not completed
 
 - External SMTP provider delivery verification.
-- Remote AI workflows, promotions, catalog upload and settlement.
+- Remote AI workflows, promotions and settlement.
 - Production configuration, production recovery evidence and final goal acceptance.
 
 ## External dependencies / blocked verification

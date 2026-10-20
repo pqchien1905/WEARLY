@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { validateCatalogReferences } from '../catalog-media/catalog-reference';
 import { transaction } from '../../common/transaction';
 import { fail } from '../../common/errors';
 import { PageDto } from '../products/dto/query-products.dto';
@@ -125,6 +126,7 @@ export class AdminService {
   createProduct(actorId: string, dto: CreateProductDto) {
     const { images, ...data } = dto;
     return transaction(this.db, async (tx) => {
+      await validateCatalogReferences(tx, null, images ?? []);
       const product = await tx.product.create({
         data: {
           ...data,
@@ -149,6 +151,7 @@ export class AdminService {
     // The transaction rolls back both metadata and gallery if any write fails.
     return transaction(this.db, async (tx) => {
       await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${id}::uuid FOR UPDATE`;
+      await validateCatalogReferences(tx, id, images ?? []);
       if (images !== undefined)
         await tx.productImage.deleteMany({ where: { productId: id } });
       const product = await tx.product.update({

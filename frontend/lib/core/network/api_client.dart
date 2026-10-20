@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'session_tokens.dart';
 
 class ApiException implements Exception {
@@ -56,13 +58,7 @@ class ApiClient {
     bool refresh = true,
     void Function()? onLateCompletion,
   }) async {
-    if (path.startsWith('/') ||
-        path.contains('://') ||
-        path.split('/').contains('..') ||
-        Uri.parse(path).hasScheme ||
-        path.contains('\\')) {
-      throw ArgumentError('API path must be relative.');
-    }
+    _validatePath(path);
     final generation = tokens.generation;
     final access = authenticated ? tokens.accessToken : null;
     final response = await _send(
@@ -102,6 +98,64 @@ class ApiClient {
     );
   }
 
+  void _validatePath(String path) {
+    if (path.startsWith('/') ||
+        path.contains('://') ||
+        path.split('/').contains('..') ||
+        Uri.parse(path).hasScheme ||
+        path.contains('\\')) {
+      throw ArgumentError('API path must be relative.');
+    }
+  }
+
+  Future<Object?> uploadImage(
+    String path, {
+    required Uint8List bytes,
+    required String mimeType,
+    required Map<String, String> fields,
+    required String key,
+    void Function()? onLateCompletion,
+  }) async {
+    _validatePath(path);
+    final generation = tokens.generation;
+    // Freeze the payload before awaiting refresh or network IO.
+    final payload = Uint8List.fromList(bytes);
+    final metadata = Map<String, String>.of(fields);
+    for (var attempt = 0; attempt < 2; attempt++) {
+      if (tokens.generation != generation) throw sessionChanged;
+      final access = tokens.accessToken;
+      final request = http.MultipartRequest('POST', _base.resolve(path))
+        ..headers.addAll({
+          'Accept': 'application/json',
+          'Idempotency-Key': key,
+          if (access != null) 'Authorization': 'Bearer $access',
+        })
+        ..fields.addAll(metadata)
+        ..files.add(
+          http.MultipartFile.fromBytes(
+            'file',
+            payload,
+            filename: mimeType == 'image/png' ? 'catalog.png' : 'catalog.jpg',
+            contentType: MediaType.parse(mimeType),
+          ),
+        );
+      final response = await _sendRequest(
+        request,
+        onLateCompletion: onLateCompletion,
+      );
+      if (tokens.generation != generation) throw sessionChanged;
+      if (response.statusCode == 401 &&
+          attempt == 0 &&
+          tokens.refreshToken != null) {
+        if (tokens.accessToken == access) await _refresh(generation);
+        continue;
+      }
+      if (response.statusCode == 401) tokens.clear();
+      return _decode(response);
+    }
+    throw sessionChanged;
+  }
+
   Future<http.Response> _send(
     String method,
     String path, {
@@ -119,6 +173,13 @@ class ApiClient {
       request.headers['Content-Type'] = 'application/json';
       request.body = jsonEncode(body);
     }
+    return _sendRequest(request, onLateCompletion: onLateCompletion);
+  }
+
+  Future<http.Response> _sendRequest(
+    http.BaseRequest request, {
+    void Function()? onLateCompletion,
+  }) async {
     var timedOut = false;
     try {
       return await _client

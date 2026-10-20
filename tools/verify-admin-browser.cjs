@@ -106,6 +106,31 @@ module.exports = async function verify({ root, fixture, email, customerEmail, pa
     await fill('Mô tả ảnh', 'Áo kiểm thử quản trị');
     await button('Lưu thông tin sản phẩm');
     console.log('Chrome admin: created product with gallery.');
+    const chooser = page.waitForEvent('filechooser');
+    await button('Tải ảnh từ máy');
+    const sharp = require(path.join(root, 'backend/node_modules/sharp'));
+    const photo = await sharp({ create: { width: 120, height: 160, channels: 3, background: '#568079' } })
+      .withExif({ IFD0: { Artist: 'Synthetic catalog browser fixture' } }).png().toBuffer();
+    const uploaded = page.waitForResponse(r => /\/api\/v1\/admin\/products\/[^/]+\/images$/.test(new URL(r.url()).pathname) && r.request().method() === 'POST');
+    await (await chooser).setFiles({ name: 'catalog-fixture.png', mimeType: 'image/png', buffer: photo });
+    const uploadedResponse = await uploaded;
+    assert.equal(uploadedResponse.status(), 201);
+    const receipt = await uploadedResponse.json();
+    const uploadedField = page.getByRole('textbox', { name: 'Đường dẫn ảnh', exact: true }).nth(1);
+    await uploadedField.waitFor({ state: 'attached' });
+    await reveal(uploadedField); await uploadedField.click(); await page.waitForTimeout(200);
+    assert.equal(await uploadedField.inputValue(), receipt.url);
+    assert.equal(await page.getByRole('textbox', { name: 'Đường dẫn ảnh', exact: true }).count(), 2);
+    // Make the uploaded asset the cover using the ordinary gallery save path.
+    const removeOld = page.getByRole('button', { name: 'Bỏ ảnh', exact: true }).first();
+    await reveal(removeOld); await removeOld.click(); await page.waitForTimeout(300);
+    await button('Lưu thông tin sản phẩm');
+    await page.setViewportSize({ width: 375, height: 812 }); await page.waitForTimeout(400);
+    await reveal(page.getByRole('textbox', { name: 'Đường dẫn ảnh', exact: true }));
+    await page.screenshot({ path: path.join(output, 'catalog-upload-mobile.png') });
+    assert(requests.some(r => r.path.endsWith('/' + receipt.url) && r.status === 200), 'Verified catalog preview was not loaded');
+    await page.setViewportSize({ width: 1440, height: 900 }); await page.waitForTimeout(400);
+    console.log('Chrome admin: multipart file selected, verified public preview loaded, uploaded cover saved on mobile.');
     await button('Thêm biến thể');
     await fill('Mã SKU', fixture + '-admin-M'); await fill('Kích cỡ', 'M');
     await fill('Màu sắc', 'Trắng'); await fill('Mã màu HEX', '#FFFFFF'); await fill('Giá bán (VND)', '690000');

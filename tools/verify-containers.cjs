@@ -27,6 +27,7 @@ async function main() {
   const dbUrl = new URL('postgresql://postgres:5432/' + database);
   dbUrl.username = config.POSTGRES_USER; dbUrl.password = config.POSTGRES_PASSWORD;
   const env = { ...process.env, ...config, NODE_ENV: 'test', PORT: '3000', DATABASE_URL: dbUrl.toString(), REDIS_HOST: 'redis', REDIS_PORT: '6379', AI_QUEUE_PREFIX: prefix, JWT_ACCESS_SECRET: randomBytes(32).toString('hex'), JWT_REFRESH_SECRET: randomBytes(32).toString('hex'), SWAGGER_ENABLED: 'true', S3_ENDPOINT: 'http://host.docker.internal:9000' };
+  if (config.S3_BUCKET) env.S3_BUCKET = config.S3_BUCKET + '-test';
   const names = ['NODE_ENV', 'PORT', 'DATABASE_URL', 'REDIS_HOST', 'REDIS_PORT', 'AI_QUEUE_PREFIX', 'JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET', 'JWT_ACCESS_EXPIRES_IN', 'JWT_REFRESH_EXPIRES_IN', 'CORS_ORIGINS', 'SWAGGER_ENABLED', 'S3_ENDPOINT', 'S3_PUBLIC_ENDPOINT', 'S3_REGION', 'S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'];
   const flags = names.filter(key => env[key] !== undefined).flatMap(key => ['--env', key]);
   const secrets = [env.DATABASE_URL, config.POSTGRES_PASSWORD, env.JWT_ACCESS_SECRET, env.JWT_REFRESH_SECRET, config.S3_SECRET_ACCESS_KEY].filter(Boolean);
@@ -118,6 +119,32 @@ async function main() {
       assert.equal(history.items[0].targetId, category.id);
       assert.equal(Number((await db.query('SELECT count(*) FROM "AdminAuditEvent" WHERE "actorId"=$1 AND "targetId"=$2', [customer.user.id, category.id])).rows[0].count), 1);
       report.checks.push('container admin write and authenticated activity event persisted atomically');
+      assert(env.S3_BUCKET?.endsWith('-test'), 'Container upload requires a dedicated test bucket');
+      const productId = (await db.query('SELECT "productId" FROM "ProductVariant" WHERE sku=$1', ['WRL-1-MAIN-M'])).rows[0].productId;
+      const sharp = requireBackend('sharp');
+      const bytes = await sharp({ create: { width: 80, height: 96, channels: 3, background: '#abc' } }).png().toBuffer();
+      const uploadKey = randomUUID();
+      async function upload() {
+        const form = new FormData();
+        form.set('alt', 'Retained synthetic catalog recovery fixture');
+        form.set('file', new Blob([bytes], { type: 'image/png' }), 'fixture.png');
+        const response = await fetch(`http://127.0.0.1:3001/api/v1/admin/products/${productId}/images`, {
+          method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Idempotency-Key': uploadKey },
+          body: form, signal: AbortSignal.timeout(15000),
+        });
+        assert.equal(response.status, 201, 'Container catalog upload');
+        return response.json();
+      }
+      const uploaded = await upload();
+      assert.deepEqual(await upload(), uploaded);
+      const publicImage = await fetch('http://127.0.0.1:3001/api/v1/' + uploaded.url, { signal: AbortSignal.timeout(10000) });
+      assert.equal(publicImage.status, 200);
+      assert.equal(publicImage.headers.get('cross-origin-resource-policy'), 'cross-origin');
+      const storedBytes = Buffer.from(await publicImage.arrayBuffer());
+      assert.equal((await sharp(storedBytes).metadata()).width, 80);
+      assert.equal(Number((await db.query('SELECT count(*) FROM "CatalogAsset" WHERE id=$1 AND "verifiedAt" IS NOT NULL', [uploaded.id])).rows[0].count), 1);
+      report.catalogAsset = { id: uploaded.id, bucket: env.S3_BUCKET, url: uploaded.url };
+      report.checks.push('container catalog upload/replay, Sharp normalization and verified public S3 read');
       const draftBefore = await api('GET', 'admin/content', null, token);
       assert.equal(draftBefore.id, null, 'Content verification needs a fresh bootstrap DB; never overwrite existing content');
       const contentBody = { banner: 'Container content fixture', policy: 'Synthetic local verification only.', expectedVersion: 0 };

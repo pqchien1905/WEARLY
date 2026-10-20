@@ -81,7 +81,7 @@ erDiagram
 | Nhóm | Bảng | Quy tắc |
 |---|---|---|
 | Tài khoản | User, RefreshToken, PasswordResetToken, Address, AddressCreateReceipt, StylePreference | UUID PK; receipt có PK(userId,key); email unique lowercase ở DTO; token chỉ SHA-256; một địa chỉ mặc định/user; StylePreference dùng userId PK/FK, budget Decimal, version chống ghi đè |
-| Catalog | Category, Brand, Product, ProductVariant, ProductImage | slug/SKU unique; unique (productId,size,color); ảnh unique (productId,position) |
+| Catalog | Category, Brand, Product, ProductVariant, ProductImage, CatalogAsset | slug/SKU unique; unique (productId,size,color); ảnh unique (productId,position); asset unique(actorId,requestKey), objectKey unique, verified/hash/receipt và retry cleanup |
 | Kho | Inventory, InventoryMovement | 1 inventory/SKU; quantity>=0; version tăng sau mutation; movement delta/reason/order |
 | Giỏ | Cart, CartItem | 1 cart/user; unique (cartId,variantId); quantity 1..99 |
 | Đơn | Order, OrderItem, Payment | unique (userId,idempotencyKey); immutable item/address snapshot; 1 payment/order |
@@ -91,7 +91,7 @@ erDiagram
 | Lịch sử quản trị | AdminAuditEvent | actorId/action/targetId/createdAt; index(createdAt,id); ghi cùng transaction nghiệp vụ |
 | Nội dung | StoreContent | singleton storefront; draft/publication riêng; version, publishedVersion; không seed policy |
 
-Tổng cộng 27 model. Quan hệ n-n user/product qua WishlistItem và Review; cart/variant qua CartItem; order/variant qua OrderItem. StylePreference là quan hệ 1-0..1 với User, xóa theo tài khoản; GET mặc định không tạo bản ghi. AddressCreateReceipt dùng PK(userId,key), hash nội dung và FK addressId nullable/unique; xóa địa chỉ chỉ SET NULL để yêu cầu cũ không tạo lại địa chỉ. Các foreign key đều có trong migration. Riêng actorId/targetId của AdminAuditEvent là UUID lịch sử không FK/cascade, để việc xóa thực thể không xóa nhật ký theo.
+Tổng cộng 28 model. Quan hệ n-n user/product qua WishlistItem và Review; cart/variant qua CartItem; order/variant qua OrderItem. StylePreference là quan hệ 1-0..1 với User, xóa theo tài khoản; GET mặc định không tạo bản ghi. AddressCreateReceipt dùng PK(userId,key), hash nội dung và FK addressId nullable/unique; xóa địa chỉ chỉ SET NULL để yêu cầu cũ không tạo lại địa chỉ. Các foreign key đều có trong migration. Riêng actorId/targetId của AdminAuditEvent và actorId/productId của CatalogAsset là UUID lịch sử không FK/cascade, để việc xóa thực thể không xóa nhật ký hoặc ảnh được snapshot đơn hàng tham chiếu.
 
 Enum: Role(CUSTOMER,ADMIN), OrderStatus(PENDING,CONFIRMED,SHIPPED,DELIVERED,CANCELLED), PaymentStatus(PENDING,PAID,FAILED,REFUNDED,CANCELLED), AIJobStatus(PENDING,PROCESSING,COMPLETED,FAILED).
 

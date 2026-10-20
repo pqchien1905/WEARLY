@@ -43,6 +43,7 @@ enum AdminAuditAction {
   ORDER_STATUS_CHANGED
   CONTENT_DRAFT_SAVED
   CONTENT_PUBLISHED
+  PRODUCT_IMAGE_UPLOADED
 }
 // Historical identifiers intentionally survive changes to the referenced entities.
 // Do not copy request bodies or credentials into activity history.
@@ -217,6 +218,30 @@ model ProductImage {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@unique([productId, position])
+}
+// Durable public catalog assets outlive gallery edits/order snapshots.
+// Actor/product identifiers are historical: no cascade from account/catalog.
+model CatalogAsset {
+  id String @id @default(uuid()) @db.Uuid
+  productId String @db.Uuid
+  actorId String @db.Uuid
+  requestKey String @db.Uuid
+  inputHash String @db.VarChar(64)
+  objectKey String @unique
+  sha256 String @db.VarChar(64)
+  mimeType String
+  size Int
+  width Int
+  height Int
+  receipt Json?
+  verifiedAt DateTime?
+  deletedAt DateTime?
+  purgedAt DateTime?
+  purgeRetryAt DateTime?
+  createdAt DateTime @default(now())
+  @@unique([actorId, requestKey])
+  @@index([productId])
+  @@index([verifiedAt, purgeRetryAt, createdAt])
 }
 model Inventory {
   id String @id @default(uuid()) @db.Uuid

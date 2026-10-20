@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import '../core/network/api_client.dart';
 import 'commerce_json.dart';
 
@@ -78,6 +79,27 @@ class AdminRepository {
     id == null ? 'admin/products' : 'admin/products/${Uri.encodeComponent(id)}',
     body: body,
   );
+  Future<AdminRecord> uploadImage(
+    String id, {
+    required Uint8List bytes,
+    required String mimeType,
+    required String alt,
+    required String key,
+    void Function()? onLateCompletion,
+  }) async {
+    _check();
+    final result = await api.uploadImage(
+      'admin/products/${Uri.encodeComponent(id)}/images',
+      bytes: bytes,
+      mimeType: mimeType,
+      fields: {'alt': alt},
+      key: key,
+      onLateCompletion: onLateCompletion,
+    );
+    _check();
+    return commerceMap(result);
+  }
+
   Future<AdminRecord> saveTaxonomy(String kind, String? id, AdminRecord body) {
     if (!['categories', 'brands'].contains(kind)) {
       throw ArgumentError.value(kind);

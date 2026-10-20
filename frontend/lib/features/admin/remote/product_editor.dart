@@ -1,12 +1,18 @@
 import 'dart:convert';
+import 'dart:typed_data';
+import 'package:file_selector/file_selector.dart';
+import 'package:uuid/uuid.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/providers.dart';
 import '../../../core/design/tokens.dart';
 import '../../../core/format.dart';
+import '../../../core/network/api_client.dart';
+import '../../../core/network/catalog_image.dart';
 import '../../../core/widgets/primitives.dart';
 import '../../../data/commerce_json.dart';
+import '../../virtual_tryon/image_validation.dart';
 import 'admin_pages.dart' show adjustInventory;
 import 'admin_providers.dart';
 import 'admin_widgets.dart';
@@ -53,6 +59,13 @@ class _ImageFields {
   };
 }
 
+class _PendingImage {
+  _PendingImage(this.bytes, this.alt) : key = const Uuid().v4();
+  final Uint8List bytes;
+  final String alt, key;
+  String get mimeType => bytes[0] == 137 ? 'image/png' : 'image/jpeg';
+}
+
 class _ProductForm extends ConsumerStatefulWidget {
   const _ProductForm({super.key, this.product, required this.references});
   final AdminRecord? product;
@@ -68,6 +81,9 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
   final removedImages = <_ImageFields>[];
   late final AdminRecord baseline;
   bool active = false, tryOn = false, saving = false;
+  bool uploading = false;
+  _PendingImage? pendingImage;
+  bool get locked => saving || uploading || pendingImage != null;
   String? category, brand, error;
   @override
   void initState() {
@@ -107,7 +123,7 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
   }
 
   Future<void> save() async {
-    if (saving || !form.currentState!.validate()) return;
+    if (locked || !form.currentState!.validate()) return;
     final snapshot = draft();
     // PATCH only the fields edited in this form. In particular an unchanged
     // gallery must not replace images another administrator added meanwhile.
@@ -146,6 +162,95 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
     }
   }
 
+  Future<void> upload() async {
+    if (saving || uploading || widget.product == null) return;
+    if (pendingImage == null && jsonEncode(draft()) != jsonEncode(baseline)) {
+      setState(() => error = 'Lưu các thay đổi hiện tại trước khi tải ảnh.');
+      return;
+    }
+    final repo = ref.read(adminRepositoryProvider);
+    final revision = ref.read(catalogRevisionProvider.notifier);
+    setState(() {
+      uploading = true;
+      error = null;
+    });
+    try {
+      if (pendingImage == null) {
+        final selected = await openFile(
+          acceptedTypeGroups: [
+            const XTypeGroup(
+              label: 'Ảnh JPEG hoặc PNG',
+              extensions: ['jpg', 'jpeg', 'png'],
+              mimeTypes: ['image/jpeg', 'image/png'],
+            ),
+          ],
+        );
+        if (!mounted || selected == null) return;
+        if (await selected.length() > 8 * 1024 * 1024) {
+          throw const ApiException(
+            'IMAGE_TOO_LARGE',
+            'Ảnh vượt 8 MB. Hãy chọn ảnh nhỏ hơn.',
+          );
+        }
+        final bytes = await selected.readAsBytes();
+        if (!mounted) return;
+        final invalid = validateImage(bytes);
+        if (invalid != null) throw ApiException('INVALID_IMAGE', invalid);
+        pendingImage = _PendingImage(bytes, fields['name']!.text.trim());
+      }
+      final pending = pendingImage!;
+      String? failure;
+      try {
+        await repo.uploadImage(
+          widget.product!['id'],
+          bytes: pending.bytes,
+          mimeType: pending.mimeType,
+          alt: pending.alt,
+          key: pending.key,
+          onLateCompletion: revision.refresh,
+        );
+      } on ApiException catch (e) {
+        // A terminal reservation can only be abandoned after reconciling the
+        // product. An uncertain or still-running request retains its exact key.
+        if (e.code != 'UPLOAD_FAILED' &&
+            e.code != 'GALLERY_FULL' &&
+            e.status != 400 &&
+            e.status != 413) {
+          rethrow;
+        }
+        failure = e.code == 'GALLERY_FULL'
+            ? 'Bộ ảnh đã đủ 20 ảnh. Bỏ bớt ảnh và lưu trước khi tải ảnh mới.'
+            : 'Ảnh chưa được tải lên. Kiểm tra định dạng, kích thước rồi chọn lại ảnh.';
+      }
+      final product = await repo.detail('products', widget.product!['id']);
+      if (!mounted) return;
+      setState(() {
+        removedImages.addAll(images);
+        images.clear();
+        for (final raw in product['images'] as List) {
+          images.add(_ImageFields(commerceMap(raw)));
+        }
+        baseline['images'] = images.map((image) => image.json()).toList();
+        pendingImage = null;
+        error = failure;
+      });
+      refreshAdmin(ref);
+      revision.refresh();
+      if (failure == null) toast(context, 'Đã tải và lưu ảnh sản phẩm.');
+    } catch (e) {
+      revision.refresh();
+      if (mounted) {
+        setState(
+          () => error = pendingImage == null
+              ? adminError(e)
+              : '${adminError(e)} Bấm “Kiểm tra lại ảnh tải lên” để lấy kết quả trước khi tiếp tục.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => uploading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final variants = (widget.product?['variants'] ?? []) as List;
@@ -159,7 +264,9 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
             AppButton(
               'Về danh sách sản phẩm',
               outlined: true,
-              onPressed: saving ? null : () => context.go('/admin/products'),
+              onPressed: uploading || saving
+                  ? null
+                  : () => context.go('/admin/products'),
             ),
           ],
         ),
@@ -217,13 +324,13 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
                     'Sản phẩm cần ít nhất một biến thể đang bán để xuất hiện tại cửa hàng.',
                   ),
                   value: active,
-                  onChanged: saving ? null : (v) => setState(() => active = v),
+                  onChanged: locked ? null : (v) => setState(() => active = v),
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Hỗ trợ thử đồ'),
                   value: tryOn,
-                  onChanged: saving ? null : (v) => setState(() => tryOn = v),
+                  onChanged: locked ? null : (v) => setState(() => tryOn = v),
                 ),
                 const SizedBox(height: 24),
                 Text('Bộ ảnh sản phẩm', style: T.display(24)),
@@ -231,6 +338,30 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
                   'Ảnh đầu tiên là ảnh bìa. Dùng đường dẫn HTTPS công khai hoặc ảnh có sẵn trong assets/images/.',
                   style: T.small,
                 ),
+                const SizedBox(height: 12),
+                Text(
+                  widget.product == null
+                      ? 'Lưu sản phẩm trước để tải ảnh từ máy.'
+                      : 'Ảnh tải lên được lưu ngay và có đường dẫn công khai. JPEG/PNG tối đa 8 MB, mỗi chiều 64–8.192 px, tối đa 16 triệu điểm ảnh.',
+                  style: T.small,
+                ),
+                if (widget.product != null)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: AppButton(
+                      pendingImage == null
+                          ? 'Tải ảnh từ máy'
+                          : 'Kiểm tra lại ảnh tải lên',
+                      outlined: true,
+                      busy: uploading,
+                      onPressed:
+                          saving ||
+                              uploading ||
+                              (pendingImage == null && images.length >= 20)
+                          ? null
+                          : upload,
+                    ),
+                  ),
                 for (final image in images)
                   Padding(
                     key: ObjectKey(image),
@@ -238,14 +369,24 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        if (managedCatalogImage.hasMatch(image.url.text))
+                          SizedBox(
+                            height: 160,
+                            child: FashionImage(
+                              image.url.text,
+                              label: image.alt.text,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
                         AppField(
                           label: 'Đường dẫn ảnh',
                           controller: image.url,
-                          readOnly: saving,
+                          readOnly: locked,
                           validator: (s) =>
-                              RegExp(
-                                    r'^(https://[^\s]+|assets/images/[a-zA-Z0-9_./-]+)$',
-                                  ).hasMatch(s ?? '') &&
+                              (managedCatalogImage.hasMatch(s ?? '') ||
+                                      RegExp(
+                                        r'^(https://[^\s]+|assets/images/[a-zA-Z0-9_./-]+)$',
+                                      ).hasMatch(s ?? '')) &&
                                   s!.length <= 2000
                               ? null
                               : 'Nhập đường dẫn ảnh HTTPS hoặc assets/images/ hợp lệ.',
@@ -254,7 +395,7 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
                         AppField(
                           label: 'Mô tả ảnh',
                           controller: image.alt,
-                          readOnly: saving,
+                          readOnly: locked,
                           validator: (s) => (s ?? '').length > 200
                               ? 'Tối đa 200 ký tự.'
                               : null,
@@ -263,14 +404,14 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
                         AppField(
                           label: 'Màu áp dụng (không bắt buộc)',
                           controller: image.color,
-                          readOnly: saving,
+                          readOnly: locked,
                           validator: (s) =>
                               (s ?? '').length > 60 ? 'Tối đa 60 ký tự.' : null,
                         ),
                         Align(
                           alignment: Alignment.centerLeft,
                           child: TextButton.icon(
-                            onPressed: saving
+                            onPressed: locked
                                 ? null
                                 : () => setState(() {
                                     images.remove(image);
@@ -289,7 +430,7 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
                   child: AppButton(
                     'Thêm ảnh',
                     outlined: true,
-                    onPressed: saving || images.length >= 20
+                    onPressed: locked || images.length >= 20
                         ? null
                         : () => setState(() => images.add(_ImageFields({}))),
                   ),
@@ -308,7 +449,7 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
                   child: AppButton(
                     'Lưu thông tin sản phẩm',
                     busy: saving,
-                    onPressed: save,
+                    onPressed: locked ? null : save,
                   ),
                 ),
               ],
@@ -324,7 +465,7 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
               AppButton(
                 'Thêm biến thể',
                 outlined: true,
-                onPressed: saving
+                onPressed: locked
                     ? null
                     : () => _sku(context, ref, widget.product!),
               ),
@@ -364,7 +505,7 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
                           AppButton(
                             'Sửa giá / trạng thái',
                             outlined: true,
-                            onPressed: saving
+                            onPressed: locked
                                 ? null
                                 : () => _sku(
                                     context,
@@ -377,7 +518,7 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
                             AppButton(
                               'Điều chỉnh kho',
                               outlined: true,
-                              onPressed: saving
+                              onPressed: locked
                                   ? null
                                   : () => adjustInventory(
                                       context,
@@ -410,7 +551,7 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
       controller: fields[key],
       maxLines: maxLines,
       validator: validator,
-      readOnly: saving,
+      readOnly: locked,
     ),
   );
   Widget _select(
@@ -431,7 +572,7 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
             child: Text(item['name'], overflow: TextOverflow.ellipsis),
           ),
       ],
-      onChanged: saving ? null : change,
+      onChanged: locked ? null : change,
       validator: (s) => s == null ? 'Vui lòng chọn $label.' : null,
     ),
   );

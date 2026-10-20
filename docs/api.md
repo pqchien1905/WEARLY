@@ -115,7 +115,13 @@ Response là order trực tiếp, có items và payment. subtotal/shipping/total
 
 List orders/admin dùng page/limit. Hủy đơn hoặc sửa inventory có kiểm tra trạng thái/phiên bản. Luồng admin: PENDING→CONFIRMED→SHIPPED→DELIVERED, không nhảy bước.
 
-Admin list sắp xếp createdAt/id giảm dần. Admin products trả categoryId/brandId UUID, variants gồm active, price dạng chuỗi và inventory {id,quantity,version}; không dùng shape giá public `{amount,currency}`. POST/PATCH product nhận thêm `images:[{url,alt,color?}]` tối đa20; bỏ field images giữ nguyên bộ ảnh, gửi mảng thay thế bộ ảnh theo thứ tự mảng trong cùng transaction. URL chấp nhận HTTPS hoặc `assets/images/`; không tải file hoặc tạo public URL cho ảnh người dùng. Summary đếm toàn database, customers chỉ role CUSTOMER; danh sách users có cả ADMIN.
+Admin list sắp xếp createdAt/id giảm dần. Admin products trả categoryId/brandId UUID, variants gồm active, price dạng chuỗi và inventory {id,quantity,version}; không dùng shape giá public `{amount,currency}`. POST/PATCH product nhận thêm `images:[{url,alt,color?}]` tối đa20; bỏ field images giữ nguyên bộ ảnh, gửi mảng thay thế bộ ảnh theo thứ tự mảng trong cùng transaction. URL chấp nhận HTTPS, `assets/images/` hoặc managed reference của đúng sản phẩm đã xác minh. Summary đếm toàn database, customers chỉ role CUSTOMER; danh sách users có cả ADMIN.
+
+`POST /admin/products/:id/images` nhận file JPEG/PNG bằng multipart, bắt buộc
+ADMIN và Idempotency-Key UUIDv4. Upload tự thêm vào gallery, trả reference
+`catalog/images/<UUID>`. `GET /catalog/images/:id` phục vụ bytes công khai
+chỉ khi asset đã xác minh. Ảnh cá nhân vẫn riêng tư. Xem
+[giới hạn, replay và vòng đời](catalog-images.md).
 
 ## AI foundation
 

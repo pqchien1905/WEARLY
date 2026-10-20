@@ -23,7 +23,7 @@ No production deployment or production data changes are authorized.
 - Private S3 images use ownership, content validation, quotas and expiry.
   Redis/BullMQ worker handles outbox dispatch and retention. AI provider is
   disabled; this does not constitute a working AI integration.
-- Eleven migrations and existing bootstrap/seed verification scripts. Local
+- Twelve migrations and existing bootstrap/seed verification scripts. Local
   PostgreSQL and Memurai are available. MinIO was stopped at audit start.
 
 ## Prioritized findings
@@ -37,7 +37,7 @@ No production deployment or production data changes are authorized.
 | A05 | Medium | Full npm audit reports 20 Moderate findings in dev dependency chain | OPEN tooling-only: runtime production audit is zero; no forced toolchain downgrade |
 | A06 | High | Password recovery/email was absent | Local implementation VERIFIED: public request/reset, PostgreSQL tokens, real local SMTP/Redis worker, Flutter/Chrome; external provider delivery remains BLOCKED on configuration |
 | A07 | High | Try-On/Stylist UI is gated in API mode; no real AI provider | Provider/account/contract required for real output; never substitute demo output |
-| A08 | Medium | Promotions, catalog-specific upload and COD settlement remain incomplete | Promotions BLOCKED on conflicting contracts: UI uses percent, Coupon schema uses VND amount; no checkout coupon exists. Clarification requested. Persistent activity and content draft/publication are now implemented; other extensions remain open |
+| A08 | Medium | Promotions, catalog-specific upload and COD settlement were incomplete | Catalog upload VERIFIED with PostgreSQL/MinIO/Flutter/Chrome/container. Promotions BLOCKED on conflicting UI percent/schema VND contracts; COD settlement requires a confirmed rule. Activity and content draft/publication verified |
 | A09 | High | Production operational verification is incomplete | Local backup/restore verified; production TLS/domain, secrets, topology, throttling, off-host backup/restore and target still require evidence |
 | A10 | Low | Bootstrap helper does not assert fixture UPDATE affected-row counts | FIXED: every fixture UPDATE must affect exactly one row; fresh bootstrap passed |
 | A11 | Medium | Shopping browser verifier races Flutter focus/input replacement and assumes label excludes hint | FIXED: wait for focus frames, match address label with optional hint; full Chrome shopping passed |
@@ -67,6 +67,28 @@ No Critical issue has been confirmed. High items remain open; the goal is
   `wearly_handoff_1792479244018_790906ee_test`.
 - Production dependency audit after Nodemailer addition remains **zero**.
 - Evidence `.tools/goal-recovery-*`; [recovery configuration](password-recovery.md).
+
+### Iteration five evidence
+
+- Dedicated CatalogAsset reservation/receipt, ADMIN upload and verified public
+  reads. Private bucket and private-user asset separation verified. Failed
+  uploads cannot publish; transactional audit rollback and late PUT cleanup
+  tested. Asset/product locks prevent duplicate uploads and gallery overfill.
+- S3 body deadline/byte limit tested against actual oversized/stalled HTTP
+  responses; hash/size verified before public delivery.
+- Backend16 unit/79 E2E; Flutter analyze and317 tests passed, two opt-in skips.
+  Review found a full-gallery rejection locking the form; fixed and regression
+  added. No other backend/frontend blocking finding.
+- Chrome verified actual picker/upload/preview/cover persistence, mobile375px
+  and desktop, storefront and13 audit types. Two initial helper failures were
+  transient toast/Flutter input focus assumptions; corrected and rerun passed.
+- Twelve migrations/bootstrap, three runtime images and container catalog
+  upload/replay/read passed. Restore29 public tables and schema matched:
+  `wearly_restore_1792480903411_6d6b1003_test`. Source DB unchanged.
+- Compiled restored API passed readiness/public/private routes and public
+  catalog read against the retained source bucket. Object-store restore still
+  needs separate evidence. Production dependency audit remains zero.
+- Evidence `.tools/goal-catalog-*`; [catalog images](catalog-images.md).
 
 ## Verification observed in this session
 

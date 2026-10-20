@@ -8,6 +8,7 @@ import 'admin_widgets.dart';
 const _actions = {
   'PRODUCT_CREATED': 'Tạo sản phẩm',
   'PRODUCT_UPDATED': 'Cập nhật sản phẩm',
+  'PRODUCT_IMAGE_UPLOADED': 'Tải ảnh sản phẩm',
   'SKU_CREATED': 'Tạo biến thể',
   'SKU_UPDATED': 'Cập nhật biến thể',
   'CATEGORY_CREATED': 'Tạo danh mục',

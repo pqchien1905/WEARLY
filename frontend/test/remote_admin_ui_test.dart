@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
+import 'dart:typed_data';
+import 'package:file_selector_platform_interface/file_selector_platform_interface.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,6 +15,7 @@ import 'package:nep_storefront/core/network/api_client.dart';
 import 'remote_account_test.dart' show sessionJson;
 import 'remote_commerce_test.dart' show orderJson;
 import 'remote_session_test.dart' show jsonResponse;
+import 'tryon_replacement_test.dart' show PhotoPicker;
 
 Map<String, dynamic> adminProduct() => {
   'id': 'p1',
@@ -101,6 +104,147 @@ void main() {
     return container;
   }
 
+  testWidgets(
+    'a stale gallery full rejection unlocks removal after canonical reload',
+    (tester) async {
+      final original = FileSelectorPlatform.instance;
+      addTearDown(() => FileSelectorPlatform.instance = original);
+      final photo = XFile.fromData(
+        Uint8List.fromList([255, 216, 255, 0]),
+        name: 'photo.jpg',
+      );
+      FileSelectorPlatform.instance = PhotoPicker(photo, photo);
+      final server = adminProduct();
+      final sample = (server['images'] as List).single;
+      server['images'] = List.generate(19, (_) => sample);
+      var uploads = 0;
+      await setup(tester, '/admin/products/p1/edit', (r) async {
+        if (r.url.path.endsWith('/categories')) {
+          return jsonResponse([
+            {'id': 'c1', 'name': 'Áo'},
+          ]);
+        }
+        if (r.url.path.endsWith('/brands')) {
+          return jsonResponse([
+            {'id': 'b1', 'name': 'Wearly'},
+          ]);
+        }
+        if (r.method == 'POST') {
+          uploads++;
+          server['images'] = List.generate(20, (_) => sample);
+          return jsonResponse({
+            'error': {'code': 'GALLERY_FULL'},
+          }, 409);
+        }
+        return jsonResponse(server);
+      });
+      final upload = find.widgetWithText(OutlinedButton, 'Tải ảnh từ máy');
+      await tester.ensureVisible(upload);
+      await tester.tap(upload);
+      await tester.pumpAndSettle();
+      expect(uploads, 1);
+      expect(find.text('Kiểm tra lại ảnh tải lên'), findsNothing);
+      expect(
+        find.text(
+          'Bộ ảnh đã đủ 20 ảnh. Bỏ bớt ảnh và lưu trước khi tải ảnh mới.',
+        ),
+        findsOneWidget,
+      );
+      final remove = find.widgetWithText(TextButton, 'Bỏ ảnh').first;
+      await tester.ensureVisible(remove);
+      await tester.tap(remove);
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(TextButton, 'Bỏ ảnh'), findsNWidgets(19));
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Lưu thông tin sản phẩm'),
+            )
+            .onPressed,
+        isNotNull,
+      );
+    },
+  );
+  for (final uncertain in [false, true]) {
+    testWidgets(
+      'catalog upload reconciles gallery and baseline (uncertain=$uncertain)',
+      (tester) async {
+        final original = FileSelectorPlatform.instance;
+        addTearDown(() => FileSelectorPlatform.instance = original);
+        final photo = XFile.fromData(
+          Uint8List.fromList([255, 216, 255, 0]),
+          name: 'photo.jpg',
+        );
+        final picker = PhotoPicker(photo, photo);
+        FileSelectorPlatform.instance = picker;
+        const image = 'catalog/images/1f9392a7-19a8-4ff2-95e3-1b1d88ee3c25';
+        final server = adminProduct();
+        final keys = <String>[], bodies = <Map<String, dynamic>>[];
+        await setup(tester, '/admin/products/p1/edit', (r) async {
+          if (r.url.path.endsWith('/categories')) {
+            return jsonResponse([
+              {'id': 'c1', 'name': 'Áo'},
+            ]);
+          }
+          if (r.url.path.endsWith('/brands')) {
+            return jsonResponse([
+              {'id': 'b1', 'name': 'Wearly'},
+            ]);
+          }
+          if (r.method == 'POST' && r.url.path.endsWith('/images')) {
+            keys.add(r.headers['idempotency-key']!);
+            server['images'] = [
+              ...adminProduct()['images'] as List,
+              {'url': image, 'alt': 'Uploaded', 'color': null},
+            ];
+            if (uncertain && keys.length == 1) {
+              throw http.ClientException('Lost after commit');
+            }
+            return jsonResponse({'id': image.split('/').last, 'url': image});
+          }
+          if (r.method == 'PATCH') {
+            final body = Map<String, dynamic>.from(jsonDecode(r.body));
+            bodies.add(body);
+            server.addAll(body);
+          }
+          return jsonResponse(server);
+        });
+        final upload = find.widgetWithText(OutlinedButton, 'Tải ảnh từ máy');
+        await tester.ensureVisible(upload);
+        await tester.tap(upload);
+        await tester.pumpAndSettle();
+        if (uncertain) {
+          final save = tester.widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Lưu thông tin sản phẩm'),
+          );
+          expect(save.onPressed, isNull);
+          final retry = find.widgetWithText(
+            OutlinedButton,
+            'Kiểm tra lại ảnh tải lên',
+          );
+          await tester.ensureVisible(retry);
+          await tester.tap(retry);
+          await tester.pumpAndSettle();
+          expect(keys, [keys.first, keys.first]);
+        }
+        expect(picker.calls, 1);
+        expect(find.widgetWithText(TextFormField, image), findsOneWidget);
+        final name = find.widgetWithText(TextFormField, 'Tên sản phẩm');
+        await tester.ensureVisible(name);
+        await tester.enterText(name, 'Tên sau upload');
+        final save = find.widgetWithText(
+          FilledButton,
+          'Lưu thông tin sản phẩm',
+        );
+        await tester.ensureVisible(save);
+        await tester.tap(save);
+        await tester.pumpAndSettle();
+        expect(bodies.single, {'name': 'Tên sau upload'});
+        expect((server['images'] as List).last['url'], image);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
   for (final loseSession in [true, false]) {
     testWidgets(
       'taxonomy refresh survives ${loseSession ? 'logout before response' : 'closing after uncertain response'}',

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../app/api_providers.dart';
+import '../network/catalog_image.dart';
 import '../design/tokens.dart';
 
 class PageBody extends StatelessWidget {
@@ -218,10 +221,21 @@ class FashionImage extends StatelessWidget {
   final BoxFit fit;
   final Alignment alignment;
   @override
-  Widget build(BuildContext context) => Image(
-    image: asset.startsWith('https://') || asset.startsWith('http://')
-        ? NetworkImage(asset)
-        : AssetImage(asset) as ImageProvider,
+  Widget build(BuildContext context) => managedCatalogImage.hasMatch(asset)
+      ? Consumer(
+          builder: (context, ref, _) => _image(
+            NetworkImage(
+              catalogImageUrl(ref.watch(apiBaseUrlProvider), asset)!,
+            ),
+          ),
+        )
+      : _image(
+          asset.startsWith('https://') || asset.startsWith('http://')
+              ? NetworkImage(asset)
+              : AssetImage(asset),
+        );
+  Widget _image(ImageProvider provider) => Image(
+    image: provider,
     fit: fit,
     alignment: alignment,
     semanticLabel: label,
