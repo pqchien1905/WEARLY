@@ -1,5 +1,6 @@
 erDiagram
   User ||--o{ RefreshToken : sessions
+  User ||--o{ PasswordResetToken : recovery
   User ||--o{ Address : owns
   User ||--o{ AddressCreateReceipt : deduplicates
   Address |o--o| AddressCreateReceipt : created_by

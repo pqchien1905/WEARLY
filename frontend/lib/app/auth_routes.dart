@@ -31,7 +31,12 @@ String loginDestination(String? next, {bool admin = false}) {
         : fallback;
   }
   return !isAdminPath(uri.path) &&
-          !['/login', '/register', '/forgot-password'].contains(uri.path)
+          ![
+            '/login',
+            '/register',
+            '/forgot-password',
+            '/reset-password',
+          ].contains(uri.path)
       ? next
       : fallback;
 }

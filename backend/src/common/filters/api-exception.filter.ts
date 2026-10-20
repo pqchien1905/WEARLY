@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { Prisma } from '../../generated/prisma/client';
+import { isTransactionConflict } from '../transaction';
 @Catch()
 export class ApiExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger('HTTP');
@@ -57,6 +58,10 @@ export class ApiExceptionFilter implements ExceptionFilter {
       status = 413;
       code = 'PAYLOAD_TOO_LARGE';
       message = 'Request body exceeds the allowed size';
+    } else if (isTransactionConflict(exception)) {
+      status = 409;
+      code = 'VERSION_CONFLICT';
+      message = 'Please retry the operation';
     } else if (exception instanceof Prisma.PrismaClientKnownRequestError) {
       if (exception.code === 'P2003') {
         status = 400;
@@ -72,11 +77,6 @@ export class ApiExceptionFilter implements ExceptionFilter {
         status = 404;
         code = 'NOT_FOUND';
         message = 'Record not found';
-      }
-      if (exception.code === 'P2034') {
-        status = 409;
-        code = 'VERSION_CONFLICT';
-        message = 'Please retry the operation';
       }
     }
     const requestId = response.getHeader('x-request-id');

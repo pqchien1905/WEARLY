@@ -1,5 +1,22 @@
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../database/prisma.service';
+export function isTransactionConflict(error: unknown): boolean {
+  if (error instanceof Prisma.PrismaClientKnownRequestError)
+    return error.code === 'P2034';
+  // Prisma's pg adapter can expose a commit-time conflict without wrapping it
+  // in P2034. Only retry PostgreSQL's explicit serialization/deadlock outcomes.
+  if (!(error instanceof Error) || error.name !== 'DriverAdapterError')
+    return false;
+  const cause = error.cause;
+  return (
+    typeof cause === 'object' &&
+    cause !== null &&
+    'kind' in cause &&
+    cause.kind === 'TransactionWriteConflict' &&
+    'originalCode' in cause &&
+    ['40001', '40P01'].includes(String(cause.originalCode))
+  );
+}
 export async function transaction<T>(
   db: PrismaService,
   run: (tx: Prisma.TransactionClient) => Promise<T>,
@@ -11,12 +28,7 @@ export async function transaction<T>(
         timeout: 15000,
       });
     } catch (error) {
-      if (
-        !(error instanceof Prisma.PrismaClientKnownRequestError) ||
-        error.code !== 'P2034' ||
-        attempt >= 4
-      )
-        throw error;
+      if (!isTransactionConflict(error) || attempt >= 4) throw error;
       await new Promise((resolve) => setTimeout(resolve, 15 * (attempt + 1)));
     }
   }

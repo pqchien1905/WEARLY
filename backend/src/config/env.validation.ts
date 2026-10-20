@@ -63,6 +63,55 @@ const schema = z
     S3_SECRET_ACCESS_KEY: z.string().default(''),
     AI_PROVIDER_URL: z.string().default(''),
     AI_PROVIDER_API_KEY: z.string().default(''),
+    PASSWORD_RECOVERY_ENABLED: z.enum(['true', 'false']).default('false'),
+    SMTP_HOST: z.string().default(''),
+    SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+    SMTP_SECURE: z.enum(['true', 'false']).default('false'),
+    SMTP_USER: z.string().default(''),
+    SMTP_PASSWORD: z.string().default(''),
+    SMTP_FROM: z.string().default(''),
+    SMTP_ALLOW_INSECURE_LOCAL: z.enum(['true', 'false']).default('false'),
+    PASSWORD_RESET_WEB_URL: z.string().default(''),
+  })
+  .superRefine((c, ctx) => {
+    if (c.PASSWORD_RECOVERY_ENABLED !== 'true') return;
+    const fail = (path: string) =>
+      ctx.addIssue({
+        code: 'custom',
+        path: [path],
+        message: 'Invalid password recovery configuration',
+      });
+    const local = (host: string) =>
+      ['localhost', '127.0.0.1', '[::1]', '::1'].includes(host);
+    if (!c.SMTP_HOST || /[\s/@]/.test(c.SMTP_HOST)) fail('SMTP_HOST');
+    if (!z.email().safeParse(c.SMTP_FROM).success) fail('SMTP_FROM');
+    if (Boolean(c.SMTP_USER) !== Boolean(c.SMTP_PASSWORD)) fail('SMTP_USER');
+    if (
+      c.SMTP_ALLOW_INSECURE_LOCAL === 'true' &&
+      (c.NODE_ENV === 'production' || !local(c.SMTP_HOST))
+    )
+      fail('SMTP_ALLOW_INSECURE_LOCAL');
+    try {
+      const url = new URL(c.PASSWORD_RESET_WEB_URL);
+      if (
+        url.username ||
+        url.password ||
+        url.search ||
+        url.hash !== '#/reset-password' ||
+        !c.CORS_ORIGINS.split(',')
+          .map((s) => s.trim())
+          .includes(url.origin) ||
+        (url.protocol !== 'https:' &&
+          !(
+            url.protocol === 'http:' &&
+            local(url.hostname) &&
+            c.NODE_ENV !== 'production'
+          ))
+      )
+        fail('PASSWORD_RESET_WEB_URL');
+    } catch {
+      fail('PASSWORD_RESET_WEB_URL');
+    }
   })
   .refine(
     (c) => c.JWT_ACCESS_SECRET !== c.JWT_REFRESH_SECRET,

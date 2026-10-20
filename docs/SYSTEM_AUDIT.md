@@ -23,7 +23,7 @@ No production deployment or production data changes are authorized.
 - Private S3 images use ownership, content validation, quotas and expiry.
   Redis/BullMQ worker handles outbox dispatch and retention. AI provider is
   disabled; this does not constitute a working AI integration.
-- Ten migrations and existing bootstrap/seed verification scripts. Local
+- Eleven migrations and existing bootstrap/seed verification scripts. Local
   PostgreSQL and Memurai are available. MinIO was stopped at audit start.
 
 ## Prioritized findings
@@ -35,7 +35,7 @@ No production deployment or production data changes are authorized.
 | A03 | Medium | Admin product/SKU requests with missing related UUIDs reach unhandled Prisma FK errors | FIXED: 400 INVALID_REFERENCE; E2E proves gallery transaction rollback and no orphan product/SKU |
 | A04 | Medium | API/worker Docker runtime includes build tooling and test dependencies | FIXED: separate migration target and production runtime; actual API/worker verified non-root, without Jest/TypeScript/Prisma CLI/source/.env |
 | A05 | Medium | Full npm audit reports 20 Moderate findings in dev dependency chain | OPEN tooling-only: runtime production audit is zero; no forced toolchain downgrade |
-| A06 | High | Real password recovery/email is absent | Implement existing recovery workflow; external mail delivery requires provider configuration |
+| A06 | High | Password recovery/email was absent | Local implementation VERIFIED: public request/reset, PostgreSQL tokens, real local SMTP/Redis worker, Flutter/Chrome; external provider delivery remains BLOCKED on configuration |
 | A07 | High | Try-On/Stylist UI is gated in API mode; no real AI provider | Provider/account/contract required for real output; never substitute demo output |
 | A08 | Medium | Promotions, catalog-specific upload and COD settlement remain incomplete | Promotions BLOCKED on conflicting contracts: UI uses percent, Coupon schema uses VND amount; no checkout coupon exists. Clarification requested. Persistent activity and content draft/publication are now implemented; other extensions remain open |
 | A09 | High | Production operational verification is incomplete | Local backup/restore verified; production TLS/domain, secrets, topology, throttling, off-host backup/restore and target still require evidence |
@@ -45,9 +45,28 @@ No production deployment or production data changes are authorized.
 | A13 | Medium | Admin activity history exists only in demo memory | FIXED: transactional event recording for all ten admin mutation categories, ADMIN-only paginated read and dashboard history; PostgreSQL, widget, Chrome, container and recovery verification passed |
 | A14 | Medium | Content drafts only live in demo memory; no explicit remote publication | FIXED: versioned private drafts, separate published snapshot, ADMIN save/publish, public home title/policy, transaction audit |
 | A15 | Medium | Remote privacy/FAQ still claim orders and account data disappear on reload | FIXED: API-mode text describes persisted data and COD accurately; return-policy links use the published policy page |
+| A16 | High | Raw PostgreSQL adapter serialization conflicts bypass P2034-only retry and return500 on concurrent cart additions | FIXED: explicit 40001/40P01 adapter conflict detection, five-attempt bound, generic409 when exhausted; red/green unit tests, 50 real concurrent pairs and full E2E passed |
+| A17 | Medium | Recovery Redis producer shutdown fails after a stalled established connection | FIXED during implementation: command/deadline bounds and forced disconnect; real TCP proxy regression passes and Jest exits normally |
 
 No Critical issue has been confirmed. High items remain open; the goal is
 **not complete**, and production readiness has not been established.
+
+### Iteration four evidence
+
+- Backend lint/build, **15 unit + 71 real E2E** passed; PostgreSQL/Redis/MinIO
+  and SMTP receiver used. Flutter analyze clean, **310 tests passed**, two
+  live opt-in tests skipped.
+- Chrome recovery passed actual mail link → URL scrub →375px reset →new login;
+  old password/session and reused link rejected. No external email sent.
+- Security review findings fixed and re-reviewed: Redis response deadlines,
+  malformed reset response treated as uncertain, generation-safe late response.
+- Recovery's initial timestamp cast caused a seven-hour timezone error; raw
+  timestamptz fixes it. Corrected uncommitted migration tested from an empty
+  isolated DB; original test database retained without reset.
+- A fresh eleven-migration bootstrap/schema diff/seed replay passed:
+  `wearly_handoff_1792479244018_790906ee_test`.
+- Production dependency audit after Nodemailer addition remains **zero**.
+- Evidence `.tools/goal-recovery-*`; [recovery configuration](password-recovery.md).
 
 ## Verification observed in this session
 

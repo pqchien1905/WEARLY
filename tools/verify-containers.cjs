@@ -82,6 +82,9 @@ async function main() {
       return response.json();
     }
     await api('GET', 'cart', null, null, null, 401);
+    const recoveryDisabled = await api('POST', 'auth/forgot-password', { email: prefix + '@example.test' }, null, null, 503);
+    assert.equal(recoveryDisabled.error.code, 'RECOVERY_UNAVAILABLE');
+    report.checks.push('recovery module loads in production runtime and stays unavailable without explicit SMTP configuration');
     const customer = await api('POST', 'auth/register', { email: prefix + '@example.test', name: 'Handoff container customer', password: randomBytes(24).toString('hex') }, null, null, 201);
     const token = customer.accessToken;
     assert.equal(customer.user.role, 'CUSTOMER'); assert.equal(customer.user.passwordHash, undefined);
@@ -102,6 +105,10 @@ async function main() {
     await db.connect();
     try {
       assert.equal((await db.query('SELECT status FROM "Payment" WHERE "orderId"=$1', [order.id])).rows[0].status, 'PENDING');
+      // Retained, already-consumed synthetic credential exercises backup/restore
+      // of the new table without creating a usable recovery link or sending mail.
+      assert.equal((await db.query('INSERT INTO "PasswordResetToken" (id,"userId","tokenHash","expiresAt","consumedAt") VALUES ($1,$2,$3,(NOW() AT TIME ZONE \'UTC\'),(NOW() AT TIME ZONE \'UTC\'))',
+        [randomUUID(), customer.user.id, randomBytes(32).toString('hex')])).rowCount, 1);
       // Promote only this verifier's synthetic account in its retained test DB.
       assert.equal((await db.query('UPDATE "User" SET role=$1 WHERE id=$2', ['ADMIN', customer.user.id])).rowCount, 1);
       const category = await api('POST', 'admin/categories', { name: 'Container activity fixture', slug: prefix }, token, null, 201);

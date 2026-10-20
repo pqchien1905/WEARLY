@@ -150,17 +150,27 @@ void main() {
       api.close();
     },
   );
-  test('password reset explicitly reports missing integration', () async {
-    final api = ApiClient(
-      baseUrl: 'http://localhost/api/v1',
-      client: MockClient((_) async => throw StateError('No API call expected')),
-    );
-    await expectLater(
-      RemoteAccountRepository(api).requestPasswordReset('an@example.com'),
-      throwsA(
-        isA<ApiException>().having((e) => e.code, 'code', 'NOT_AVAILABLE'),
-      ),
-    );
-    api.close();
-  });
+  test(
+    'password reset reports a disabled server transport without claiming success',
+    () async {
+      final api = ApiClient(
+        baseUrl: 'http://localhost/api/v1',
+        client: MockClient(
+          (_) async =>
+              http.Response('{"error":{"code":"RECOVERY_UNAVAILABLE"}}', 503),
+        ),
+      );
+      await expectLater(
+        RemoteAccountRepository(api).requestPasswordReset('an@example.com'),
+        throwsA(
+          isA<ApiException>().having(
+            (e) => e.code,
+            'code',
+            'RECOVERY_UNAVAILABLE',
+          ),
+        ),
+      );
+      api.close();
+    },
+  );
 }

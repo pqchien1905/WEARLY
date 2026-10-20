@@ -29,8 +29,28 @@ Goal: execute the attached system completion objective. Status: **IN PROGRESS**.
 ## In progress
 
 - Resolve provider/promotion requirements and scope the remaining integrations.
-- Scope provider-independent work remaining in password recovery and catalog
-  upload while external provider/promotion/settlement decisions remain pending.
+- Scope and implement catalog image upload from the existing admin flow.
+- External provider/promotion/settlement questions remain pending.
+
+## Completed — iteration four
+
+- Configurable real SMTP recovery, public request/reset, one-use hashed tokens,
+  all-session revocation, login/reset/refresh locking and Flutter forms.
+- Security review findings addressed: bounded Redis commands/shutdown,
+  malformed response uncertainty and generation-safe late response. Recent
+  failed-job retry after reset cannot create a new link.
+- Fixed timestamp cast timezone bug, then verified the corrected new migration
+  from a fresh isolated test DB. Earlier native test DB retained, never reset.
+- Fixed an existing raw pg adapter serialization-conflict retry gap discovered
+  on the fresh DB: strict40001/40P01 recognition, bounded retries and generic409.
+  Regression-first tests and50 real paired cart additions passed.
+- Backend lint/build,15unit/71E2E; Flutter analyze/310tests,2opt-in skips passed.
+  Chrome SMTP recovery and shopping/COD/mobile/reload journeys passed.
+- Fresh11-migration bootstrap,3image builds, container runtime,28-table restore
+  and restored-API smoke passed. Evidence `.tools/goal-recovery-*`,
+  source `wearly_handoff_1792479244018_790906ee_test`, restored copy
+  `wearly_restore_1792479398226_e548ec01_test`.
+- Production dependency audit zero. Default-API Web release rebuilt.
 
 ## Completed — iteration two
 
@@ -49,14 +69,15 @@ Goal: execute the attached system completion objective. Status: **IN PROGRESS**.
 
 ## Not completed
 
-- Password recovery with real email transport and frontend.
+- External SMTP provider delivery verification.
 - Remote AI workflows, promotions, catalog upload and settlement.
 - Production configuration, production recovery evidence and final goal acceptance.
 
 ## External dependencies / blocked verification
 
 - Real AI output: no enabled provider implementation/contract or verified account.
-- Email delivery: no configured mail transport verified yet.
+- External email delivery: configurable SMTP transport is implemented and local
+  SMTP delivery passed; real provider credentials/domain delivery remain BLOCKED.
 - Public production deployment/TLS/domain: no target or approval; deployment
   is excluded until authorized.
 - Promotion policy: existing UI is percent, database is fixed VND amount.

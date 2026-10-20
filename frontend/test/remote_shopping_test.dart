@@ -255,7 +255,7 @@ void main() {
         child: NepApp(router: router),
       ),
     );
-    for (final path in ['/ai-stylist', '/virtual-try-on', '/forgot-password']) {
+    for (final path in ['/ai-stylist', '/virtual-try-on']) {
       router.go(path);
       await tester.pumpAndSettle();
       expect(

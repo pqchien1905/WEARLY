@@ -71,6 +71,7 @@ model User {
   id String @id @default(uuid()) @db.Uuid
   email String @unique
   passwordHash String
+  passwordChangedAt DateTime?
   name String
   phone String @default("")
   role Role @default(CUSTOMER)
@@ -78,6 +79,7 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   refreshTokens RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
   addresses Address[]
   cart Cart?
   orders Order[]
@@ -87,6 +89,17 @@ model User {
   images ImageAsset[]
   stylePreference StylePreference?
   addressCreateReceipts AddressCreateReceipt[]
+}
+model PasswordResetToken {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String @unique @db.VarChar(64)
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([userId])
+  @@index([expiresAt])
 }
 model StylePreference {
   userId String @id @db.Uuid

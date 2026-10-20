@@ -18,10 +18,10 @@ if (!/^\/[a-zA-Z0-9_]+_test$/.test(target.pathname) || target.href === new URL(n
 Object.assign(process.env, normal, { DATABASE_URL: target.href, NODE_ENV: 'test',
   JWT_ACCESS_SECRET: randomUUID() + randomUUID(), JWT_REFRESH_SECRET: randomUUID() + randomUUID(),
   AI_QUEUE_PREFIX: 'flutter-test-' + randomUUID(), CORS_ORIGINS: 'http://127.0.0.1:4183' });
+process.env.PASSWORD_RECOVERY_ENABLED = 'false';
 process.chdir(backend);
 requireBackend('reflect-metadata');
 const { NestFactory } = requireBackend('@nestjs/core');
-const { AppModule } = requireBackend('./dist/app.module');
 const { PrismaService } = requireBackend('./dist/database/prisma.service');
 const { configureApp } = requireBackend('./dist/bootstrap');
 const fixture = 'flutter-test-' + randomUUID();
@@ -30,6 +30,7 @@ const admin = process.argv.includes('--admin');
 const wishlist = process.argv.includes('--wishlist');
 const reviews = process.argv.includes('--reviews');
 const style = process.argv.includes('--style');
+const recovery = process.argv.includes('--recovery');
 function flutter(args) {
   const binary = path.join(root, '.tools/flutter/bin/flutter.bat');
   // All arguments below are local constants, loopback URLs or generated UUIDs.
@@ -41,6 +42,25 @@ function flutter(args) {
   });
 }
 async function main() {
+  let smtp, recoveryWorker, recoveryQueue;
+  const mails = [];
+  if (recovery) {
+    const { SMTPServer } = requireBackend('smtp-server');
+    smtp = new SMTPServer({ authOptional: true, disabledCommands: ['AUTH', 'STARTTLS'], logger: false,
+      onData(stream, _session, callback) {
+        let text = '';
+        stream.on('data', chunk => { text += chunk.toString(); });
+        stream.on('end', () => { mails.push(text); callback(); });
+      },
+    });
+    await new Promise(resolve => smtp.listen(0, '127.0.0.1', resolve));
+    Object.assign(process.env, { PASSWORD_RECOVERY_ENABLED: 'true', SMTP_HOST: '127.0.0.1',
+      SMTP_PORT: String(smtp.server.address().port), SMTP_SECURE: 'false', SMTP_ALLOW_INSECURE_LOCAL: 'true',
+      SMTP_FROM: 'store@example.test', SMTP_USER: '', SMTP_PASSWORD: '',
+      PASSWORD_RESET_WEB_URL: 'http://127.0.0.1:4183/#/reset-password',
+    });
+  }
+  const { AppModule } = requireBackend('./dist/app.module');
   const app = await NestFactory.create(AppModule, { logger: false });
   const db = app.get(PrismaService);
   let category, brand, product;
@@ -54,7 +74,43 @@ async function main() {
       images: { create: { url: 'assets/images/shirt.jpg', alt: 'Áo cotton', position: 0 } },
       variants: { create: { sku: fixture, size: 'M', color: 'Trắng', colorHex: '#FFFFFF', price: '490000', inventory: { create: { quantity: 10 } } } } } });
     const url = (await app.getUrl()) + '/api/v1';
-    if (admin) {
+    if (recovery) {
+      const { ConfigService } = requireBackend('@nestjs/config');
+      const { RecoveryService } = requireBackend('./dist/modules/recovery/recovery.service');
+      const { RecoveryWorker } = requireBackend('./dist/worker/recovery.worker');
+      const { Queue } = requireBackend('bullmq');
+      recoveryWorker = new RecoveryWorker(app.get(ConfigService), app.get(RecoveryService));
+      recoveryWorker.onModuleInit();
+      recoveryQueue = new Queue('wearly-password-recovery', { prefix: process.env.AI_QUEUE_PREFIX,
+        connection: { host: process.env.REDIS_HOST, port: Number(process.env.REDIS_PORT) } });
+      const email = fixture + '@example.com', password = 'Browser-original-Password-2026';
+      const registered = await fetch(url + '/auth/register', { method: 'POST',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, name: 'Khôi phục kiểm thử' }) });
+      if (registered.status !== 201) throw new Error('Recovery fixture registration failed');
+      const account = await registered.json();
+      await flutter(['build', 'web', '--release', '--dart-define=USE_REMOTE_API=true', '--dart-define=API_BASE_URL=' + url]);
+      await require('./verify-recovery-browser.cjs')({ root, email, password, url, nextPassword: 'Browser-replaced-Password-2026',
+        getLink: async () => {
+          for (let i = 0; i < 100; i++) {
+            for (const mail of mails) {
+              const split = mail.indexOf('\r\n\r\n'), headers = mail.slice(0, split), body = mail.slice(split + 4);
+              const decoded = /Content-Transfer-Encoding: base64/i.test(headers)
+                ? Buffer.from(body.replace(/\s/g, ''), 'base64').toString()
+                : body.replace(/=\r\n/g, '').replace(/=([0-9A-F]{2})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+              const link = decoded.match(/http:\/\/127\.0\.0\.1:4183\/#\/reset-password\?token=[A-Za-z0-9_-]{43}/)?.[0];
+              if (link) return link;
+            }
+            await new Promise(resolve => setTimeout(resolve, 50));
+          }
+          throw new Error('Local SMTP reset link did not arrive');
+        },
+      });
+      const oldSession = await fetch(url + '/auth/me', { headers: { Authorization: 'Bearer ' + account.accessToken } });
+      if (oldSession.status !== 401) throw new Error('Pre-reset session remained active');
+      if (await db.passwordResetToken.count({ where: { userId: account.user.id, consumedAt: null } }) !== 0)
+        throw new Error('Unconsumed reset token remained');
+      console.log('PASS recovery database: token consumed and original session revoked.');
+    } else if (admin) {
       if (await db.storeContent.count() !== 0) throw new Error('Admin content verification requires no pre-existing content; refusing to overwrite it.');
       const password = 'Browser-only-Password-2026';
       const post = async (path, body, token, headers = {}) => {
@@ -147,6 +203,8 @@ async function main() {
     }
     console.log('PASS real PostgreSQL shopping; normal development database untouched.');
   } finally {
+    await recoveryWorker?.onModuleDestroy();
+    if (recoveryQueue) { await recoveryQueue.obliterate({ force: true }); await recoveryQueue.close(); }
     // Restrict every cleanup to this run's exact account emails/product IDs.
     try {
       const users = await db.user.findMany({ where: { email: { in: [fixture + '@example.com', 'browser-' + fixture + '@example.com', 'admin-' + fixture + '@example.com'] } }, select: { id: true } });
@@ -174,7 +232,10 @@ async function main() {
         await tx.category.deleteMany({ where: { slug: fixture + '-taxonomy' } });
         await tx.brand.deleteMany({ where: { slug: fixture + '-taxonomy' } });
       });
-    } finally { await app.close(); }
+    } finally {
+      await app.close();
+      if (smtp) await new Promise(resolve => smtp.close(resolve));
+    }
   }
 }
 const deadline = setTimeout(() => { console.error('Integration verification exceeded 10 minutes.'); process.exit(1); }, 600000);

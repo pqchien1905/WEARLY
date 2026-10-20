@@ -28,7 +28,6 @@ class RemoteRouteGate extends ConsumerWidget {
       '/ai-stylist',
       '/virtual-try-on',
       '/account/try-ons',
-      '/forgot-password',
     ].any((prefix) => path == prefix || path.startsWith('$prefix/'))) {
       return StatePanel(
         title: 'Tính năng chưa được kết nối',

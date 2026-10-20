@@ -6,6 +6,8 @@ Base URL: `http://localhost:3000/api/v1`. Swagger: `http://localhost:3000/api/do
 |---|---|---|
 | POST | /auth/register, /auth/login, /auth/refresh | Public, rate limited |
 | POST | /auth/admin/login | Public, rate limited; xác thực mật khẩu và yêu cầu role ADMIN trước khi cấp phiên |
+| POST | /auth/forgot-password | Public; `{email}` →202 generic; SMTP/worker phải bật; xem [khôi phục](password-recovery.md) |
+| POST | /auth/reset-password | Public; `{token,password}` →200; token một lần15phút, thu hồi mọi phiên |
 | POST | /auth/logout | Bearer; revoke session family |
 | GET | /auth/me | Bearer |
 | GET, PATCH | /users/me | Bearer |

@@ -5,6 +5,7 @@ CLI, client, PostgreSQL adapter đều khóa **7.10.1**. Schema ở `backend/pri
 ```mermaid
 erDiagram
   User ||--o{ RefreshToken : sessions
+  User ||--o{ PasswordResetToken : recovery
   User ||--o{ Address : owns
   User ||--o{ AddressCreateReceipt : deduplicates
   Address |o--o| AddressCreateReceipt : created_by
@@ -79,7 +80,7 @@ erDiagram
 
 | Nhóm | Bảng | Quy tắc |
 |---|---|---|
-| Tài khoản | User, RefreshToken, Address, AddressCreateReceipt, StylePreference | UUID PK; receipt có PK(userId,key); email unique lowercase ở DTO; token chỉ SHA-256; một địa chỉ mặc định/user; StylePreference dùng userId PK/FK, budget Decimal, version chống ghi đè |
+| Tài khoản | User, RefreshToken, PasswordResetToken, Address, AddressCreateReceipt, StylePreference | UUID PK; receipt có PK(userId,key); email unique lowercase ở DTO; token chỉ SHA-256; một địa chỉ mặc định/user; StylePreference dùng userId PK/FK, budget Decimal, version chống ghi đè |
 | Catalog | Category, Brand, Product, ProductVariant, ProductImage | slug/SKU unique; unique (productId,size,color); ảnh unique (productId,position) |
 | Kho | Inventory, InventoryMovement | 1 inventory/SKU; quantity>=0; version tăng sau mutation; movement delta/reason/order |
 | Giỏ | Cart, CartItem | 1 cart/user; unique (cartId,variantId); quantity 1..99 |
@@ -90,7 +91,7 @@ erDiagram
 | Lịch sử quản trị | AdminAuditEvent | actorId/action/targetId/createdAt; index(createdAt,id); ghi cùng transaction nghiệp vụ |
 | Nội dung | StoreContent | singleton storefront; draft/publication riêng; version, publishedVersion; không seed policy |
 
-Tổng cộng 26 model. Quan hệ n-n user/product qua WishlistItem và Review; cart/variant qua CartItem; order/variant qua OrderItem. StylePreference là quan hệ 1-0..1 với User, xóa theo tài khoản; GET mặc định không tạo bản ghi. AddressCreateReceipt dùng PK(userId,key), hash nội dung và FK addressId nullable/unique; xóa địa chỉ chỉ SET NULL để yêu cầu cũ không tạo lại địa chỉ. Các foreign key đều có trong migration. Riêng actorId/targetId của AdminAuditEvent là UUID lịch sử không FK/cascade, để việc xóa thực thể không xóa nhật ký theo.
+Tổng cộng 27 model. Quan hệ n-n user/product qua WishlistItem và Review; cart/variant qua CartItem; order/variant qua OrderItem. StylePreference là quan hệ 1-0..1 với User, xóa theo tài khoản; GET mặc định không tạo bản ghi. AddressCreateReceipt dùng PK(userId,key), hash nội dung và FK addressId nullable/unique; xóa địa chỉ chỉ SET NULL để yêu cầu cũ không tạo lại địa chỉ. Các foreign key đều có trong migration. Riêng actorId/targetId của AdminAuditEvent là UUID lịch sử không FK/cascade, để việc xóa thực thể không xóa nhật ký theo.
 
 Enum: Role(CUSTOMER,ADMIN), OrderStatus(PENDING,CONFIRMED,SHIPPED,DELIVERED,CANCELLED), PaymentStatus(PENDING,PAID,FAILED,REFUNDED,CANCELLED), AIJobStatus(PENDING,PROCESSING,COMPLETED,FAILED).
 
@@ -103,6 +104,7 @@ Indexes: email/SKU/slugs, product(active,createdAt,id), category/brand, variant(
 - `20261018000000_init`: tạo 22 bảng, enum, PK/FK/unique/index.
 - `20261020100000_admin_audit`: thêm AdminAuditEvent và enum10 thao tác; không thay đổi bảng/dữ liệu cũ.
 - `20261020110000_store_content`: thêm StoreContent với constraint publication đầy đủ/version; thêm hai enum audit lưu nháp/xuất bản. Không ghi nội dung mẫu vào DB.
+- `20261020120000_password_recovery`: thêm PasswordResetToken (hash, expiry, consumedAt, user FK) và User.passwordChangedAt nullable; không đổi mật khẩu hay thu hồi phiên hiện có.
 - `20261018000100_constraints`: số lượng/giá/tổng đơn/rating và default address.
 - `20261018000200_private_images`: thêm width/height, SHA256, consentAt, purgedAt và index/constraint; không thay hoặc xóa dữ liệu cũ.
 - `20261018000300_image_cleanup_retry`: thêm purgeRetryAt và index để retry công bằng, không sửa migration đã áp dụng.

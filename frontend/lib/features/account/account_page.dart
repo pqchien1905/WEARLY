@@ -28,6 +28,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
   bool obscure = true;
   bool busy = false;
   String? error;
+  bool recoveryAccepted = false;
 
   Future<void> submit() async {
     if (!form.currentState!.validate() || busy) return;
@@ -41,10 +42,14 @@ class _AuthPageState extends ConsumerState<AuthPage> {
       if (widget.mode == '/forgot-password') {
         await account.requestPasswordReset(email.text.trim());
         if (mounted) {
-          toast(
-            context,
-            'Đã mô phỏng yêu cầu khôi phục. Không gửi email thật.',
-          );
+          if (ref.read(remoteApiProvider)) {
+            setState(() => recoveryAccepted = true);
+          } else {
+            toast(
+              context,
+              'Đã mô phỏng yêu cầu khôi phục. Không gửi email thật.',
+            );
+          }
         }
       } else {
         await account.signIn(
@@ -101,7 +106,9 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                   const SizedBox(height: 24),
                   DemoNotice(
                     text: remote
-                        ? 'Đăng nhập để lưu giỏ hàng, địa chỉ và đơn hàng. Sau khi tải lại trang, hãy đăng nhập lại.'
+                        ? forgot
+                              ? 'Nhập email tài khoản. Nếu tài khoản hợp lệ, bạn sẽ nhận được liên kết dùng một lần, có hiệu lực 15 phút.'
+                              : 'Đăng nhập để lưu giỏ hàng, địa chỉ và đơn hàng. Sau khi tải lại trang, hãy đăng nhập lại.'
                         : 'Tài khoản mô phỏng. Không xác thực danh tính; không dùng mật khẩu thật. Dữ liệu chỉ trong phiên này.',
                   ),
                   const SizedBox(height: 28),
@@ -150,7 +157,9 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                     width: double.infinity,
                     child: AppButton(
                       forgot
-                          ? 'Gửi hướng dẫn demo'
+                          ? remote
+                                ? 'Gửi liên kết khôi phục'
+                                : 'Gửi hướng dẫn demo'
                           : register
                           ? remote
                                 ? 'Tạo tài khoản'
@@ -159,10 +168,17 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                           ? 'Đăng nhập'
                           : 'Đăng nhập demo',
                       busy: busy,
-                      onPressed: submit,
+                      onPressed: recoveryAccepted ? null : submit,
                     ),
                   ),
                   const SizedBox(height: 16),
+                  if (recoveryAccepted)
+                    Semantics(
+                      liveRegion: true,
+                      child: const Text(
+                        'Đã tiếp nhận yêu cầu. Nếu email thuộc tài khoản đang hoạt động, hướng dẫn sẽ được gửi đến hộp thư. Hãy kiểm tra cả thư rác.',
+                      ),
+                    ),
                   if (error != null)
                     Semantics(
                       liveRegion: true,

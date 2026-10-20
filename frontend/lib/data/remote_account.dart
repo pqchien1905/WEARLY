@@ -80,9 +80,11 @@ class RemoteAccountRepository implements AccountRepository {
 
   @override
   Future<void> requestPasswordReset(String email) async {
-    throw const ApiException(
-      'NOT_AVAILABLE',
-      'Khôi phục mật khẩu chưa được kết nối. Vui lòng liên hệ cửa hàng.',
+    await api.request(
+      'POST',
+      'auth/forgot-password',
+      authenticated: false,
+      body: {'email': email.trim()},
     );
   }
 

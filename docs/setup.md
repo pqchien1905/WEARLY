@@ -236,6 +236,18 @@ PostgreSQL tạm không còn được dùng sau reboot. Backend hiện dùng Pos
 
 ## Xử lý lỗi
 
+### Khôi phục mật khẩu (cập nhật20/10)
+
+Có11migrations; chạy generate/deploy/build trước khi khởi động lại. SMTP
+mặc định tắt; xem [password-recovery.md](password-recovery.md) để cấu hình API
+và worker. `node tools/test-frontend-api.cjs --recovery` chạy Chrome với SMTP
+local, không gửi email ra Internet. `test-backend.ps1` ưu tiên cấu hình hiện
+có trong `backend/.env.test`; override khác file hiện có bị từ chối trước khi
+tạo DB. DB test hiện tại là bản Docker riêng cho lượt recovery, native
+`wearly_test` cũ được giữ nguyên.
+
+### Lỗi thường gặp
+
 - Flutter báo `double/int is not a subtype of bool?` sau khi bấm F12 hoặc thay đổi chiều rộng: đã sửa xung đột PageStorage giữa vị trí cuộn và các mục thu gọn. Trong terminal đang chạy `flutter run`, nhấn `R` viết hoa để hot restart và nạp bản sửa, xóa trạng thái lỗi cũ trong bộ nhớ.
 - Docker500 hoặc WSL virtualization: kiểm tra vmcompute/hns, `wsl --status` và trạng thái Windows pending restart. Lỗi trên máy này đã hết sau khi Restart áp dụng bản sửa DISM; không chạy reset/unregister distro để xử lý lỗi này.
 - P1001/connect refused: kiểm tra port/host/container health và DATABASE_URL.

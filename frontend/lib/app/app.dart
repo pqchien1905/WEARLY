@@ -24,6 +24,7 @@ import '../features/ai_stylist/stylist_page.dart';
 import '../features/virtual_tryon/tryon_page.dart';
 import '../features/virtual_tryon/tryon_results.dart';
 import '../features/account/account_page.dart';
+import '../features/account/reset_password_page.dart';
 import '../features/account/orders_page.dart';
 import '../features/account/reviews_page.dart';
 import '../features/account/address_page.dart';
@@ -59,196 +60,222 @@ GoRoute appRoute({
   ),
 );
 
-GoRouter createRouter({String initialLocation = '/'}) => GoRouter(
-  initialLocation: initialLocation,
-  redirect: (context, state) {
-    final scope = ProviderScope.containerOf(context, listen: false);
-    if (scope.read(remoteApiProvider) &&
-        isAdminPath(state.uri.path) &&
-        state.uri.path != '/admin/login' &&
-        scope.read(adminAccountProvider)?.role != 'ADMIN') {
-      return Uri(
+GoRouter createRouter({String initialLocation = '/'}) {
+  String? resetToken;
+  var resetAttempt = 0;
+  return GoRouter(
+    initialLocation: initialLocation,
+    redirect: (context, state) {
+      if (state.uri.path == '/reset-password' && state.uri.hasQuery) {
+        resetToken = state.uri.queryParameters['token'];
+        resetAttempt++;
+        // Consume the fragment query before page/widget keys or browser history
+        // can retain it. The form takes the token once, into state memory only.
+        return '/reset-password';
+      }
+      final scope = ProviderScope.containerOf(context, listen: false);
+      if (scope.read(remoteApiProvider) &&
+          isAdminPath(state.uri.path) &&
+          state.uri.path != '/admin/login' &&
+          scope.read(adminAccountProvider)?.role != 'ADMIN') {
+        return Uri(
+          path: '/admin/login',
+          queryParameters: {
+            'next': loginDestination(state.uri.toString(), admin: true),
+          },
+        ).toString();
+      }
+      return null;
+    },
+    errorBuilder: (c, s) => StoreShell(
+      child: StatePanel(
+        title: 'Trang này không còn ở đây',
+        message: 'Đường dẫn không đúng hoặc đã thay đổi.',
+        action: AppButton('Về trang chủ', onPressed: () => c.go('/')),
+      ),
+    ),
+    routes: [
+      GoRoute(
         path: '/admin/login',
-        queryParameters: {
-          'next': loginDestination(state.uri.toString(), admin: true),
-        },
-      ).toString();
-    }
-    return null;
-  },
-  errorBuilder: (c, s) => StoreShell(
-    child: StatePanel(
-      title: 'Trang này không còn ở đây',
-      message: 'Đường dẫn không đúng hoặc đã thay đổi.',
-      action: AppButton('Về trang chủ', onPressed: () => c.go('/')),
-    ),
-  ),
-  routes: [
-    GoRoute(
-      path: '/admin/login',
-      pageBuilder: (_, s) =>
-          NoTransitionPage(key: s.pageKey, child: const AdminLoginPage()),
-    ),
-    ShellRoute(
-      builder: (_, _, child) => AdminShell(child: child),
-      routes: [
-        appRoute(path: '/admin', builder: (_, _) => const AdminDashboard()),
-        appRoute(
-          path: '/admin/products',
-          builder: (_, _) => const AdminProductsPage(),
-        ),
-        appRoute(
-          path: '/admin/products/new',
-          builder: (_, _) => const AdminProductForm(),
-        ),
-        appRoute(
-          path: '/admin/products/:id/edit',
-          builder: (_, s) => AdminProductForm(id: s.pathParameters['id']),
-        ),
-        appRoute(
-          path: '/admin/inventory',
-          builder: (_, _) => const AdminProductsPage(inventory: true),
-        ),
-        appRoute(
-          path: '/admin/orders',
-          builder: (_, _) => const AdminOrdersPage(),
-        ),
-        appRoute(
-          path: '/admin/orders/:id',
-          builder: (_, s) => AdminOrdersPage(id: s.pathParameters['id']),
-        ),
-        appRoute(
-          path: '/admin/customers',
-          builder: (_, _) => const AdminCustomersPage(),
-        ),
-        for (final path in ['/admin/categories', '/admin/brands'])
+        pageBuilder: (_, s) =>
+            NoTransitionPage(key: s.pageKey, child: const AdminLoginPage()),
+      ),
+      ShellRoute(
+        builder: (_, _, child) => AdminShell(child: child),
+        routes: [
+          appRoute(path: '/admin', builder: (_, _) => const AdminDashboard()),
           appRoute(
-            path: path,
-            builder: (_, _) => const StatePanel(
-              title: 'Quản lý danh mục và thương hiệu',
-              message: 'Chức năng này có trong chế độ kết nối API.',
+            path: '/admin/products',
+            builder: (_, _) => const AdminProductsPage(),
+          ),
+          appRoute(
+            path: '/admin/products/new',
+            builder: (_, _) => const AdminProductForm(),
+          ),
+          appRoute(
+            path: '/admin/products/:id/edit',
+            builder: (_, s) => AdminProductForm(id: s.pathParameters['id']),
+          ),
+          appRoute(
+            path: '/admin/inventory',
+            builder: (_, _) => const AdminProductsPage(inventory: true),
+          ),
+          appRoute(
+            path: '/admin/orders',
+            builder: (_, _) => const AdminOrdersPage(),
+          ),
+          appRoute(
+            path: '/admin/orders/:id',
+            builder: (_, s) => AdminOrdersPage(id: s.pathParameters['id']),
+          ),
+          appRoute(
+            path: '/admin/customers',
+            builder: (_, _) => const AdminCustomersPage(),
+          ),
+          for (final path in ['/admin/categories', '/admin/brands'])
+            appRoute(
+              path: path,
+              builder: (_, _) => const StatePanel(
+                title: 'Quản lý danh mục và thương hiệu',
+                message: 'Chức năng này có trong chế độ kết nối API.',
+              ),
+            ),
+          appRoute(
+            path: '/admin/promotions',
+            builder: (_, _) => const AdminPromotionsPage(),
+          ),
+          appRoute(
+            path: '/admin/content',
+            builder: (_, _) => const AdminContentPage(),
+          ),
+          appRoute(
+            path: '/admin/ai-monitoring',
+            builder: (_, _) => const AdminMonitoringPage(),
+          ),
+          appRoute(
+            path: '/admin/settings',
+            builder: (_, _) => const AdminSettingsPage(),
+          ),
+        ],
+      ),
+      ShellRoute(
+        builder: (_, _, child) => StoreShell(child: child),
+        routes: [
+          appRoute(
+            path: '/403',
+            builder: (c, _) => StatePanel(
+              title: 'Bạn chưa có quyền truy cập',
+              message:
+                  'Trạng thái 403 mô phỏng. Khi kết nối máy chủ, quyền truy cập được xác minh ở đó.',
+              icon: Icons.lock_outline,
+              action: AppButton('Về cửa hàng', onPressed: () => c.go('/')),
             ),
           ),
-        appRoute(
-          path: '/admin/promotions',
-          builder: (_, _) => const AdminPromotionsPage(),
-        ),
-        appRoute(
-          path: '/admin/content',
-          builder: (_, _) => const AdminContentPage(),
-        ),
-        appRoute(
-          path: '/admin/ai-monitoring',
-          builder: (_, _) => const AdminMonitoringPage(),
-        ),
-        appRoute(
-          path: '/admin/settings',
-          builder: (_, _) => const AdminSettingsPage(),
-        ),
-      ],
-    ),
-    ShellRoute(
-      builder: (_, _, child) => StoreShell(child: child),
-      routes: [
-        appRoute(
-          path: '/403',
-          builder: (c, _) => StatePanel(
-            title: 'Bạn chưa có quyền truy cập',
-            message:
-                'Trạng thái 403 mô phỏng. Khi kết nối máy chủ, quyền truy cập được xác minh ở đó.',
-            icon: Icons.lock_outline,
-            action: AppButton('Về cửa hàng', onPressed: () => c.go('/')),
-          ),
-        ),
-        appRoute(path: '/', builder: (_, _) => const HomePage()),
-        for (final path in ['/login', '/register', '/forgot-password'])
+          appRoute(path: '/', builder: (_, _) => const HomePage()),
           appRoute(
-            path: path,
+            path: '/reset-password',
+            builder: (_, _) => ResetPasswordPage(
+              key: ValueKey(resetAttempt),
+              takeToken: () {
+                final value = resetToken;
+                resetToken = null;
+                return value;
+              },
+            ),
+          ),
+          for (final path in ['/login', '/register', '/forgot-password'])
+            appRoute(
+              path: path,
+              builder: (_, s) =>
+                  AuthPage(key: ValueKey(s.uri.path), mode: s.uri.path),
+            ),
+          appRoute(path: '/account', builder: (_, _) => const AccountPage()),
+          appRoute(
+            path: '/account/reviews',
+            builder: (_, _) => const CustomerReviewsPage(),
+          ),
+          appRoute(
+            path: '/account/addresses',
+            builder: (_, _) => const AddressPage(),
+          ),
+          appRoute(
+            path: '/account/style',
+            builder: (_, _) => const StylePage(),
+          ),
+          appRoute(
+            path: '/account/try-ons',
+            builder: (_, _) => const TryOnHistoryPage(),
+          ),
+          appRoute(
+            path: '/account/orders',
+            builder: (_, _) => const OrdersPage(),
+          ),
+          appRoute(
+            path: '/account/orders/:id',
+            builder: (_, s) => OrdersPage(id: s.pathParameters['id']),
+          ),
+          appRoute(
+            path: '/ai-stylist',
             builder: (_, s) =>
-                AuthPage(key: ValueKey(s.uri.path), mode: s.uri.path),
+                StylistPage(prompt: s.uri.queryParameters['prompt']),
           ),
-        appRoute(path: '/account', builder: (_, _) => const AccountPage()),
-        appRoute(
-          path: '/account/reviews',
-          builder: (_, _) => const CustomerReviewsPage(),
-        ),
-        appRoute(
-          path: '/account/addresses',
-          builder: (_, _) => const AddressPage(),
-        ),
-        appRoute(path: '/account/style', builder: (_, _) => const StylePage()),
-        appRoute(
-          path: '/account/try-ons',
-          builder: (_, _) => const TryOnHistoryPage(),
-        ),
-        appRoute(
-          path: '/account/orders',
-          builder: (_, _) => const OrdersPage(),
-        ),
-        appRoute(
-          path: '/account/orders/:id',
-          builder: (_, s) => OrdersPage(id: s.pathParameters['id']),
-        ),
-        appRoute(
-          path: '/ai-stylist',
-          builder: (_, s) =>
-              StylistPage(prompt: s.uri.queryParameters['prompt']),
-        ),
-        appRoute(
-          path: '/virtual-try-on',
-          builder: (_, s) => TryOnPage(slug: s.uri.queryParameters['product']),
-        ),
-        appRoute(
-          path: '/virtual-try-on/:jobId',
-          builder: (_, s) => TryOnResultPage(id: s.pathParameters['jobId']!),
-        ),
-        appRoute(path: '/cart', builder: (_, _) => const CartPage()),
-        appRoute(path: '/checkout', builder: (_, _) => const CheckoutPage()),
-        appRoute(
-          path: '/checkout/success/:id',
-          builder: (_, s) => OrderSuccessPage(id: s.pathParameters['id']!),
-        ),
-        for (final path in ['/shop', '/search'])
           appRoute(
-            path: path,
-            builder: (_, s) => CatalogPage(uri: s.uri),
+            path: '/virtual-try-on',
+            builder: (_, s) =>
+                TryOnPage(slug: s.uri.queryParameters['product']),
           ),
-        appRoute(
-          path: '/wishlist',
-          builder: (_, s) => CatalogPage(uri: s.uri, wishlist: true),
-        ),
-        appRoute(
-          path: '/products/:slug',
-          builder: (_, s) => ProductPageView(slug: s.pathParameters['slug']!),
-        ),
-        appRoute(
-          path: '/design-system',
-          builder: (_, _) => const GalleryPage(),
-        ),
-        appRoute(path: '/contact', builder: (_, _) => const ContactPage()),
-        appRoute(path: '/faq', builder: (_, _) => const FaqPage()),
-        appRoute(
-          path: '/collections',
-          builder: (_, _) => const CollectionPage(),
-        ),
-        appRoute(
-          path: '/collections/:slug',
-          builder: (_, s) => CollectionPage(slug: s.pathParameters['slug']),
-        ),
-        for (final page in [
-          '/about',
-          '/shipping-returns',
-          '/privacy',
-          '/size-guide',
-        ])
           appRoute(
-            path: page,
-            builder: (_, s) => InfoPage(path: s.uri.path),
+            path: '/virtual-try-on/:jobId',
+            builder: (_, s) => TryOnResultPage(id: s.pathParameters['jobId']!),
           ),
-      ],
-    ),
-  ],
-);
+          appRoute(path: '/cart', builder: (_, _) => const CartPage()),
+          appRoute(path: '/checkout', builder: (_, _) => const CheckoutPage()),
+          appRoute(
+            path: '/checkout/success/:id',
+            builder: (_, s) => OrderSuccessPage(id: s.pathParameters['id']!),
+          ),
+          for (final path in ['/shop', '/search'])
+            appRoute(
+              path: path,
+              builder: (_, s) => CatalogPage(uri: s.uri),
+            ),
+          appRoute(
+            path: '/wishlist',
+            builder: (_, s) => CatalogPage(uri: s.uri, wishlist: true),
+          ),
+          appRoute(
+            path: '/products/:slug',
+            builder: (_, s) => ProductPageView(slug: s.pathParameters['slug']!),
+          ),
+          appRoute(
+            path: '/design-system',
+            builder: (_, _) => const GalleryPage(),
+          ),
+          appRoute(path: '/contact', builder: (_, _) => const ContactPage()),
+          appRoute(path: '/faq', builder: (_, _) => const FaqPage()),
+          appRoute(
+            path: '/collections',
+            builder: (_, _) => const CollectionPage(),
+          ),
+          appRoute(
+            path: '/collections/:slug',
+            builder: (_, s) => CollectionPage(slug: s.pathParameters['slug']),
+          ),
+          for (final page in [
+            '/about',
+            '/shipping-returns',
+            '/privacy',
+            '/size-guide',
+          ])
+            appRoute(
+              path: page,
+              builder: (_, s) => InfoPage(path: s.uri.path),
+            ),
+        ],
+      ),
+    ],
+  );
+}
 
 class NepApp extends ConsumerStatefulWidget {
   const NepApp({super.key, this.router});

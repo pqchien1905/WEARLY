@@ -1,4 +1,8 @@
-import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomUUID } from 'node:crypto';
@@ -47,7 +51,15 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     if (adminOnly && user.role !== 'ADMIN')
       throw new ForbiddenException('Administrator access is required');
-    return this.db.$transaction((tx) => this.issue(tx, user, randomUUID()));
+    return transaction(this.db, async (tx) => {
+      await lockUser(tx, user.id);
+      const current = await tx.user.findUnique({ where: { id: user.id } });
+      if (!current?.active || current.passwordHash !== user.passwordHash)
+        throw new UnauthorizedException('Invalid email or password');
+      if (adminOnly && current.role !== 'ADMIN')
+        throw new ForbiddenException('Administrator access is required');
+      return this.issue(tx, current, randomUUID());
+    });
   }
   private async issue(
     tx: Prisma.TransactionClient,
