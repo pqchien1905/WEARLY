@@ -88,8 +88,9 @@ erDiagram
 | Chuẩn bị mở rộng | Coupon | Chưa có workflow promotions; unique code |
 | AI | ImageAsset, AIJob, TryOnResult, OutboxEvent | object keys private; verified/deleted/expiry; 1 result và 1 outbox/job |
 | Lịch sử quản trị | AdminAuditEvent | actorId/action/targetId/createdAt; index(createdAt,id); ghi cùng transaction nghiệp vụ |
+| Nội dung | StoreContent | singleton storefront; draft/publication riêng; version, publishedVersion; không seed policy |
 
-Tổng cộng 25 model. Quan hệ n-n user/product qua WishlistItem và Review; cart/variant qua CartItem; order/variant qua OrderItem. StylePreference là quan hệ 1-0..1 với User, xóa theo tài khoản; GET mặc định không tạo bản ghi. AddressCreateReceipt dùng PK(userId,key), hash nội dung và FK addressId nullable/unique; xóa địa chỉ chỉ SET NULL để yêu cầu cũ không tạo lại địa chỉ. Các foreign key đều có trong migration. Riêng actorId/targetId của AdminAuditEvent là UUID lịch sử không FK/cascade, để việc xóa thực thể không xóa nhật ký theo.
+Tổng cộng 26 model. Quan hệ n-n user/product qua WishlistItem và Review; cart/variant qua CartItem; order/variant qua OrderItem. StylePreference là quan hệ 1-0..1 với User, xóa theo tài khoản; GET mặc định không tạo bản ghi. AddressCreateReceipt dùng PK(userId,key), hash nội dung và FK addressId nullable/unique; xóa địa chỉ chỉ SET NULL để yêu cầu cũ không tạo lại địa chỉ. Các foreign key đều có trong migration. Riêng actorId/targetId của AdminAuditEvent là UUID lịch sử không FK/cascade, để việc xóa thực thể không xóa nhật ký theo.
 
 Enum: Role(CUSTOMER,ADMIN), OrderStatus(PENDING,CONFIRMED,SHIPPED,DELIVERED,CANCELLED), PaymentStatus(PENDING,PAID,FAILED,REFUNDED,CANCELLED), AIJobStatus(PENDING,PROCESSING,COMPLETED,FAILED).
 
@@ -101,6 +102,7 @@ Indexes: email/SKU/slugs, product(active,createdAt,id), category/brand, variant(
 
 - `20261018000000_init`: tạo 22 bảng, enum, PK/FK/unique/index.
 - `20261020100000_admin_audit`: thêm AdminAuditEvent và enum10 thao tác; không thay đổi bảng/dữ liệu cũ.
+- `20261020110000_store_content`: thêm StoreContent với constraint publication đầy đủ/version; thêm hai enum audit lưu nháp/xuất bản. Không ghi nội dung mẫu vào DB.
 - `20261018000100_constraints`: số lượng/giá/tổng đơn/rating và default address.
 - `20261018000200_private_images`: thêm width/height, SHA256, consentAt, purgedAt và index/constraint; không thay hoặc xóa dữ liệu cũ.
 - `20261018000300_image_cleanup_retry`: thêm purgeRetryAt và index để retry công bằng, không sửa migration đã áp dụng.

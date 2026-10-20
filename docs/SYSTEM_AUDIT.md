@@ -23,7 +23,7 @@ No production deployment or production data changes are authorized.
 - Private S3 images use ownership, content validation, quotas and expiry.
   Redis/BullMQ worker handles outbox dispatch and retention. AI provider is
   disabled; this does not constitute a working AI integration.
-- Nine migrations and existing bootstrap/seed verification scripts. Local
+- Ten migrations and existing bootstrap/seed verification scripts. Local
   PostgreSQL and Memurai are available. MinIO was stopped at audit start.
 
 ## Prioritized findings
@@ -37,12 +37,14 @@ No production deployment or production data changes are authorized.
 | A05 | Medium | Full npm audit reports 20 Moderate findings in dev dependency chain | OPEN tooling-only: runtime production audit is zero; no forced toolchain downgrade |
 | A06 | High | Real password recovery/email is absent | Implement existing recovery workflow; external mail delivery requires provider configuration |
 | A07 | High | Try-On/Stylist UI is gated in API mode; no real AI provider | Provider/account/contract required for real output; never substitute demo output |
-| A08 | Medium | Promotions, catalog-specific upload, COD settlement and content administration remain incomplete | Promotions BLOCKED on conflicting contracts: UI uses percent, Coupon schema uses VND amount; no checkout coupon exists. Clarification requested. Persistent admin activity is now implemented; other extensions remain open |
+| A08 | Medium | Promotions, catalog-specific upload and COD settlement remain incomplete | Promotions BLOCKED on conflicting contracts: UI uses percent, Coupon schema uses VND amount; no checkout coupon exists. Clarification requested. Persistent activity and content draft/publication are now implemented; other extensions remain open |
 | A09 | High | Production operational verification is incomplete | Local backup/restore verified; production TLS/domain, secrets, topology, throttling, off-host backup/restore and target still require evidence |
 | A10 | Low | Bootstrap helper does not assert fixture UPDATE affected-row counts | FIXED: every fixture UPDATE must affect exactly one row; fresh bootstrap passed |
 | A11 | Medium | Shopping browser verifier races Flutter focus/input replacement and assumes label excludes hint | FIXED: wait for focus frames, match address label with optional hint; full Chrome shopping passed |
 | A12 | Low | Local preview crashes on malformed percent escapes or NUL paths | FIXED: invalid URL returns 400; live process probe confirms subsequent homepage still returns 200 |
 | A13 | Medium | Admin activity history exists only in demo memory | FIXED: transactional event recording for all ten admin mutation categories, ADMIN-only paginated read and dashboard history; PostgreSQL, widget, Chrome, container and recovery verification passed |
+| A14 | Medium | Content drafts only live in demo memory; no explicit remote publication | FIXED: versioned private drafts, separate published snapshot, ADMIN save/publish, public home title/policy, transaction audit |
+| A15 | Medium | Remote privacy/FAQ still claim orders and account data disappear on reload | FIXED: API-mode text describes persisted data and COD accurately; return-policy links use the published policy page |
 
 No Critical issue has been confirmed. High items remain open; the goal is
 **not complete**, and production readiness has not been established.
@@ -130,3 +132,36 @@ dependency and browser verification is tracked in IMPLEMENTATION_PROGRESS.md.
   all **26 public tables** including non-empty history and migration records,
   schema, enums, constraints and indexes. Source unchanged.
 - Final Flutter Web release build passed and restored default local API URL.
+
+## Iteration three: content draft/publication
+
+- Additive `20261020110000_store_content` migration; fixed storefront key, no
+  automatic seed/publication of policy text. Content fields are plain text.
+- ADMIN-only GET/PUT draft and POST publish. Mandatory expectedVersion rejects
+  stale saves/publications and concurrent first-save/publish races. Publication
+  copies the saved revision; later drafts stay private. Public GET selects only
+  published columns, never draft contents or actor IDs.
+- `CONTENT_DRAFT_SAVED` and `CONTENT_PUBLISHED` events commit with content
+  changes. Real PostgreSQL audit failure rolls back a publication.
+- Flutter separates Save draft from Publish; unsaved fields disable Publish.
+  Conflicts/uncertain writes require rereading, no automatic write replay.
+  Late publication completion refreshes public content even after page/session
+  disposal. Public load errors show retry instead of reverting to demo copy.
+- Backend lint/build/11 unit tests and 62 E2E passed. Flutter analyze and full
+  **307-test run** passed, including logout during publication. Two opt-in live
+  tests remain skipped in the ordinary suite.
+- Actual Chrome validated draft privacy, published home/policy, later-draft
+  isolation and all twelve audit actions. Review found a browser synchronization
+  gap, fixed by awaiting successful PUT responses; implementation had no blocker.
+- Fresh bootstrap `wearly_handoff_1792477120268_edadebac_test` passed all ten
+  migrations, schema diff and seed preservation. Rebuilt images passed container
+  auth/COD/worker, audit and draft/publication checks.
+- Recovery into `wearly_restore_1792477270144_c48e1b3f_test` matched all 27 public
+  tables and schema, including non-empty draft/published content and events.
+  Source retained unchanged. Evidence: `.tools/goal-content-*`.
+- Compiled API smoke on that restored database passed readiness/catalog/public
+  content and unauthorized private routes. No writes during the smoke run.
+- Chrome shopping regression passed registration/address/cart/COD/cancellation
+  and restored order after login. Its first run failed on a detached Flutter
+  semantics element after order creation; helper now scrolls the actual viewport
+  with bounded fresh locator checks. Re-run passed; no commerce API change.

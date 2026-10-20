@@ -55,6 +55,7 @@ async function main() {
       variants: { create: { sku: fixture, size: 'M', color: 'Trắng', colorHex: '#FFFFFF', price: '490000', inventory: { create: { quantity: 10 } } } } } });
     const url = (await app.getUrl()) + '/api/v1';
     if (admin) {
+      if (await db.storeContent.count() !== 0) throw new Error('Admin content verification requires no pre-existing content; refusing to overwrite it.');
       const password = 'Browser-only-Password-2026';
       const post = async (path, body, token, headers = {}) => {
         const res = await fetch(url + '/' + path, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}), ...headers }, body: JSON.stringify(body) });
@@ -77,11 +78,13 @@ async function main() {
       const delivered = await db.order.findUniqueOrThrow({ where: { id: order.id }, include: { payment: true } });
       if (delivered.status !== 'DELIVERED' || delivered.payment.status !== 'PENDING') throw new Error('Persisted order/COD state mismatch');
       const activity = await db.adminAuditEvent.findMany({ where: { actorId: adminUser.user.id } });
-      for (const action of ['PRODUCT_CREATED', 'PRODUCT_UPDATED', 'SKU_CREATED', 'SKU_UPDATED', 'CATEGORY_CREATED', 'CATEGORY_RENAMED', 'BRAND_CREATED', 'BRAND_RENAMED', 'INVENTORY_ADJUSTED', 'ORDER_STATUS_CHANGED']) {
+      for (const action of ['PRODUCT_CREATED', 'PRODUCT_UPDATED', 'SKU_CREATED', 'SKU_UPDATED', 'CATEGORY_CREATED', 'CATEGORY_RENAMED', 'BRAND_CREATED', 'BRAND_RENAMED', 'INVENTORY_ADJUSTED', 'ORDER_STATUS_CHANGED', 'CONTENT_DRAFT_SAVED', 'CONTENT_PUBLISHED']) {
         if (!activity.some(event => event.action === action)) throw new Error('Missing persisted admin activity: ' + action);
       }
       if (activity.filter(event => event.action === 'ORDER_STATUS_CHANGED' && event.targetId === order.id).length !== 3) throw new Error('Order activity cardinality mismatch');
-      console.log('PASS persistent admin history: authenticated actor and all ten action categories.');
+      const content = await db.storeContent.findUniqueOrThrow({ where: { key: 'storefront' } });
+      if (content.version !== 3 || content.publishedVersion !== 2 || content.banner !== 'Bản nháp tiếp theo' || content.publishedBanner !== 'Campaign kiểm thử' || content.publishedPolicy !== 'Chính sách kiểm thử đã xuất bản.') throw new Error('Draft/public content isolation mismatch');
+      console.log('PASS persistent admin history: authenticated actor and all twelve action categories; draft/public content isolation.');
       console.log('PASS database assertions: product, SKU, gallery, stock, order delivered with COD pending.');
     } else if (style) {
       const password = 'Browser-only-Password-2026';
@@ -149,6 +152,10 @@ async function main() {
       const users = await db.user.findMany({ where: { email: { in: [fixture + '@example.com', 'browser-' + fixture + '@example.com', 'admin-' + fixture + '@example.com'] } }, select: { id: true } });
       const owner = { userId: { in: users.map(user => user.id) } };
       await db.$transaction(async tx => {
+        const contentEvents = await tx.adminAuditEvent.findMany({
+          where: { actorId: owner.userId, action: 'CONTENT_DRAFT_SAVED' }, select: { targetId: true },
+        });
+        await tx.storeContent.deleteMany({ where: { id: { in: contentEvents.map(event => event.targetId) } } });
         await tx.adminAuditEvent.deleteMany({ where: { actorId: owner.userId } });
         await tx.review.deleteMany({ where: owner });
         await tx.inventoryMovement.deleteMany({ where: { order: owner } });

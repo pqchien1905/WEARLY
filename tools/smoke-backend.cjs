@@ -15,7 +15,7 @@ async function main() {
     configureApp(app);
     await app.listen(0, '127.0.0.1');
     const base = await app.getUrl();
-    for (const [route, expected] of [['/api/v1/health/ready', 200], ['/api/v1/products', 200], ['/api/v1/uploads/images', 401]]) {
+    for (const [route, expected] of [['/api/v1/health/ready', 200], ['/api/v1/products', 200], ['/api/v1/content', 200], ['/api/v1/admin/content', 401], ['/api/v1/admin/audit', 401], ['/api/v1/uploads/images', 401]]) {
       const response = await fetch(base + route, { signal: AbortSignal.timeout(10000) });
       if (response.status !== expected) throw new Error('Unexpected response for ' + route);
       console.log(route + ': ' + response.status);

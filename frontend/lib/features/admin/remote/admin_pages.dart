@@ -11,6 +11,7 @@ import 'admin_widgets.dart';
 import 'product_editor.dart';
 import 'taxonomy_page.dart';
 import 'admin_activity.dart';
+import 'content_page.dart';
 
 class RemoteAdminRoute extends StatelessWidget {
   const RemoteAdminRoute({super.key, required this.path});
@@ -19,6 +20,7 @@ class RemoteAdminRoute extends StatelessWidget {
   Widget build(BuildContext context) {
     final parts = path.split('/');
     if (path == '/admin') return const RemoteAdminDashboard();
+    if (path == '/admin/content') return const RemoteContentPage();
     if (path == '/admin/categories' || path == '/admin/brands') {
       return RemoteTaxonomyPage(key: ValueKey(path), kind: parts[2]);
     }
@@ -39,7 +41,7 @@ class RemoteAdminRoute extends StatelessWidget {
     return const StatePanel(
       title: 'Chức năng quản trị chưa khả dụng',
       message:
-          'Khuyến mãi, nội dung và theo dõi AI sẽ được kết nối ở giai đoạn tiếp theo.',
+          'Khuyến mãi và theo dõi AI sẽ được kết nối ở giai đoạn tiếp theo.',
     );
   }
 }

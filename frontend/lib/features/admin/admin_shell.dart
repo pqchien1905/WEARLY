@@ -46,7 +46,9 @@ class AdminShell extends ConsumerWidget {
           child: ListView(
             children: [
               for (final item
-                  in remote ? [...adminNav.take(5), ...taxonomyNav] : adminNav)
+                  in remote
+                      ? [...adminNav.take(5), ...taxonomyNav, adminNav[6]]
+                      : adminNav)
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,

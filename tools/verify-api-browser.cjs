@@ -26,7 +26,21 @@ module.exports = async function verify({ root, fixture }) {
     page.on('response', r => { if (r.url().includes('/api/v1/')) requests.push({ path: new URL(r.url()).pathname, status: r.status() }); });
     async function semantics() { await page.waitForTimeout(700); await page.evaluate(() => document.querySelector('flt-semantics-placeholder')?.click()); }
     async function route(value) { await page.evaluate(value => { location.hash = value; }, value); await page.waitForTimeout(400); }
-    async function button(name) { const node = page.getByRole('button', { name, exact: true }); await node.scrollIntoViewIfNeeded(); await node.click(); }
+    // Flutter rebuilds semantics while detail data loads. Scroll the actual
+    // canvas viewport and resolve the locator again each time, rather than
+    // scrolling an HTML semantics element that may detach during an update.
+    async function reveal(node) {
+      await node.waitFor({ state: 'attached' });
+      for (let i = 0; i < 24; i++) {
+        const box = await node.boundingBox(), viewport = page.viewportSize();
+        if (box && box.y >= 95 && box.y + box.height <= viewport.height - 35) return;
+        await page.mouse.move(viewport.width * 0.8, viewport.height * 0.7);
+        await page.mouse.wheel(0, box && box.y < 95 ? -350 : 350);
+        await page.waitForTimeout(180);
+      }
+      throw new Error('Flutter control could not be scrolled into view');
+    }
+    async function button(name) { const node = page.getByRole('button', { name, exact: true }); await reveal(node); await node.click(); }
     async function fill(name, value) {
       const field = page.getByRole('textbox', {
         name: name === 'Tên gợi nhớ' ? /^Tên gợi nhớ(?: Nhà, Văn phòng…)?$/ : name,
@@ -71,9 +85,10 @@ module.exports = async function verify({ root, fixture }) {
     await page.getByText('Chọn địa chỉ đã lưu', { exact: true }).click();
     await page.getByRole('menuitem', { name: 'Nhà — Nguyễn Trình Duyệt', exact: true }).click();
     const confirm = page.getByRole('checkbox', { name: 'Tôi xác nhận thông tin nhận hàng và đặt đơn COD.', exact: true });
-    await confirm.scrollIntoViewIfNeeded(); await confirm.click();
+    await reveal(confirm); await confirm.click();
     await button('Đặt hàng COD');
     await page.getByText('Đã tiếp nhận đơn hàng', { exact: true }).waitFor();
+    console.log('Chrome: COD order persisted.');
     assert((await page.locator('body').ariaSnapshot()).includes('Chưa thu tiền'));
     await button('Xem chi tiết đơn');
     await button('Hủy đơn hàng'); await button('Xác nhận hủy');

@@ -41,6 +41,8 @@ enum AdminAuditAction {
   BRAND_RENAMED
   INVENTORY_ADJUSTED
   ORDER_STATUS_CHANGED
+  CONTENT_DRAFT_SAVED
+  CONTENT_PUBLISHED
 }
 // Historical identifiers intentionally survive changes to the referenced entities.
 // Do not copy request bodies or credentials into activity history.
@@ -51,6 +53,19 @@ model AdminAuditEvent {
   targetId String @db.Uuid
   createdAt DateTime @default(now())
   @@index([createdAt, id])
+}
+model StoreContent {
+  id String @id @default(uuid()) @db.Uuid
+  key String @unique @db.VarChar(30)
+  banner String @db.VarChar(120)
+  policy String @db.VarChar(5000)
+  version Int @default(1)
+  publishedBanner String? @db.VarChar(120)
+  publishedPolicy String? @db.VarChar(5000)
+  publishedVersion Int?
+  publishedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 model User {
   id String @id @default(uuid()) @db.Uuid

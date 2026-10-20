@@ -36,6 +36,9 @@ final adminSummaryProvider = FutureProvider.autoDispose<AdminRecord>(
 final adminReferencesProvider = FutureProvider.autoDispose<AdminRecord>(
   (ref) => ref.watch(adminRepositoryProvider).references(),
 );
+final adminContentProvider = FutureProvider.autoDispose<AdminRecord>(
+  (ref) => ref.watch(adminRepositoryProvider).content(),
+);
 
 void refreshAdmin(WidgetRef ref) {
   ref.invalidate(adminListProvider);

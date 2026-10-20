@@ -29,7 +29,8 @@ Goal: execute the attached system completion objective. Status: **IN PROGRESS**.
 ## In progress
 
 - Resolve provider/promotion requirements and scope the remaining integrations.
-- Examine the existing content draft/publish contract for the next local task.
+- Scope provider-independent work remaining in password recovery and catalog
+  upload while external provider/promotion/settlement decisions remain pending.
 
 ## Completed — iteration two
 
@@ -49,7 +50,7 @@ Goal: execute the attached system completion objective. Status: **IN PROGRESS**.
 ## Not completed
 
 - Password recovery with real email transport and frontend.
-- Remote AI workflows, promotions, catalog upload, settlement and admin content.
+- Remote AI workflows, promotions, catalog upload and settlement.
 - Production configuration, production recovery evidence and final goal acceptance.
 
 ## External dependencies / blocked verification
@@ -60,8 +61,26 @@ Goal: execute the attached system completion objective. Status: **IN PROGRESS**.
   is excluded until authorized.
 - Promotion policy: existing UI is percent, database is fixed VND amount.
   User clarification requested before applying financial changes.
+- COD settlement: no existing verified reconciliation rule; asked whether
+  staff confirmation or carrier data should authorize payment status changes.
 
 These do not block local repairs. Goal remains active.
+
+## Completed — iteration three
+
+- Versioned private content drafts and explicit publication, separate public
+  snapshot and transactional audit. Home title/policy use published content.
+- Remote privacy/FAQ correctly describe persisted account/order data; policy
+  references no longer repeat a conflicting demo return period.
+- Backend lint/build/11 unit/62 E2E passed. Flutter analyze and 307 tests passed,
+  including conflict, draft isolation, late response and logout cases.
+- Chrome admin/content and shopping journeys passed. Review-driven PUT
+  synchronization and detached-semantics scroll-helper fixes verified.
+- Fresh ten-migration bootstrap, rebuilt runtime images, content publication in
+  containers, 27-table recovery and restored compiled API smoke passed.
+- Evidence `.tools/goal-content-*`, bootstrap source
+  `wearly_handoff_1792477120268_edadebac_test`, restore
+  `wearly_restore_1792477270144_c48e1b3f_test`.
 
 ## Decisions
 

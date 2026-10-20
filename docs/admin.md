@@ -26,6 +26,7 @@ Chạy từ root. Script dùng cấu hình PostgreSQL của backend, chỉ cập
 - Tồn kho: tăng/giảm bằng số nguyên và lý do; gửi phiên bản đã đọc. Khi xung đột hoặc không xác định kết quả, tải lại trước khi thao tác tiếp; không tự gửi lặp lệnh tăng kho.
 - Đơn: xem người nhận, sản phẩm, phí giao và tổng tiền đã chốt; chuyển PENDING → CONFIRMED → SHIPPED → DELIVERED, kiểm tra version. Giao xong không đồng nghĩa COD đã thu tiền.
 - Khách hàng: danh sách tài khoản chỉ đọc, không gửi hash mật khẩu/token tới Flutter.
+- Nội dung (`/#/admin/content`): lưu bản nháp tiêu đề campaign và chính sách, sau đó **Xuất bản nội dung** riêng. Bản nháp không xuất hiện công khai. Sửa chưa lưu sẽ khóa nút xuất bản; xung đột phải tải lại bản hiện tại. Tiêu đề tối đa120, chính sách5000 ký tự; văn bản không tự thay đổi phí giao hàng hoặc nghiệp vụ đổi trả.
 
 Các thao tác lưu metadata, SKU và tồn kho tách biệt; không trình bày một chuỗi nhiều request như một giao dịch nguyên tử. Sản phẩm mới mặc định ẩn. Cần có biến thể đang bán để xuất hiện trên cửa hàng. Ẩn sản phẩm/biến thể giữ nguyên lịch sử đơn.
 
@@ -33,7 +34,7 @@ Khi sửa sản phẩm, Flutter chỉ PATCH các trường đã đổi. Sửa t�
 
 Nhật ký ghi cùng transaction với thao tác thành công trên sản phẩm, SKU, danh mục, thương hiệu, tồn kho và trạng thái đơn. Khi ghi nhật ký lỗi, thay đổi nghiệp vụ cũng rollback. Request bị từ chối không tạo sự kiện thành công. Mã actor lấy từ phiên đã xác thực, không nhận từ form. Đây là lịch sử thao tác ứng dụng, chưa phải kho kiểm toán chống sửa đổi bởi người có quyền database.
 
-Khuyến mãi, nội dung, AI monitoring và đối soát COD chưa triển khai. Các trang demo vẫn có trong chế độ `run`; API mode không dùng dữ liệu demo cho các mục này. Chưa kiểm chứng native Android/iOS hoặc môi trường production. Chạy migration trước khi dùng bản mới: `npm run prisma:deploy` trong `backend` với cấu hình DB local.
+Khuyến mãi, AI monitoring và đối soát COD chưa triển khai. Các trang demo vẫn có trong chế độ `run`; API mode không dùng dữ liệu demo cho các mục này. Chưa kiểm chứng native Android/iOS hoặc môi trường production. Chạy migration trước khi dùng bản mới: `npm run prisma:deploy` trong `backend` với cấu hình DB local.
 
 ## Kiểm chứng
 

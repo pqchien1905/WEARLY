@@ -3,24 +3,31 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/providers.dart';
+import '../../app/api_providers.dart';
 import '../../core/design/tokens.dart';
 import '../../core/widgets/primitives.dart';
 import '../../core/widgets/product_card.dart';
+import '../../core/widgets/store_content.dart';
 import '../product_detail/product_page.dart';
 
-class InfoPage extends StatelessWidget {
+class InfoPage extends ConsumerWidget {
   const InfoPage({super.key, required this.path});
   final String path;
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final remote = ref.watch(remoteApiProvider);
     final content = switch (path) {
       '/collections' => (
         'Everyday, theo cách bạn.',
         'Một chiếc áo trắng, một phom quần rộng, một chiếc đầm có sắc màu riêng. Bộ sưu tập minh họa những cách phối đơn giản cho nhịp sống hằng ngày.',
       ),
       '/privacy' => (
-        'Quyền riêng tư trong bản demo',
-        'Ảnh bạn chọn chỉ được giữ trong bộ nhớ của tab hiện tại, không được tải lên máy chủ hoặc lưu vào browser storage. Xóa ảnh hoặc rời phòng thử để giải phóng ảnh. Tài khoản, giỏ hàng và đơn hàng là dữ liệu mô phỏng, mất khi tải lại ứng dụng. Không nhập thông tin cá nhân thật nếu không cần thiết.',
+        remote
+            ? 'Dữ liệu khi kết nối cửa hàng'
+            : 'Quyền riêng tư trong bản demo',
+        remote
+            ? 'Tài khoản, địa chỉ, giỏ hàng, đơn hàng, yêu thích, đánh giá và hồ sơ phong cách được lưu trên máy chủ. Tải lại trang không xóa các dữ liệu này. Phiên đăng nhập chỉ được giữ trong bộ nhớ của tab; sau khi tải lại, bạn cần đăng nhập lại. Quản trị viên được phân quyền có thể xem thông tin cần thiết để quản lý tài khoản và xử lý đơn hàng. Phòng thử AI chưa được kết nối trong chế độ trực tuyến hiện tại.'
+            : 'Ảnh bạn chọn chỉ được giữ trong bộ nhớ của tab hiện tại, không được tải lên máy chủ hoặc lưu vào browser storage. Xóa ảnh hoặc rời phòng thử để giải phóng ảnh. Tài khoản, giỏ hàng và đơn hàng là dữ liệu mô phỏng, mất khi tải lại ứng dụng. Không nhập thông tin cá nhân thật nếu không cần thiết.',
       ),
       '/shipping-returns' => (
         'Giao hàng & đổi trả',
@@ -52,7 +59,14 @@ class InfoPage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 32),
-                Text(content.$2, style: T.body.copyWith(fontSize: 16)),
+                if (path == '/shipping-returns')
+                  StoreContentText(
+                    field: 'policy',
+                    fallback: content.$2,
+                    style: T.body.copyWith(fontSize: 16),
+                  )
+                else
+                  Text(content.$2, style: T.body.copyWith(fontSize: 16)),
                 const SizedBox(height: 32),
                 if (path == '/size-guide')
                   AppButton(

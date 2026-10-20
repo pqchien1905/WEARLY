@@ -111,6 +111,14 @@ async function main() {
       assert.equal(history.items[0].targetId, category.id);
       assert.equal(Number((await db.query('SELECT count(*) FROM "AdminAuditEvent" WHERE "actorId"=$1 AND "targetId"=$2', [customer.user.id, category.id])).rows[0].count), 1);
       report.checks.push('container admin write and authenticated activity event persisted atomically');
+      const draftBefore = await api('GET', 'admin/content', null, token);
+      assert.equal(draftBefore.id, null, 'Content verification needs a fresh bootstrap DB; never overwrite existing content');
+      const contentBody = { banner: 'Container content fixture', policy: 'Synthetic local verification only.', expectedVersion: 0 };
+      const draft = await api('PUT', 'admin/content', contentBody, token);
+      assert.deepEqual(await api('GET', 'content'), { content: null });
+      const publication = await api('POST', 'admin/content/publish', { expectedVersion: draft.version }, token, null, 201);
+      assert.deepEqual((await api('GET', 'content')).content, publication.published);
+      report.checks.push('container content draft remained private until explicit publication');
       const imageId = randomUUID(), jobId = randomUUID();
       await db.query('BEGIN');
       await db.query('INSERT INTO "ImageAsset" (id,"userId","objectKey","mimeType",size,"verifiedAt","expiresAt","updatedAt") VALUES ($1,$2,$3,$4,1,NOW(),NOW()+interval \'1 hour\',NOW())', [imageId, customer.user.id, prefix + '/synthetic.png', 'image/png']);

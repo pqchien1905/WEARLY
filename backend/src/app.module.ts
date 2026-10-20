@@ -17,6 +17,7 @@ import { AiModule } from './modules/ai/ai.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { WishlistModule } from './modules/wishlist/wishlist.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
+import { ContentModule } from './modules/content/content.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
@@ -34,6 +35,7 @@ import { ReviewsModule } from './modules/reviews/reviews.module';
     UploadsModule,
     WishlistModule,
     ReviewsModule,
+    ContentModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

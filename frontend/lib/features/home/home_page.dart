@@ -6,6 +6,7 @@ import '../../core/design/tokens.dart';
 import '../../core/widgets/primitives.dart';
 import '../../core/widgets/product_card.dart';
 import '../../core/widgets/category_choices.dart';
+import '../../core/widgets/store_content.dart';
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -38,8 +39,9 @@ class HomePage extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 28),
-                    Text(
-                      'Mặc theo\ncách bạn.',
+                    StoreContentText(
+                      field: 'banner',
+                      fallback: 'Mặc theo\ncách bạn.',
                       style: T.display(
                         compact ? 50 : (c.maxWidth * .052).clamp(60, 94),
                       ),

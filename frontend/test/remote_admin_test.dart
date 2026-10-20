@@ -9,6 +9,32 @@ import 'package:nep_storefront/data/remote_admin.dart';
 import 'remote_session_test.dart' show jsonResponse;
 
 void main() {
+  test(
+    'late publication completion invalidates public content without replaying the write',
+    () async {
+      final response = Completer<http.Response>();
+      var requests = 0, late = 0;
+      final api = ApiClient(
+        baseUrl: 'http://localhost/api/v1',
+        timeout: const Duration(milliseconds: 5),
+        client: MockClient((r) {
+          requests++;
+          return response.future;
+        }),
+      );
+      final repository = AdminRepository(api);
+      await expectLater(
+        repository.publishContent(7, onLateCompletion: () => late++),
+        throwsA(isA<ApiException>().having((e) => e.code, 'code', 'TIMEOUT')),
+      );
+      repository.dispose();
+      response.complete(jsonResponse({'version': 8}));
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect(requests, 1);
+      expect(late, 1);
+      api.close();
+    },
+  );
   test('admin list keeps disabled variants and server pagination', () async {
     final api = ApiClient(
       baseUrl: 'http://localhost/api/v1',

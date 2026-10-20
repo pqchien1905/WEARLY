@@ -41,19 +41,33 @@ Base URL: `http://localhost:3000/api/v1`. Swagger: `http://localhost:3000/api/do
 | PATCH | /admin/orders/:id/status | ADMIN; status,expectedVersion |
 | GET | /admin/users | ADMIN; không passwordHash |
 | GET | /admin/audit | ADMIN; page1..10000, limit1..100; mới nhất trước, tie-break ID |
+| GET | /content | Public; chỉ nội dung đã xuất bản hoặc `{content:null}` |
+| GET, PUT | /admin/content | ADMIN; đọc/lưu bản nháp `{banner,policy,expectedVersion}` |
+| POST | /admin/content/publish | ADMIN; `{expectedVersion}`; xuất bản đúng bản đã lưu |
 | POST, GET | /ai/try-on/jobs, /ai/try-on/jobs/:id | Owner; create trả503 khi provider Disabled |
 | POST, GET | /uploads/images | Bearer; multipart upload với consent=true / list ảnh của mình |
 | GET, DELETE | /uploads/images/:id | Owner; signed URL60s / 202 lên lịch purge |
 | GET | /health | Public liveness |
 | GET | /health/ready | Public; DB+Redis; 503 khi dependency chưa ready |
 
-Chưa có API reset password, promotions, AI Stylist hoặc online payments. Reviews đã có các endpoint kể trên; hướng dẫn tại [reviews.md](reviews.md). Admin có lịch sử thao tác; nội dung và đối soát còn thiếu.
+Chưa có API reset password, promotions, AI Stylist hoặc online payments. Reviews đã có các endpoint kể trên; hướng dẫn tại [reviews.md](reviews.md). Admin có lịch sử thao tác và nội dung; đối soát còn thiếu.
 
 `GET /admin/audit` trả `{items:[{id,actorId,action,targetId,createdAt}],total,page,limit}`.
 Action gồm PRODUCT_CREATED/UPDATED, SKU_CREATED/UPDATED, CATEGORY_CREATED/RENAMED,
 BRAND_CREATED/RENAMED, INVENTORY_ADJUSTED, ORDER_STATUS_CHANGED. Actor lấy từ
 bearer session; không có endpoint sửa/xóa lịch sử. Event và thay đổi nghiệp vụ
 ghi nguyên tử; chỉ ghi thao tác thành công, không sao chép request body.
+
+## Nội dung cửa hàng
+
+GET draft trả `{id,banner,policy,version,published}`; chưa lưu trả id null,
+version0, policy rỗng. PUT yêu cầu banner1..120/policy1..5000 ký tự sau trim.
+POST publish chỉ nhận expectedVersion và chụp bản nháp đã lưu; lưu nháp tiếp
+không thay publication. Mỗi mutation tăng version, stale/concurrent/replay
+trả409; publication đã hiện hành trả409 ALREADY_PUBLISHED.
+Public GET trả `{content:{banner,policy,version,publishedAt}}` hoặc null;
+không trả draft/actor. Hai thao tác ghi audit CONTENT_DRAFT_SAVED và
+CONTENT_PUBLISHED cùng transaction. Không render HTML hoặc thay đổi phí đơn.
 
 ## Auth
 

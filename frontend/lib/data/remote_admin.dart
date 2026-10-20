@@ -31,9 +31,16 @@ class AdminRepository {
     String path, {
     AdminRecord? body,
     Map<String, String>? query,
+    void Function()? onLateCompletion,
   }) async {
     _check();
-    final value = await api.request(method, path, body: body, query: query);
+    final value = await api.request(
+      method,
+      path,
+      body: body,
+      query: query,
+      onLateCompletion: onLateCompletion,
+    );
     _check();
     return commerceMap(value);
   }
@@ -44,6 +51,18 @@ class AdminRepository {
   Future<AdminRecord> detail(String kind, String id) =>
       _call('GET', 'admin/$kind/${Uri.encodeComponent(id)}');
   Future<AdminRecord> summary() => _call('GET', 'admin/summary');
+  Future<AdminRecord> content() => _call('GET', 'admin/content');
+  Future<AdminRecord> saveContent(AdminRecord body) =>
+      _call('PUT', 'admin/content', body: body);
+  Future<AdminRecord> publishContent(
+    int version, {
+    void Function()? onLateCompletion,
+  }) => _call(
+    'POST',
+    'admin/content/publish',
+    body: {'expectedVersion': version},
+    onLateCompletion: onLateCompletion,
+  );
   Future<AdminRecord> references() async {
     _check();
     final values = await Future.wait([

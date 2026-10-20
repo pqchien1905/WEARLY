@@ -268,12 +268,18 @@ class _ProductDetailState extends ConsumerState<ProductDetail> {
           tilePadding: EdgeInsets.zero,
           title: const Text('Giao hàng & đổi trả', style: T.body),
           children: [
-            const Text(
-              'Demo: giao trong 3–5 ngày, đổi size trong 7 ngày khi chưa sử dụng. Chính sách cần xác nhận trước khi bán hàng.',
+            Text(
+              ref.watch(remoteApiProvider)
+                  ? 'Xem chính sách cửa hàng để biết thông tin giao hàng và đổi trả hiện hành.'
+                  : 'Demo: giao trong 3–5 ngày, đổi size trong 7 ngày khi chưa sử dụng. Chính sách cần xác nhận trước khi bán hàng.',
             ),
             TextButton(
               onPressed: () => context.go('/shipping-returns'),
-              child: const Text('Xem chính sách demo'),
+              child: Text(
+                ref.watch(remoteApiProvider)
+                    ? 'Xem chính sách cửa hàng'
+                    : 'Xem chính sách demo',
+              ),
             ),
           ],
         ),
