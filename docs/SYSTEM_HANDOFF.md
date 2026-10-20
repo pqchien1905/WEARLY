@@ -1,6 +1,6 @@
 # Bàn giao tiến độ hoàn thiện — 20/10/2026
 
-**Goal chưa hoàn tất.** Các thay đổi dưới đây đã kiểm chứng local; chưa triển
+**Goal BLOCKED, chưa hoàn tất.** Các thay đổi dưới đây đã kiểm chứng local; chưa triển
 khai production. Phạm vi mở và phần phụ thuộc bên ngoài nằm trong
 [SYSTEM_AUDIT.md](SYSTEM_AUDIT.md) và
 [IMPLEMENTATION_PROGRESS.md](IMPLEMENTATION_PROGRESS.md).
@@ -141,8 +141,10 @@ Audit toàn bộ giảm từ20 xuống0; review không tìm thấy vấn đề t
 | Đối soát COD | Chờ quy tắc xác nhận thu tiền; không tự đổi DELIVERED thành PAID |
 | Production | Chưa xác minh TLS/domain, secrets, tải lớn, nhiều instance, backup off-host, roles/grants và khôi phục S3; chưa có target/approval |
 
-Các blockers ở bảng là blockers của từng hạng mục, không phải tuyên bố goal
-hoàn thành hoặc toàn bộ công việc bị chặn.
+Các blockers ở bảng hiện ngăn tiếp tục các hạng mục còn lại sau những sửa đổi
+local đã kiểm chứng. Cần cấu hình/contract provider, quy tắc tài chính và thông
+tin môi trường đích để tiếp tục; không được coi các kết quả local là nghiệm thu
+production hoặc hoàn tất goal.
 
 ## Khởi chạy
 

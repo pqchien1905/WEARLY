@@ -1,6 +1,8 @@
 # Implementation progress — 20/10/2026
 
-Goal: execute the attached system completion objective. Status: **IN PROGRESS**.
+Goal: execute the attached system completion objective. Status: **BLOCKED** —
+waiting for provider configuration/contracts, financial rules and deployment
+environment details. This is not completion or production acceptance.
 
 ## Completed
 
@@ -165,7 +167,16 @@ Goal: execute the attached system completion objective. Status: **IN PROGRESS**.
 - COD settlement: no existing verified reconciliation rule; asked whether
   staff confirmation or carrier data should authorize payment status changes.
 
-These do not block local repairs. Goal remains active.
+These dependencies persisted through the dependency, architecture and final
+blocker reviews. Local fixes and their verification were completed while
+waiting. The latest check found no configuration or policy answers supplied:
+root/backend environments still lack SMTP/reset URL/AI provider configuration.
+No further concrete local repair was identified by the current audit.
+
+Resume with the provider choices/contracts and secure configuration locations,
+the promotion/COD settlement rules, and target deployment topology. Do not put
+credentials in chat or commit them. Production deployment remains a separate
+action requiring authorization; preparation can continue once its target is known.
 
 ## Completed — iteration three
 
