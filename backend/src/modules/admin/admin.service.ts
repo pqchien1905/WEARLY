@@ -4,6 +4,7 @@ import { transaction } from '../../common/transaction';
 import { fail } from '../../common/errors';
 import { PageDto } from '../products/dto/query-products.dto';
 import { publicUser } from '../auth/auth.service';
+import { recordAdminActivity } from './audit';
 import {
   AdjustInventoryDto,
   CreateProductDto,
@@ -26,6 +27,21 @@ const adminOrderInclude = {
 @Injectable()
 export class AdminService {
   constructor(private readonly db: PrismaService) {}
+  audit(q: PageDto) {
+    return this.db.$transaction(
+      async (tx) => ({
+        items: await tx.adminAuditEvent.findMany({
+          skip: (q.page - 1) * q.limit,
+          take: q.limit,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        }),
+        total: await tx.adminAuditEvent.count(),
+        page: q.page,
+        limit: q.limit,
+      }),
+      { isolationLevel: 'RepeatableRead' },
+    );
+  }
   async summary() {
     const [products, inventory, orders, pendingOrders, customers] =
       await this.db.$transaction([
@@ -106,21 +122,28 @@ export class AdminService {
       limit: q.limit,
     };
   }
-  createProduct(dto: CreateProductDto) {
+  createProduct(actorId: string, dto: CreateProductDto) {
     const { images, ...data } = dto;
-    return this.db.product.create({
-      data: {
-        ...data,
-        images: images
-          ? {
-              create: images.map((image, position) => ({ ...image, position })),
-            }
-          : undefined,
-      },
-      include: adminProductInclude,
+    return transaction(this.db, async (tx) => {
+      const product = await tx.product.create({
+        data: {
+          ...data,
+          images: images
+            ? {
+                create: images.map((image, position) => ({
+                  ...image,
+                  position,
+                })),
+              }
+            : undefined,
+        },
+        include: adminProductInclude,
+      });
+      await recordAdminActivity(tx, actorId, 'PRODUCT_CREATED', product.id);
+      return product;
     });
   }
-  updateProduct(id: string, dto: UpdateProductDto) {
+  updateProduct(actorId: string, id: string, dto: UpdateProductDto) {
     const { images, ...data } = dto;
     // Explicit delete then create avoids a unique(productId,position) collision.
     // The transaction rolls back both metadata and gallery if any write fails.
@@ -128,7 +151,7 @@ export class AdminService {
       await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${id}::uuid FOR UPDATE`;
       if (images !== undefined)
         await tx.productImage.deleteMany({ where: { productId: id } });
-      return tx.product.update({
+      const product = await tx.product.update({
         where: { id },
         data: {
           ...data,
@@ -144,17 +167,27 @@ export class AdminService {
         },
         include: adminProductInclude,
       });
+      await recordAdminActivity(tx, actorId, 'PRODUCT_UPDATED', id);
+      return product;
     });
   }
-  createSku(dto: CreateSkuDto) {
-    return this.db.productVariant.create({
-      data: { ...dto, inventory: { create: { quantity: 0 } } },
+  createSku(actorId: string, dto: CreateSkuDto) {
+    return transaction(this.db, async (tx) => {
+      const sku = await tx.productVariant.create({
+        data: { ...dto, inventory: { create: { quantity: 0 } } },
+      });
+      await recordAdminActivity(tx, actorId, 'SKU_CREATED', sku.id);
+      return sku;
     });
   }
-  updateSku(id: string, dto: UpdateSkuDto) {
-    return this.db.productVariant.update({ where: { id }, data: dto });
+  updateSku(actorId: string, id: string, dto: UpdateSkuDto) {
+    return transaction(this.db, async (tx) => {
+      const sku = await tx.productVariant.update({ where: { id }, data: dto });
+      await recordAdminActivity(tx, actorId, 'SKU_UPDATED', id);
+      return sku;
+    });
   }
-  adjust(id: string, dto: AdjustInventoryDto) {
+  adjust(actorId: string, id: string, dto: AdjustInventoryDto) {
     return transaction(this.db, async (tx) => {
       const inv = await tx.inventory.findUnique({ where: { id } });
       if (!inv) throw new NotFoundException();
@@ -179,10 +212,11 @@ export class AdminService {
           reason: 'ADMIN: ' + dto.reason,
         },
       });
+      await recordAdminActivity(tx, actorId, 'INVENTORY_ADJUSTED', id);
       return tx.inventory.findUniqueOrThrow({ where: { id } });
     });
   }
-  status(id: string, dto: OrderStatusDto) {
+  status(actorId: string, id: string, dto: OrderStatusDto) {
     return transaction(this.db, async (tx) => {
       const from = {
         CONFIRMED: 'PENDING',
@@ -199,6 +233,7 @@ export class AdminService {
           'ORDER_STATE_CONFLICT',
           'Order changed or transition is invalid',
         );
+      await recordAdminActivity(tx, actorId, 'ORDER_STATUS_CHANGED', id);
       // Delivery is not proof of payment: payment stays PENDING until a separate
       // settlement workflow is implemented.
       return tx.order.findUniqueOrThrow({

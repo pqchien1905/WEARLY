@@ -141,6 +141,14 @@ module.exports = async function verify({ root, fixture, email, customerEmail, pa
     await page.getByText('Đã giao', { exact: true }).waitFor();
     assert((await page.locator('body').ariaSnapshot()).includes('Chưa thu tiền'));
     await page.screenshot({ path: path.join(output, 'order-mobile.png'), fullPage: true });
+    await route('/admin');
+    const history = page.getByText('Thay đổi gần đây', { exact: true });
+    await history.scrollIntoViewIfNeeded();
+    await page.getByText('Chuyển trạng thái đơn hàng', { exact: true }).first().waitFor();
+    await page.screenshot({ path: path.join(output, 'activity-mobile.png') });
+    await button('Tải lại lịch sử');
+    await page.getByText('Chuyển trạng thái đơn hàng', { exact: true }).first().waitFor();
+    console.log('Chrome admin: persistent activity history and refresh on mobile.');
     await route('/admin/customers'); await page.getByText('Khách hàng & tài khoản', { exact: true }).waitFor();
     await page.waitForTimeout(500);
     assert((await page.locator('body').ariaSnapshot()).includes('Quản trị kiểm thử'));

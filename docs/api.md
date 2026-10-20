@@ -40,13 +40,20 @@ Base URL: `http://localhost:3000/api/v1`. Swagger: `http://localhost:3000/api/do
 | GET | /admin/orders, /admin/orders/:id | ADMIN; gồm snapshots, version, payment và user.email/name |
 | PATCH | /admin/orders/:id/status | ADMIN; status,expectedVersion |
 | GET | /admin/users | ADMIN; không passwordHash |
+| GET | /admin/audit | ADMIN; page1..10000, limit1..100; mới nhất trước, tie-break ID |
 | POST, GET | /ai/try-on/jobs, /ai/try-on/jobs/:id | Owner; create trả503 khi provider Disabled |
 | POST, GET | /uploads/images | Bearer; multipart upload với consent=true / list ảnh của mình |
 | GET, DELETE | /uploads/images/:id | Owner; signed URL60s / 202 lên lịch purge |
 | GET | /health | Public liveness |
 | GET | /health/ready | Public; DB+Redis; 503 khi dependency chưa ready |
 
-Chưa có API reset password, promotions, AI Stylist hoặc online payments. Reviews đã có các endpoint kể trên; hướng dẫn tại [reviews.md](reviews.md). Admin chưa có toàn bộ workflow quản trị/audit.
+Chưa có API reset password, promotions, AI Stylist hoặc online payments. Reviews đã có các endpoint kể trên; hướng dẫn tại [reviews.md](reviews.md). Admin có lịch sử thao tác; nội dung và đối soát còn thiếu.
+
+`GET /admin/audit` trả `{items:[{id,actorId,action,targetId,createdAt}],total,page,limit}`.
+Action gồm PRODUCT_CREATED/UPDATED, SKU_CREATED/UPDATED, CATEGORY_CREATED/RENAMED,
+BRAND_CREATED/RENAMED, INVENTORY_ADJUSTED, ORDER_STATUS_CHANGED. Actor lấy từ
+bearer session; không có endpoint sửa/xóa lịch sử. Event và thay đổi nghiệp vụ
+ghi nguyên tử; chỉ ghi thao tác thành công, không sao chép request body.
 
 ## Auth
 

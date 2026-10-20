@@ -10,6 +10,7 @@ import 'admin_providers.dart';
 import 'admin_widgets.dart';
 import 'product_editor.dart';
 import 'taxonomy_page.dart';
+import 'admin_activity.dart';
 
 class RemoteAdminRoute extends StatelessWidget {
   const RemoteAdminRoute({super.key, required this.path});
@@ -101,6 +102,7 @@ class RemoteAdminDashboard extends ConsumerWidget {
         'Đơn COD đã giao vẫn cần đối soát tiền thu. Tổng đơn hàng không phải doanh thu đã nhận.',
         style: T.small,
       ),
+      const AdminActivityPanel(),
     ],
   );
 }

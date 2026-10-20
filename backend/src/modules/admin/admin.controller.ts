@@ -9,7 +9,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Admin } from '../../common/decorators/auth';
+import { Admin, CurrentUser, Identity } from '../../common/decorators/auth';
 import { PageDto } from '../products/dto/query-products.dto';
 import { AdminService } from './admin.service';
 import { TaxonomyService } from './taxonomy.service';
@@ -35,6 +35,9 @@ export class AdminController {
   @Get('summary') summary() {
     return this.service.summary();
   }
+  @Get('audit') audit(@Query() q: PageDto) {
+    return this.service.audit(q);
+  }
   @Get('products/:id') product(@Param('id', ParseUUIDPipe) id: string) {
     return this.service.product(id);
   }
@@ -44,65 +47,80 @@ export class AdminController {
   @Get('products') products(@Query() q: PageDto) {
     return this.service.list('products', q);
   }
-  @Post('products') createProduct(@Body() dto: CreateProductDto) {
-    return this.service.createProduct(dto);
+  @Post('products') createProduct(
+    @CurrentUser() u: Identity,
+    @Body() dto: CreateProductDto,
+  ) {
+    return this.service.createProduct(u.id, dto);
   }
   @Patch('products/:id') updateProduct(
+    @CurrentUser() u: Identity,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateProductDto,
   ) {
-    return this.service.updateProduct(id, dto);
+    return this.service.updateProduct(u.id, id, dto);
   }
-  @Post('skus') createSku(@Body() dto: CreateSkuDto) {
-    return this.service.createSku(dto);
+  @Post('skus') createSku(
+    @CurrentUser() u: Identity,
+    @Body() dto: CreateSkuDto,
+  ) {
+    return this.service.createSku(u.id, dto);
   }
   @Patch('skus/:id') updateSku(
+    @CurrentUser() u: Identity,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateSkuDto,
   ) {
-    return this.service.updateSku(id, dto);
+    return this.service.updateSku(u.id, id, dto);
   }
-  @Post('categories') category(@Body() dto: CategoryDto) {
-    return this.taxonomy.create('categories', dto);
+  @Post('categories') category(
+    @CurrentUser() u: Identity,
+    @Body() dto: CategoryDto,
+  ) {
+    return this.taxonomy.create(u.id, 'categories', dto);
   }
   @Get('categories') categories(@Query() q: PageDto) {
     return this.taxonomy.list('categories', q);
   }
   @Patch('categories/:id') renameCategory(
+    @CurrentUser() u: Identity,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: RenameTaxonomyDto,
   ) {
-    return this.taxonomy.rename('categories', id, dto);
+    return this.taxonomy.rename(u.id, 'categories', id, dto);
   }
-  @Post('brands') brand(@Body() dto: CategoryDto) {
-    return this.taxonomy.create('brands', dto);
+  @Post('brands') brand(@CurrentUser() u: Identity, @Body() dto: CategoryDto) {
+    return this.taxonomy.create(u.id, 'brands', dto);
   }
   @Get('brands') brands(@Query() q: PageDto) {
     return this.taxonomy.list('brands', q);
   }
   @Patch('brands/:id') renameBrand(
+    @CurrentUser() u: Identity,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: RenameTaxonomyDto,
   ) {
-    return this.taxonomy.rename('brands', id, dto);
+    return this.taxonomy.rename(u.id, 'brands', id, dto);
   }
   @Get('inventory') inventory(@Query() q: PageDto) {
     return this.service.list('inventory', q);
   }
   @Post('inventory/:id/adjust') adjust(
+    @CurrentUser() u: Identity,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: AdjustInventoryDto,
   ) {
-    return this.service.adjust(id, dto);
+    return this.service.adjust(u.id, id, dto);
   }
   @Get('orders') orders(@Query() q: PageDto) {
     return this.service.list('orders', q);
   }
   @Patch('orders/:id/status') status(
+    @CurrentUser() u: Identity,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: OrderStatusDto,
   ) {
-    return this.service.status(id, dto);
+    return this.service.status(u.id, id, dto);
   }
   @Get('users') users(@Query() q: PageDto) {
     return this.service.list('users', q);

@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/bootstrap';
 import { PrismaService } from '../src/database/prisma.service';
+import { AdminService } from '../src/modules/admin/admin.service';
 
 describe('Administration with PostgreSQL', () => {
   let app: INestApplication, db: PrismaService, token: string, customer: string;
@@ -14,10 +15,21 @@ describe('Administration with PostgreSQL', () => {
   let categoryId: string, brandId: string;
   const users: string[] = [];
   const taxonomies: { kind: 'categories' | 'brands'; id: string }[] = [];
+  const extraProducts: string[] = [];
   const call = (method: 'get' | 'post' | 'patch', path: string, auth = token) =>
     request(app.getHttpServer())
       [method]('/api/v1/' + path)
       .auth(auth, { type: 'bearer' });
+  it('restricts persistent activity history to administrators and bounds pagination', async () => {
+    await request(app.getHttpServer()).get('/api/v1/admin/audit').expect(401);
+    await call('get', 'admin/audit', customer).expect(403);
+    await call('get', 'admin/audit?page=0').expect(400);
+    await call('get', 'admin/audit?limit=101').expect(400);
+    const result = await call('get', 'admin/audit?limit=1').expect(200);
+    expect(result.body).toMatchObject({ page: 1, limit: 1 });
+    expect(Array.isArray(result.body.items)).toBe(true);
+    expect(typeof result.body.total).toBe('number');
+  });
   it('rejects missing related records without replacing the existing gallery', async () => {
     const before = await db.product.findUniqueOrThrow({
       where: { id: productId }, include: { images: true },
@@ -128,6 +140,10 @@ describe('Administration with PostgreSQL', () => {
   });
   afterAll(async () => {
     if (db) {
+      await db.adminAuditEvent.deleteMany({ where: { actorId: { in: users } } });
+      await db.inventory.deleteMany({ where: { variant: { productId: { in: extraProducts } } } });
+      await db.productVariant.deleteMany({ where: { productId: { in: extraProducts } } });
+      await db.product.deleteMany({ where: { id: { in: extraProducts } } });
       if (inventoryId)
         await db.inventoryMovement.deleteMany({ where: { inventoryId } });
       if (orderId) {
@@ -331,6 +347,9 @@ describe('Administration with PostgreSQL', () => {
     expect(await db.inventoryMovement.count({ where: { inventoryId } })).toBe(
       1,
     );
+    expect(await db.adminAuditEvent.count({
+      where: { targetId: inventoryId, actorId: users[0], action: 'INVENTORY_ADJUSTED' },
+    })).toBe(1);
   });
   it('loads another customer order and only advances legal versions, leaving COD unpaid', async () => {
     await db.productVariant.update({
@@ -376,5 +395,67 @@ describe('Administration with PostgreSQL', () => {
         .send({ status, expectedVersion: version })
         .expect(409);
     }
+    expect(await db.adminAuditEvent.count({
+      where: { targetId: orderId, actorId: users[0], action: 'ORDER_STATUS_CHANGED' },
+    })).toBe(3);
+  });
+  it('records authenticated actors and only successful catalog mutations, without request data', async () => {
+    const created = await call('post', 'admin/products').send({
+      slug: 'audit-' + suffix, name: 'Audit product', description: 'Private draft description',
+      material: 'Cotton', style: '', categoryId, brandId,
+    }).expect(201);
+    extraProducts.push(created.body.id);
+    const sku = await call('post', 'admin/skus').send({
+      productId: created.body.id, sku: 'audit-' + suffix, size: 'S',
+      color: 'White', colorHex: '#FFFFFF', price: '100000',
+    }).expect(201);
+    await call('patch', `admin/skus/${sku.body.id}`).send({ price: '120000' }).expect(200);
+    await call('patch', `admin/products/${created.body.id}`).send({
+      name: 'Audit edited', actorId: users[1],
+    }).expect(400);
+    await call('patch', `admin/products/${created.body.id}`).send({ name: 'Audit edited' }).expect(200);
+    const events = await db.adminAuditEvent.findMany({
+      where: { targetId: { in: [created.body.id, sku.body.id] } },
+    });
+    expect(events.map(e => e.action).sort()).toEqual([
+      'PRODUCT_CREATED', 'PRODUCT_UPDATED', 'SKU_CREATED', 'SKU_UPDATED',
+    ]);
+    expect(events.every(e => e.actorId === users[0])).toBe(true);
+    // Concurrent taxonomy renames have one winner; rejected writes have no events.
+    for (const { kind, id } of taxonomies) {
+      const actions = await db.adminAuditEvent.findMany({ where: { targetId: id } });
+      expect(actions.map(e => e.action).sort()).toEqual(kind === 'categories'
+        ? ['CATEGORY_CREATED', 'CATEGORY_RENAMED']
+        : ['BRAND_CREATED', 'BRAND_RENAMED']);
+    }
+    const history = await call('get', 'admin/audit?limit=100').expect(200);
+    const own = history.body.items.filter((e: { actorId: string }) => e.actorId === users[0]);
+    expect(own.length).toBeGreaterThanOrEqual(4);
+    for (const row of own) {
+      expect(Object.keys(row).sort()).toEqual(['action', 'actorId', 'createdAt', 'id', 'targetId']);
+    }
+    expect(JSON.stringify(history.body)).not.toContain('Private draft description');
+    const first = await call('get', 'admin/audit?limit=1').expect(200);
+    const second = await call('get', 'admin/audit?limit=1&page=2').expect(200);
+    expect(first.body.items[0].id).toBe(history.body.items[0].id);
+    expect(second.body.items[0].id).toBe(history.body.items[1].id);
+    expect(second.body.total).toBe(first.body.total);
+  });
+  it('rolls back product metadata and gallery if the audit insert fails', async () => {
+    const before = await db.product.findUniqueOrThrow({
+      where: { id: productId }, include: { images: true },
+    });
+    const eventCount = await db.adminAuditEvent.count({ where: { targetId: productId } });
+    // Invalid internal UUID reaches the real PostgreSQL audit insertion, after
+    // the product write. HTTP callers cannot select the authenticated actor.
+    await expect(app.get(AdminService).updateProduct('invalid-actor', productId, {
+      name: 'Must roll back',
+      images: [{ url: 'https://example.com/rollback.jpg', alt: 'Rollback' }],
+    })).rejects.toThrow();
+    const after = await db.product.findUniqueOrThrow({
+      where: { id: productId }, include: { images: true },
+    });
+    expect(after).toEqual(before);
+    expect(await db.adminAuditEvent.count({ where: { targetId: productId } })).toBe(eventCount);
   });
 });

@@ -102,6 +102,15 @@ async function main() {
     await db.connect();
     try {
       assert.equal((await db.query('SELECT status FROM "Payment" WHERE "orderId"=$1', [order.id])).rows[0].status, 'PENDING');
+      // Promote only this verifier's synthetic account in its retained test DB.
+      assert.equal((await db.query('UPDATE "User" SET role=$1 WHERE id=$2', ['ADMIN', customer.user.id])).rowCount, 1);
+      const category = await api('POST', 'admin/categories', { name: 'Container activity fixture', slug: prefix }, token, null, 201);
+      const history = await api('GET', 'admin/audit?limit=1', null, token);
+      assert.equal(history.items[0].actorId, customer.user.id);
+      assert.equal(history.items[0].action, 'CATEGORY_CREATED');
+      assert.equal(history.items[0].targetId, category.id);
+      assert.equal(Number((await db.query('SELECT count(*) FROM "AdminAuditEvent" WHERE "actorId"=$1 AND "targetId"=$2', [customer.user.id, category.id])).rows[0].count), 1);
+      report.checks.push('container admin write and authenticated activity event persisted atomically');
       const imageId = randomUUID(), jobId = randomUUID();
       await db.query('BEGIN');
       await db.query('INSERT INTO "ImageAsset" (id,"userId","objectKey","mimeType",size,"verifiedAt","expiresAt","updatedAt") VALUES ($1,$2,$3,$4,1,NOW(),NOW()+interval \'1 hour\',NOW())', [imageId, customer.user.id, prefix + '/synthetic.png', 'image/png']);

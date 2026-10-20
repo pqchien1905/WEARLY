@@ -29,11 +29,27 @@ Goal: execute the attached system completion objective. Status: **IN PROGRESS**.
 ## In progress
 
 - Resolve provider/promotion requirements and scope the remaining integrations.
+- Examine the existing content draft/publish contract for the next local task.
+
+## Completed — iteration two
+
+- Persistent admin history: ten action categories, authenticated actor IDs,
+  same-transaction recording, protected bounded reads.
+- Dashboard history with paging, refresh, loading/error/empty states; mobile
+  layout verified by widget tests and actual Chrome screenshot.
+- Backend lint/build, 11 unit/58 E2E tests passed; Flutter analyze and 301 tests
+  passed, two opt-in live tests skipped. Independent review found no blockers.
+- Fresh nine-migration bootstrap, rebuilt images, runtime containers and real
+  admin browser journey passed. Final default-API Web release build passed.
+- Recovery into new `wearly_restore_1792476581460_91be3fa9_test` matched 26 public
+  tables, including persisted admin activity, and schema; source unchanged.
+- Evidence `.tools/goal-audit-*` and
+  `.tools/handoff/wearly_handoff_1792476392334_2bab6643_test/`.
 
 ## Not completed
 
 - Password recovery with real email transport and frontend.
-- Remote AI workflows, promotions, catalog upload, settlement/audit assessment.
+- Remote AI workflows, promotions, catalog upload, settlement and admin content.
 - Production configuration, production recovery evidence and final goal acceptance.
 
 ## External dependencies / blocked verification

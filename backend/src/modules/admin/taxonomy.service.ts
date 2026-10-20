@@ -4,6 +4,7 @@ import { transaction } from '../../common/transaction';
 import { fail } from '../../common/errors';
 import { PageDto } from '../products/dto/query-products.dto';
 import { CategoryDto, RenameTaxonomyDto } from './dto/admin.dto';
+import { recordAdminActivity } from './audit';
 
 type Kind = 'categories' | 'brands';
 
@@ -38,14 +39,24 @@ export class TaxonomyService {
     );
   }
 
-  create(kind: Kind, dto: CategoryDto) {
+  create(actorId: string, kind: Kind, dto: CategoryDto) {
     const data = { name: dto.name, slug: dto.slug };
-    return kind === 'categories'
-      ? this.db.category.create({ data })
-      : this.db.brand.create({ data });
+    return transaction(this.db, async (tx) => {
+      const row =
+        kind === 'categories'
+          ? await tx.category.create({ data })
+          : await tx.brand.create({ data });
+      await recordAdminActivity(
+        tx,
+        actorId,
+        kind === 'categories' ? 'CATEGORY_CREATED' : 'BRAND_CREATED',
+        row.id,
+      );
+      return row;
+    });
   }
 
-  rename(kind: Kind, id: string, dto: RenameTaxonomyDto) {
+  rename(actorId: string, kind: Kind, id: string, dto: RenameTaxonomyDto) {
     return transaction(this.db, async (tx) => {
       const where = { id };
       const existing =
@@ -67,6 +78,12 @@ export class TaxonomyService {
           'VERSION_CONFLICT',
           'Tên đã được thay đổi. Vui lòng tải lại trước khi chỉnh sửa.',
         );
+      await recordAdminActivity(
+        tx,
+        actorId,
+        kind === 'categories' ? 'CATEGORY_RENAMED' : 'BRAND_RENAMED',
+        id,
+      );
       return kind === 'categories'
         ? tx.category.findUniqueOrThrow({ where })
         : tx.brand.findUniqueOrThrow({ where });

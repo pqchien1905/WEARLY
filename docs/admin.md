@@ -19,6 +19,7 @@ Chạy từ root. Script dùng cấu hình PostgreSQL của backend, chỉ cập
 ## Các thao tác đã nối
 
 - Tổng quan: số sản phẩm, đơn, đơn chờ xác nhận, khách hàng và tổng số lượng kho từ toàn database.
+- Thay đổi gần đây trên trang tổng quan: lịch sử PostgreSQL, mới nhất trước, 20 mục/trang; có tải lại và trang trước/sau. Mỗi mục gồm thao tác, mã quản trị viên, mã bản ghi và thời gian theo múi giờ thiết bị. Không lưu nội dung request hoặc thông tin khách hàng vào lịch sử.
 - Danh mục (`/#/admin/categories`) và thương hiệu (`/#/admin/brands`): danh sách phân trang 20 mục, số sản phẩm liên quan, thêm mới và đổi tên. Tên tối đa 100 ký tự; đường dẫn gồm chữ thường không dấu, số và dấu gạch nối, không trùng trong cùng loại. Đường dẫn được giữ cố định sau khi tạo, chưa có thao tác xóa. Khi người khác đã đổi tên, tải lại trước khi sửa tiếp. Danh mục mới xuất hiện ở cửa hàng và cả hai loại đều chọn được khi thêm/sửa sản phẩm.
 - Sản phẩm: danh sách phân trang, thêm/sửa metadata, chọn danh mục/thương hiệu có sẵn, bộ ảnh tối đa 20 ảnh và ẩn/hiện. Ảnh dùng URL HTTPS công khai hoặc asset bundled; chưa có trình tải ảnh catalog.
 - Biến thể: tạo SKU với size/màu/giá; sửa giá và trạng thái bán. SKU/size/màu đã tạo không đổi định danh. SKU mới có tồn kho 0; nhập kho ở thao tác riêng.
@@ -30,7 +31,9 @@ Các thao tác lưu metadata, SKU và tồn kho tách biệt; không trình bày
 
 Khi sửa sản phẩm, Flutter chỉ PATCH các trường đã đổi. Sửa tên/chất liệu không gửi lại bộ ảnh cũ; bộ ảnh chỉ được thay thế khi bạn sửa ảnh. Hai người cùng sửa chính một trường metadata vẫn áp dụng lần lưu sau cùng; kiểm tra lại sản phẩm trước khi chỉnh sửa đồng thời. Kho và trạng thái đơn dùng expectedVersion để từ chối dữ liệu cũ.
 
-Khuyến mãi, nội dung, AI monitoring, đối soát COD và audit quản trị đầy đủ chưa triển khai. Các trang demo vẫn có trong chế độ `run`; API mode không dùng dữ liệu demo cho các mục này. Chưa kiểm chứng native Android/iOS hoặc môi trường production.
+Nhật ký ghi cùng transaction với thao tác thành công trên sản phẩm, SKU, danh mục, thương hiệu, tồn kho và trạng thái đơn. Khi ghi nhật ký lỗi, thay đổi nghiệp vụ cũng rollback. Request bị từ chối không tạo sự kiện thành công. Mã actor lấy từ phiên đã xác thực, không nhận từ form. Đây là lịch sử thao tác ứng dụng, chưa phải kho kiểm toán chống sửa đổi bởi người có quyền database.
+
+Khuyến mãi, nội dung, AI monitoring và đối soát COD chưa triển khai. Các trang demo vẫn có trong chế độ `run`; API mode không dùng dữ liệu demo cho các mục này. Chưa kiểm chứng native Android/iOS hoặc môi trường production. Chạy migration trước khi dùng bản mới: `npm run prisma:deploy` trong `backend` với cấu hình DB local.
 
 ## Kiểm chứng
 

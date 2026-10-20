@@ -76,6 +76,12 @@ async function main() {
       if (saved.category.slug !== fixture + '-taxonomy' || saved.category.name !== 'BST thu đông kiểm thử' || saved.brand.slug !== fixture + '-taxonomy' || saved.brand.name !== 'Studio thu đông kiểm thử') throw new Error('Product taxonomy assignment did not persist');
       const delivered = await db.order.findUniqueOrThrow({ where: { id: order.id }, include: { payment: true } });
       if (delivered.status !== 'DELIVERED' || delivered.payment.status !== 'PENDING') throw new Error('Persisted order/COD state mismatch');
+      const activity = await db.adminAuditEvent.findMany({ where: { actorId: adminUser.user.id } });
+      for (const action of ['PRODUCT_CREATED', 'PRODUCT_UPDATED', 'SKU_CREATED', 'SKU_UPDATED', 'CATEGORY_CREATED', 'CATEGORY_RENAMED', 'BRAND_CREATED', 'BRAND_RENAMED', 'INVENTORY_ADJUSTED', 'ORDER_STATUS_CHANGED']) {
+        if (!activity.some(event => event.action === action)) throw new Error('Missing persisted admin activity: ' + action);
+      }
+      if (activity.filter(event => event.action === 'ORDER_STATUS_CHANGED' && event.targetId === order.id).length !== 3) throw new Error('Order activity cardinality mismatch');
+      console.log('PASS persistent admin history: authenticated actor and all ten action categories.');
       console.log('PASS database assertions: product, SKU, gallery, stock, order delivered with COD pending.');
     } else if (style) {
       const password = 'Browser-only-Password-2026';
@@ -143,6 +149,7 @@ async function main() {
       const users = await db.user.findMany({ where: { email: { in: [fixture + '@example.com', 'browser-' + fixture + '@example.com', 'admin-' + fixture + '@example.com'] } }, select: { id: true } });
       const owner = { userId: { in: users.map(user => user.id) } };
       await db.$transaction(async tx => {
+        await tx.adminAuditEvent.deleteMany({ where: { actorId: owner.userId } });
         await tx.review.deleteMany({ where: owner });
         await tx.inventoryMovement.deleteMany({ where: { order: owner } });
         await tx.payment.deleteMany({ where: { order: owner } });

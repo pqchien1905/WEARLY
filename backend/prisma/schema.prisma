@@ -30,6 +30,28 @@ enum AIJobStatus {
   COMPLETED
   FAILED
 }
+enum AdminAuditAction {
+  PRODUCT_CREATED
+  PRODUCT_UPDATED
+  SKU_CREATED
+  SKU_UPDATED
+  CATEGORY_CREATED
+  CATEGORY_RENAMED
+  BRAND_CREATED
+  BRAND_RENAMED
+  INVENTORY_ADJUSTED
+  ORDER_STATUS_CHANGED
+}
+// Historical identifiers intentionally survive changes to the referenced entities.
+// Do not copy request bodies or credentials into activity history.
+model AdminAuditEvent {
+  id String @id @default(uuid()) @db.Uuid
+  actorId String @db.Uuid
+  action AdminAuditAction
+  targetId String @db.Uuid
+  createdAt DateTime @default(now())
+  @@index([createdAt, id])
+}
 model User {
   id String @id @default(uuid()) @db.Uuid
   email String @unique
