@@ -75,6 +75,18 @@ Goal: execute the attached system completion objective. Status: **IN PROGRESS**.
   This proves local catalog recovery,
   not private Try-On, historical versions, off-host or production recovery.
 
+## Completed — private retention follow-up
+
+- Real MinIO regression proved a late accepted PUT could survive an earlier
+  purge because purgedAt was terminal. API access stayed revoked, but physical
+  bytes remained. Worker now revisits revoked tombstones after24h, retries
+  failures after5min, prioritizes never-purged work and retains batch50.
+- No schema, API, consent, expiry or quota change. Full80 E2E, lint/build and
+  targeted8 private-image tests passed; the latter also verifies the due-time
+  gate. Review found no blocker.
+- Rebuilt API/worker images passed container checks on fresh bootstrap
+  `wearly_handoff_1792481891987_07599963_test`. Evidence `.tools/goal-private-retention-*`.
+
 ## Completed — iteration four
 
 - Configurable real SMTP recovery, public request/reset, one-use hashed tokens,

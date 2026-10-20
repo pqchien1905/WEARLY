@@ -47,6 +47,7 @@ No production deployment or production data changes are authorized.
 | A15 | Medium | Remote privacy/FAQ still claim orders and account data disappear on reload | FIXED: API-mode text describes persisted data and COD accurately; return-policy links use the published policy page |
 | A16 | High | Raw PostgreSQL adapter serialization conflicts bypass P2034-only retry and return500 on concurrent cart additions | FIXED: explicit 40001/40P01 adapter conflict detection, five-attempt bound, generic409 when exhausted; red/green unit tests, 50 real concurrent pairs and full E2E passed |
 | A17 | Medium | Recovery Redis producer shutdown fails after a stalled established connection | FIXED during implementation: command/deadline bounds and forced disconnect; real TCP proxy regression passes and Jest exits normally |
+| A18 | Medium | Private image cleanup permanently skips purged tombstones, leaving bytes if a remote PUT completes after DELETE | FIXED: revoked tombstones reconciled every24h,5min failure retry, never-purged priority/batch50; real PG/MinIO red→green regression, API remains404 |
 
 No Critical issue has been confirmed. High items remain open; the goal is
 **not complete**, and production readiness has not been established.
@@ -101,6 +102,19 @@ cleanup tests pass. Review's Nest startup-abort finding fixed;13 helper tests
 and final actual run `objects-1792481707240-02dceafb` passed.
 Evidence `.tools/goal-object-recovery.log` and the source handoff's `objects-*`
 directory. A09 remains open for production/off-host/private-image recovery.
+
+### Private retention follow-up
+
+- Reproduced A18: after a lost upload acknowledgement and successful purge, a
+  simulated late provider PUT remained in MinIO after the old worker sweep.
+- Fixed using existing purgeRetryAt; no schema/API/consent/quota change.
+  Never-purged work precedes periodic reconciliation. Test verifies no premature
+  retry, physical removal when due, continued private404 and next schedule.
+- Backend lint/build, full80 E2E and targeted8 private-upload tests passed.
+  Independent review found no blocker. Rebuilt API/worker images passed runtime
+  verification on fresh `wearly_handoff_1792481891987_07599963_test`.
+- Evidence `.tools/goal-private-retention-*`. Earlier catalog DB/object recovery
+  remains the latest recovery evidence; this follow-up did not change schema.
 
 ## Verification observed in this session
 

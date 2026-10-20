@@ -16,6 +16,7 @@ import { PrismaService } from '../src/database/prisma.service';
 import { StorageService } from '../src/integrations/storage/storage.service';
 import { validateEnv } from '../src/config/env.validation';
 import { ImageLifecycleService } from '../src/modules/uploads/image-lifecycle.service';
+import { normalizeImage } from '../src/integrations/storage/image-policy';
 
 const storageDescribe = process.env.TEST_S3_ENDPOINT ? describe : describe.skip;
 storageDescribe('Private uploads with real PostgreSQL and S3', () => {
@@ -262,6 +263,77 @@ storageDescribe('Private uploads with real PostgreSQL and S3', () => {
     await expect(
       s3.send(new HeadObjectCommand({ Bucket: bucket, Key: stale.objectKey })),
     ).rejects.toMatchObject({ $metadata: { httpStatusCode: 404 } });
+  });
+  it('reconciles a remote PUT completed after an earlier successful purge', async () => {
+    const before = (
+      await db.imageAsset.findMany({ where: { userId }, select: { id: true } })
+    ).map((row) => row.id);
+    const put = jest
+      .spyOn(storage, 'putImage')
+      .mockRejectedValueOnce(new Error('Lost remote acknowledgement'));
+    try {
+      await upload().expect(503);
+    } finally {
+      put.mockRestore();
+    }
+    const reservation = await db.imageAsset.findFirstOrThrow({
+      where: { userId, id: { notIn: before } },
+    });
+    expect(reservation.verifiedAt).toBeNull();
+    expect(await lifecycle.purge(reservation.id)).toBe(true);
+    // Provider finishes a previously accepted PUT after responding to DELETE.
+    await storage.putImage(
+      reservation.objectKey,
+      await normalizeImage(jpeg, 'image/jpeg'),
+    );
+    expect(
+      (
+        await s3.send(
+          new HeadObjectCommand({ Bucket: bucket, Key: reservation.objectKey }),
+        )
+      ).ContentLength,
+    ).toBeGreaterThan(0);
+    await request(app.getHttpServer())
+      .get('/api/v1/uploads/images/' + reservation.id)
+      .auth(token, { type: 'bearer' })
+      .expect(404);
+    const originalFind = db.imageAsset.findMany.bind(db.imageAsset);
+    const find = jest
+      .spyOn(db.imageAsset, 'findMany')
+      .mockImplementation((args) =>
+        originalFind({
+          ...args,
+          where: { ...args?.where, id: reservation.id },
+        }),
+      );
+    try {
+      const remove = jest.spyOn(storage, 'deleteObjects');
+      try {
+        await lifecycle.purgeExpired();
+        expect(remove).not.toHaveBeenCalled();
+      } finally {
+        remove.mockRestore();
+      }
+      await db.imageAsset.update({
+        where: { id: reservation.id },
+        data: { purgeRetryAt: new Date(0) },
+      });
+      await lifecycle.purgeExpired();
+    } finally {
+      find.mockRestore();
+    }
+    await expect(
+      s3.send(
+        new HeadObjectCommand({ Bucket: bucket, Key: reservation.objectKey }),
+      ),
+    ).rejects.toMatchObject({ $metadata: { httpStatusCode: 404 } });
+    const reconciled = await db.imageAsset.findUniqueOrThrow({
+      where: { id: reservation.id },
+    });
+    expect(reconciled.purgedAt).not.toBeNull();
+    expect(reconciled.purgeRetryAt!.getTime()).toBeGreaterThan(
+      Date.now() + 23 * 3600000,
+    );
   });
   it('serializes concurrent reservations and enforces both retained and daily quotas', async () => {
     // Fixtures only: never delete a shared bucket or reset database state.

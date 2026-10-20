@@ -56,7 +56,7 @@ Xem [hướng dẫn ảnh catalog](catalog-images.md).
 
 ## Kết quả và giới hạn
 
-- Backend lint/build đạt; **16 unit + 79 E2E** đạt.
+- Backend lint/build đạt; **16 unit + 80 E2E** đạt.
 - Flutter analyze sạch; **317 tests** đạt, gồm rời phiên lúc xuất bản;
   2 live opt-in không chạy trong suite
   thường. Năm suite Chrome/API riêng đạt.
@@ -116,6 +116,12 @@ private Try-On, backup ngoài máy hoặc phục hồi production.
 Review công cụ phục hồi phát hiện lỗi Nest tự thoát trước cleanup khi khởi
 tạo thất bại; đã sửa, kiểm thử bằng tiến trình con và chạy lại phục hồi
 thành công vào `wearly-restore-1792481707240-02dceafb-test`.
+
+Rà soát retention tiếp theo tái hiện object riêng tư được PUT muộn sau lần
+DELETE đầu. Worker nay định kỳ dọn lại bản ghi đã thu hồi, giữ quyền đọc bị
+chặn và không đổi quota.80 E2E đạt; API/worker image mới qua container checks
+trên `wearly_handoff_1792481891987_07599963_test`. Không đổi schema; bằng chứng
+DB/object restore ở trên vẫn thuộc lượt catalog.
 
 ## Còn thiếu
 

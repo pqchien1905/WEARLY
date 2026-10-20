@@ -19,7 +19,7 @@ export class ImageLifecycleService {
           where: { id },
           include: { jobs: { include: { result: true } } },
         });
-        if (!image || image.purgedAt) return null;
+        if (!image) return null;
         const stale =
           !image.verifiedAt &&
           image.createdAt.getTime() < Date.now() - 15 * 60000;
@@ -48,14 +48,18 @@ export class ImageLifecycleService {
     await this.storage.deleteObjects(keys);
     await this.db.imageAsset.update({
       where: { id },
-      data: { purgedAt: new Date(), purgeRetryAt: null },
+      // A provider can complete a previously accepted PUT after DELETE.
+      // Keep the revoked tombstone eligible for periodic reconciliation.
+      data: {
+        purgedAt: new Date(),
+        purgeRetryAt: new Date(Date.now() + 86400000),
+      },
     });
     return true;
   }
   async purgeExpired() {
     const candidates = await this.db.imageAsset.findMany({
       where: {
-        purgedAt: null,
         AND: [
           {
             OR: [{ purgeRetryAt: null }, { purgeRetryAt: { lte: new Date() } }],
@@ -73,6 +77,7 @@ export class ImageLifecycleService {
       // Never-attempted work first, then oldest retry, so failing early objects
       // cannot monopolize every batch regardless of backlog size.
       orderBy: [
+        { purgedAt: { sort: 'asc', nulls: 'first' } },
         { purgeRetryAt: { sort: 'asc', nulls: 'first' } },
         { expiresAt: 'asc' },
       ],

@@ -27,6 +27,14 @@ Worker công bố kết quả, cấp URL đọc và DELETE dùng cùng transacti
 
 Cleanup lỗi được hẹn lại sau5 phút bằng `purgeRetryAt`. Mỗi lượt ưu tiên ảnh chưa thử, sau đó retry cũ nhất; một nhóm object lỗi không được chặn toàn bộ các ảnh khác. PNG được kiểm tra đủ chunk, CRC và IEND trước khi giải mã, bao gồm từ chối bytes thừa sau IEND.
 
+Sau DELETE thành công, bản ghi đã thu hồi được hẹn kiểm tra/xóa lại sau24giờ.
+Provider có thể hoàn tất PUT đã nhận trước khi mất phản hồi sau lần DELETE
+đầu tiên; bỏ qua vĩnh viễn `purgedAt` sẽ để lại bytes. Worker ưu tiên ảnh
+chưa purge, vẫn xử lý tối đa50/lượt; lỗi retry5phút. `purgedAt` ghi lần xóa
+thành công gần nhất, không mở lại quyền đọc và không tính lại quota ảnh.
+Đã tái hiện late PUT bằng PostgreSQL/MinIO thật, kiểm tra404 trong toàn luồng
+và object biến mất sau lượt reconciliation đến hạn.
+
 URL đã cấp có hiệu lực tối đa60s, hoặc ngắn hơn khi object được purge. Xóa không thể thu hồi bytes đã tải xuống. Bucket phải private và **không bật versioning**: DeleteObjects hiện xóa object hiện tại, không quản lý lịch sử phiên bản hay Object Lock. Trên production, chọn storage phù hợp và credential chỉ có quyền cần thiết trên bucket/prefix của ứng dụng; helper tạo bucket local dùng tài khoản quản trị phát triển.
 
 `S3_ENDPOINT` dùng cho server ghi/xóa. `S3_PUBLIC_ENDPOINT` dùng ký URL cho browser/provider; để trống thì dùng `S3_ENDPOINT`. Với Compose, endpoint nội bộ là `http://minio:9000`, URL local cho browser là `http://localhost:9000`. Provider ngoài máy cần endpoint HTTPS thực sự truy cập được, không dùng localhost hoặc hostname Docker nội bộ.
