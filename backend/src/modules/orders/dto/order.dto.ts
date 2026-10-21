@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsIn, IsInt, ValidateIf, IsUUID, Matches, Min } from 'class-validator';
 export class CreateOrderDto {
   @ApiProperty() @IsUUID() addressId!: string;
@@ -8,6 +9,20 @@ export class CreateOrderDto {
   @ApiProperty({ enum: ['cod', 'vnpay'] })
   @IsIn(['cod', 'vnpay'])
   paymentMethod: 'cod' | 'vnpay' = 'cod';
+  @ApiPropertyOptional()
+  @ValidateIf((_object, value) => value !== undefined)
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().toUpperCase() : value,
+  )
+  @Matches(/^[A-Z0-9_-]{3,32}$/)
+  couponCode?: string;
+  @ApiPropertyOptional()
+  @ValidateIf(
+    (object: CreateOrderDto, value) =>
+      object.couponCode !== undefined || value !== undefined,
+  )
+  @Matches(/^\d{1,14}$/)
+  expectedDiscount?: string;
   @ApiProperty({
     description: 'Exact VND subtotal from the last cart response',
   })

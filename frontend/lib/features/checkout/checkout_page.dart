@@ -6,6 +6,8 @@ import '../../app/account_state.dart';
 import '../../app/account_details.dart';
 import '../../app/config.dart';
 import '../../app/payment_providers.dart';
+import '../../app/promotion_providers.dart';
+import '../../data/remote_promotions.dart';
 import 'payment_panel.dart';
 import '../../core/design/tokens.dart';
 import '../../core/widgets/primitives.dart';
@@ -24,10 +26,13 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   final name = TextEditingController(),
       email = TextEditingController(),
       phone = TextEditingController(),
-      address = TextEditingController();
+      address = TextEditingController(),
+      coupon = TextEditingController();
   bool express = false, busy = false, confirmed = false;
   String payment = 'COD demo';
   String? error, addressId;
+  PromotionQuote? quote;
+  bool quoting = false;
   @override
   void initState() {
     super.initState();
@@ -41,13 +46,14 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       addressId = pending.draft.addressId;
       express = pending.draft.express;
       payment = pending.draft.payment;
+      coupon.text = pending.draft.couponCode ?? '';
       confirmed = true;
     }
   }
 
   @override
   void dispose() {
-    for (final c in [name, email, phone, address]) {
+    for (final c in [name, email, phone, address, coupon]) {
       c.dispose();
     }
     super.dispose();
@@ -57,6 +63,21 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     if (busy) return;
     final store = ref.read(commerceProvider);
     final retry = store.checkoutPending;
+    final applied =
+        quote?.cartVersion == store.cartVersion &&
+            quote?.subtotal == store.cart.subtotal
+        ? quote
+        : null;
+    if (!retry &&
+        store.remote &&
+        coupon.text.trim().isNotEmpty &&
+        applied == null) {
+      setState(
+        () => error =
+            'Hãy áp dụng lại hoặc xóa mã khuyến mãi trước khi đặt hàng.',
+      );
+      return;
+    }
     if (!retry && !form.currentState!.validate()) {
       return;
     }
@@ -97,6 +118,8 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               express: express,
               payment: payment,
               paymentMethod: payment == 'VNPay sandbox' ? 'vnpay' : 'cod',
+              couponCode: applied?.code,
+              discount: applied?.discount ?? 0,
             ),
           );
       if (mounted) {
@@ -113,6 +136,36 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     }
   }
 
+  Future<void> applyCoupon() async {
+    if (quoting) return;
+    final store = ref.read(commerceProvider),
+        version = ref.read(commerceProvider).cartVersion;
+    if (version == null || coupon.text.trim().isEmpty) return;
+    setState(() {
+      quoting = true;
+      error = null;
+      quote = null;
+    });
+    try {
+      final result = await ref
+          .read(promotionRepositoryProvider)
+          .preview(coupon.text, express: express, cartVersion: version);
+      if (!mounted) return;
+      if (store.cartVersion != version ||
+          result.subtotal != store.cart.subtotal) {
+        setState(
+          () => error = 'Giỏ hàng đã thay đổi. Vui lòng áp dụng lại mã.',
+        );
+      } else {
+        setState(() => quote = result);
+      }
+    } catch (e) {
+      if (mounted) setState(() => error = '$e');
+    } finally {
+      if (mounted) setState(() => quoting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cart = ref.watch(commerceProvider);
@@ -121,7 +174,15 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     }
     final remote = cart.remote;
     final methods = remote ? ref.watch(paymentMethodsProvider) : null;
-    final locked = busy || cart.checkoutPending;
+    final locked = busy || cart.checkoutPending || quoting;
+    final applied =
+        quote?.cartVersion == cart.cartVersion &&
+            quote?.subtotal == cart.cart.subtotal
+        ? quote
+        : null;
+    final discount =
+        cart.pendingCheckout?.draft.discount ?? applied?.discount ?? 0;
+    final couponCode = cart.pendingCheckout?.draft.couponCode ?? applied?.code;
     final profile = ref.watch(accountProvider);
     final savedAddresses = profile == null
         ? null
@@ -263,7 +324,10 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
             value: express,
             onChanged: locked
                 ? null
-                : (v) => setState(() => express = v ?? false),
+                : (v) => setState(() {
+                    express = v ?? false;
+                    quote = null;
+                  }),
             title: const Text('Giao nhanh · 50.000đ'),
             subtitle: Text(
               remote
@@ -292,6 +356,42 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                     .toList(),
             onChanged: locked ? null : (v) => setState(() => payment = v!),
           ),
+          if (remote) ...[
+            const SizedBox(height: 20),
+            TextFormField(
+              controller: coupon,
+              readOnly: locked,
+              decoration: const InputDecoration(labelText: 'Mã khuyến mãi'),
+              maxLength: 32,
+              onChanged: (_) => setState(() => quote = null),
+            ),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                AppButton(
+                  'Áp dụng mã',
+                  outlined: true,
+                  busy: quoting,
+                  onPressed: locked ? null : applyCoupon,
+                ),
+                TextButton(
+                  onPressed: locked
+                      ? null
+                      : () => setState(() {
+                          coupon.clear();
+                          quote = null;
+                        }),
+                  child: const Text('Xóa mã'),
+                ),
+              ],
+            ),
+            if (coupon.text.trim().isNotEmpty && couponCode == null)
+              const Text(
+                'Áp dụng mã để xác nhận giảm giá. Thay đổi giỏ hàng hoặc giao hàng cần áp dụng lại.',
+                style: T.small,
+              ),
+          ],
           if (remote && methods?.asData?.value != true)
             Text(
               methods?.isLoading == true
@@ -324,6 +424,8 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     final summary = CartSummary(
       remote: remote,
       paymentMethod: payment == 'VNPay sandbox' ? 'vnpay' : 'cod',
+      discount: discount,
+      couponCode: couponCode,
       subtotal: subtotal,
       shipping: shipping,
       action: AppButton(
@@ -335,7 +437,9 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                   : 'Đặt hàng COD')
             : 'Tạo đơn hàng demo',
         busy: busy,
-        onPressed: cart.cart.locked && !cart.checkoutPending ? null : submit,
+        onPressed: quoting || (cart.cart.locked && !cart.checkoutPending)
+            ? null
+            : submit,
       ),
     );
     return PageBody(
@@ -454,6 +558,8 @@ class _OrderSuccessPageState extends ConsumerState<OrderSuccessPage> {
               child: CartSummary(
                 remote: store.remote,
                 paymentMethod: order.paymentProvider,
+                discount: order.discount,
+                couponCode: order.couponCode,
                 subtotal: order.subtotal,
                 shipping: order.shipping,
                 action: AppButton(

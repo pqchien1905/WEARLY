@@ -33,6 +33,8 @@ const reviews = process.argv.includes('--reviews');
 const style = process.argv.includes('--style');
 const recovery = process.argv.includes('--recovery');
 const payments = process.argv.includes('--payments');
+const promotions = process.argv.includes('--promotions');
+const promotionCode = 'BROWSER' + fixture.replaceAll('-', '').slice(-12).toUpperCase();
 if (admin) {
   process.env.S3_BUCKET = test.TEST_S3_BUCKET || normal.S3_BUCKET + '-test';
   if (!process.env.S3_BUCKET.endsWith('-test') || process.env.S3_BUCKET === normal.S3_BUCKET)
@@ -220,9 +222,22 @@ async function main() {
       if (saved.length !== 1 || saved[0].productId !== product.id) throw new Error('Wishlist was not persisted for first customer');
       if (await db.wishlistItem.count({ where: { user: { email: fixture + '@example.com' } } }) !== 0) throw new Error('Wishlist crossed customer accounts');
       console.log('PASS database assertions: first customer saved product, second customer empty.');
-    } else if (browser || payments) {
+    } else if (browser || payments || promotions) {
+      const promotion = promotions ? {code:promotionCode,adminEmail:'admin-'+fixture+'@example.com',password:'Browser-only-Password-2026'} : null;
+      if(promotion) {
+        const response=await fetch(url+'/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:promotion.adminEmail,password:promotion.password,name:'Promotion admin'})});
+        if(response.status!==201)throw Error('Promotion admin fixture failed');
+        const account=await response.json();await db.user.update({where:{id:account.user.id},data:{role:'ADMIN'}});
+      }
       await flutter(['build', 'web', '--release', '--dart-define=USE_REMOTE_API=true', '--dart-define=API_BASE_URL=' + url]);
-      await require('./verify-api-browser.cjs')({ root, url, fixture, payments, markFixturePaid:()=>{fixturePaid=true;} });
+      await require('./verify-api-browser.cjs')({ root, url, fixture, payments, promotion, markFixturePaid:()=>{fixturePaid=true;} });
+      if(promotions) {
+        const order=await db.order.findFirstOrThrow({where:{user:{email:'browser-'+fixture+'@example.com'}},include:{payment:true,redemption:true}});
+        if(order.total.toString()!=='470000'||order.discount.toString()!=='50000'||order.couponCode!==promotionCode||order.status!=='CANCELLED'||!order.redemption?.releasedAt)throw Error('Promotion snapshot or release mismatch');
+        const coupon=await db.coupon.findUniqueOrThrow({where:{code:promotionCode}});
+        if(coupon.usageLimit!==1 || await db.couponRedemption.count({where:{couponId:coupon.id,releasedAt:null}})!==0)throw Error('Coupon quota was not released');
+        console.log('PASS promotion: browser admin creation, server quote, order discount snapshot and quota released on cancellation.');
+      }
       if(payments) {
         const order=await db.order.findFirstOrThrow({where:{user:{email:'browser-'+fixture+'@example.com'}},include:{payment:{include:{attempts:true}}}});
         if(order.payment.provider!=='vnpay' || order.payment.status!=='PAID' || order.payment.attempts.length!==1 || order.payment.attempts[0].status!=='PAID')throw Error('VNPay fixture persistence mismatch');
@@ -254,6 +269,8 @@ async function main() {
         await tx.review.deleteMany({ where: owner });
         await tx.inventoryMovement.deleteMany({ where: { order: owner } });
         await tx.paymentAttempt.deleteMany({ where: { payment: { order: owner } } });
+        await tx.couponRedemption.deleteMany({where:{order:owner}});
+        if(promotions) await tx.coupon.deleteMany({where:{code:promotionCode}});
         await tx.payment.deleteMany({ where: { order: owner } });
         await tx.orderItem.deleteMany({ where: { order: owner } });
         await tx.order.deleteMany({ where: owner });

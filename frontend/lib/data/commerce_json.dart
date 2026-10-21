@@ -72,7 +72,13 @@ Order commerceOrder(Object? value, {required String email}) {
     'REFUNDED' => 'Đã hoàn tiền',
     _ => throw invalidCommerce,
   };
-  if (!['cod', 'vnpay'].contains(payment['provider'])) throw invalidCommerce;
+  if (!['cod', 'vnpay', 'free'].contains(payment['provider'])) {
+    throw invalidCommerce;
+  }
+  final discount = vnd(data['discount'] ?? '0');
+  final couponCode = data['couponCode'];
+  if (couponCode != null && couponCode is! String) throw invalidCommerce;
+  if (discount > 0 && couponCode == null) throw invalidCommerce;
   final createdAt = DateTime.tryParse(data['createdAt']?.toString() ?? '');
   if (createdAt == null) throw invalidCommerce;
   final order = Order(
@@ -80,6 +86,8 @@ Order commerceOrder(Object? value, {required String email}) {
     status: status,
     paymentProvider: payment['provider'],
     paymentStatus: payment['status'],
+    discount: discount,
+    couponCode: couponCode,
     createdAt: createdAt,
     shipping: vnd(data['shipping']),
     items: List<CartItem>.unmodifiable(
@@ -90,13 +98,19 @@ Order commerceOrder(Object? value, {required String email}) {
       email: email,
       phone: address['phone'],
       address: address['address'],
-      payment:
-          '${payment['provider'] == 'vnpay' ? 'VNPay sandbox' : 'COD'} · $paymentStatus',
+      payment: payment['provider'] == 'free'
+          ? 'Không cần thanh toán'
+          : '${payment['provider'] == 'vnpay' ? 'VNPay sandbox' : 'COD'} · $paymentStatus',
       paymentMethod: payment['provider'],
+      discount: discount,
+      couponCode: couponCode,
       express: data['shippingMethod'] == 'express',
     ),
   );
   if (order.items.isEmpty ||
+      discount > order.subtotal ||
+      (payment['provider'] == 'free' &&
+          (order.total != 0 || payment['amount'] != '0')) ||
       order.subtotal != vnd(data['subtotal']) ||
       order.total != vnd(data['total'])) {
     throw invalidCommerce;

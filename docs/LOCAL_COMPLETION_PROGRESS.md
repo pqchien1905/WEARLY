@@ -8,7 +8,8 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
 - [x] Foundation: timezone, schema/readiness, local backup and migration.
 - [x] Shipping snapshot, COD settlement, useful business reports.
 - [x] VNPay sandbox local implementation and signed-fixture acceptance.
-- [ ] Promotions, shipment tracking, cancellations/returns/refunds.
+- [x] Transactional promotions and customer/admin UI.
+- [ ] Shipment tracking, cancellations/returns/refunds.
 - [ ] Local email/support, staff roles/audit detail, persistent safe sessions.
 - [ ] Gemini Stylist and private asynchronous try-on with frontend integration.
 - [ ] Local tooling/CI/monitoring/recovery and store content/SEO.
@@ -152,3 +153,25 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   all other local milestones remain in scope.
 - Final VNPay checks: lint/build/analyze clean; COD Chrome regression also passes
   after the shared checkout changes. Review found no deferred minor issues.
+
+## Promotions — 21 October 2026
+
+- Fixed/percentage coupons, validity windows, minimum spend, discount caps,
+  global/per-customer quotas, cart-version preview and exact order snapshots.
+  Serializable order creation locks the coupon; cancellation returns usage.
+- Ruling: zero-total orders use free/PAID amount0 and no receipt or gateway
+  attempt. Cost if business policy changes: reject zero-total discounts instead.
+- Existing order-total SQL constraint required an ordered follow-up migration;
+  already-applied test migration checksums were preserved. Optional DTO fields
+  are filtered before merging an update to avoid overwriting with undefined.
+- Customer quote/retry/discount summaries and versioned admin editor implemented.
+  Real Chrome passes admin coupon creation, mobile checkout, order persistence,
+  cancellation, released quota and reload/login. No business fixture created.
+- Independent review found two important issues, both RED->GREEN: unchanged
+  admin date fields now preserve seconds/milliseconds; free orders no longer
+  require VNPay availability. No deferred minor findings.
+- Final116/116 E2E,26/26unit,333 Flutter pass/2 opt-in skips; lint/build/analyze
+  clean. Logs and Chrome screenshots stay in private `.tools/` artifacts.
+- Backup `before-promotions-1792600245978.dump` verified; business migrations16->18
+  applied. All30 original tables retain exact original-column fingerprints/counts;
+  CouponRedemption is empty. Operator guide: `docs/PROMOTIONS.md`.

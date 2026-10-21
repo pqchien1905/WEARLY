@@ -12,6 +12,7 @@ import 'product_editor.dart';
 import 'taxonomy_page.dart';
 import 'admin_activity.dart';
 import 'content_page.dart';
+import 'promotions_page.dart';
 
 class RemoteAdminRoute extends StatelessWidget {
   const RemoteAdminRoute({super.key, required this.path});
@@ -21,6 +22,7 @@ class RemoteAdminRoute extends StatelessWidget {
     final parts = path.split('/');
     if (path == '/admin') return const RemoteAdminDashboard();
     if (path == '/admin/content') return const RemoteContentPage();
+    if (path == '/admin/promotions') return const RemotePromotionsPage();
     if (path == '/admin/categories' || path == '/admin/brands') {
       return RemoteTaxonomyPage(key: ValueKey(path), kind: parts[2]);
     }
@@ -478,6 +480,11 @@ class RemoteAdminOrder extends ConsumerWidget {
                     '${order.draft.payment} · ${money(order.total)}',
                     style: T.body,
                   ),
+                  if (order.couponCode != null)
+                    Text(
+                      'Khuyến mãi ${order.couponCode}: -${money(order.discount)}',
+                      style: T.body,
+                    ),
                   const Text(
                     'Trạng thái giao hàng và tiền thu COD được theo dõi riêng.',
                     style: T.small,

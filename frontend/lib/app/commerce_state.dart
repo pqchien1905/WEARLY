@@ -96,6 +96,9 @@ class CommerceController extends ChangeNotifier {
   final CartRepository cart;
   final OrderRepository orderRepository;
   List<CartItem> get items => List.unmodifiable(cart.items);
+  int? get cartVersion => cart is RemoteCartRepository
+      ? (cart as RemoteCartRepository).version
+      : null;
   List<Order> get orders => List.unmodifiable(orderRepository.orders);
   int get count => items.fold(0, (sum, i) => sum + i.quantity);
   void _requireAccount() {

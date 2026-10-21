@@ -231,11 +231,15 @@ class CartSummary extends StatelessWidget {
     this.action,
     this.remote = false,
     this.paymentMethod = 'cod',
+    this.discount = 0,
+    this.couponCode,
   });
   final int subtotal, shipping;
   final Widget? action;
   final bool remote;
   final String paymentMethod;
+  final int discount;
+  final String? couponCode;
   @override
   Widget build(BuildContext context) => Container(
     width: double.infinity,
@@ -254,11 +258,17 @@ class CartSummary extends StatelessWidget {
         const SizedBox(height: 16),
         _line('Giao hàng', shipping == 0 ? 'Miễn phí' : money(shipping)),
         const Divider(),
-        _line('Tổng cộng', money(subtotal + shipping), strong: true),
+        if (couponCode != null) ...[
+          _line('Khuyến mãi $couponCode', '-${money(discount)}'),
+          const SizedBox(height: 16),
+        ],
+        _line('Tổng cộng', money(subtotal + shipping - discount), strong: true),
         const SizedBox(height: 12),
         Text(
           remote
-              ? (paymentMethod == 'vnpay'
+              ? (paymentMethod == 'free'
+                    ? 'Không cần thanh toán.'
+                    : paymentMethod == 'vnpay'
                     ? 'VNPay sandbox: thanh toán thử nghiệm. Kiểm tra kết quả trong chi tiết đơn hàng.'
                     : 'Thanh toán COD khi nhận hàng. Tổng tiền được xác nhận khi tạo đơn.')
               : 'Giá và phí vận chuyển mô phỏng, không thu tiền.',

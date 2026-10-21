@@ -12,12 +12,14 @@ import { cartInclude } from '../cart/cart.service';
 import { CreateOrderDto } from './dto/order.dto';
 import { PageDto } from '../products/dto/query-products.dto';
 import { VnpayProvider } from '../../integrations/payments/vnpay.provider';
+import { PromotionsService } from '../promotions/promotions.service';
 const include = { items: true, payment: true };
 @Injectable()
 export class OrdersService {
   constructor(
     private readonly db: PrismaService,
     private readonly gateway: VnpayProvider,
+    private readonly promotions: PromotionsService,
   ) {}
   create(userId: string, key: string | undefined, dto: CreateOrderDto) {
     if (!key || !/^[a-zA-Z0-9_-]{8,128}$/.test(key))
@@ -32,6 +34,12 @@ export class OrdersService {
           expectedSubtotal: dto.expectedSubtotal,
           cartVersion: dto.cartVersion ?? null,
           ...(dto.paymentMethod === 'vnpay' ? { paymentMethod: 'vnpay' } : {}),
+          ...(dto.couponCode
+            ? {
+                couponCode: dto.couponCode,
+                expectedDiscount: dto.expectedDiscount,
+              }
+            : {}),
         }),
       )
       .digest('hex');
@@ -50,7 +58,6 @@ export class OrdersService {
           );
         return previous;
       }
-      if (dto.paymentMethod === 'vnpay') this.gateway.assertAvailable();
       const address = await tx.address.findFirst({
         where: { id: dto.addressId, userId },
       });
@@ -71,17 +78,29 @@ export class OrdersService {
       if (!subtotal.eq(dto.expectedSubtotal))
         fail(409, 'PRICE_CHANGED', 'Prices changed; refresh your cart');
       const shipping = shippingFee(subtotal, dto.shippingMethod);
+      const promotion = dto.couponCode
+        ? await this.promotions.discount(tx, userId, dto.couponCode, subtotal)
+        : null;
+      const discount = promotion?.discount ?? subtotal.minus(subtotal),
+        total = subtotal.plus(shipping).minus(discount);
+      if (dto.paymentMethod === 'vnpay' && total.gt(0))
+        this.gateway.assertAvailable();
       if (
-        dto.paymentMethod === 'vnpay' &&
-        (subtotal.plus(shipping).gt('9999999999') ||
-          subtotal.plus(shipping).lte(0))
+        dto.expectedDiscount !== undefined &&
+        !discount.eq(dto.expectedDiscount)
       )
+        fail(
+          409,
+          'PROMOTION_CHANGED',
+          'Discount changed; apply the code again',
+        );
+      if (dto.paymentMethod === 'vnpay' && total.gt('9999999999'))
         fail(
           400,
           'PAYMENT_AMOUNT_UNSUPPORTED',
           'VNPay amount is outside the supported range',
         );
-      if (subtotal.plus(shipping).gt('99999999999999')) {
+      if (total.gt('99999999999999')) {
         fail(
           400,
           'ORDER_TOTAL_TOO_LARGE',
@@ -118,9 +137,11 @@ export class OrdersService {
             address: address.address,
           },
           subtotal,
+          discount,
+          couponCode: promotion?.code,
           shipping,
           shippingMethod: dto.shippingMethod,
-          total: subtotal.plus(shipping),
+          total,
           items: {
             create: cart.items.map((i) => ({
               variantId: i.variantId,
@@ -136,13 +157,23 @@ export class OrdersService {
           },
           payment: {
             create: {
-              provider: dto.paymentMethod,
-              amount: subtotal.plus(shipping),
+              provider: total.eq(0) ? 'free' : dto.paymentMethod,
+              status: total.eq(0) ? 'PAID' : 'PENDING',
+              amount: total,
             },
           },
         },
         include,
       });
+      if (promotion)
+        await tx.couponRedemption.create({
+          data: {
+            couponId: promotion.couponId,
+            orderId: order.id,
+            userId,
+            discount,
+          },
+        });
       for (const item of cart.items)
         await tx.inventoryMovement.create({
           data: {
@@ -242,6 +273,10 @@ export class OrdersService {
       await tx.payment.update({
         where: { orderId: id },
         data: { status: 'CANCELLED' },
+      });
+      await tx.couponRedemption.updateMany({
+        where: { orderId: id, releasedAt: null },
+        data: { releasedAt: new Date() },
       });
       return tx.order.findUniqueOrThrow({ where: { id }, include });
     });

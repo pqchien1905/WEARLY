@@ -138,6 +138,10 @@ class RemoteOrderRepository implements OrderRepository {
           'expectedSubtotal': cart.subtotal.toString(),
           'cartVersion': cart.version,
           if (draft.paymentMethod == 'vnpay') 'paymentMethod': 'vnpay',
+          if (draft.couponCode != null) ...{
+            'couponCode': draft.couponCode,
+            'expectedDiscount': draft.discount.toString(),
+          },
         },
       );
     }

@@ -1,5 +1,30 @@
-import { shippingFee, totalForItems } from '../src/common/money';
+import { shippingFee, totalForItems, discountFor } from '../src/common/money';
 describe('VND arithmetic', () => {
+  it('floors percentage VND and caps discounts at the configured ceiling and merchandise subtotal', () => {
+    expect(
+      discountFor('1500001', { kind: 'PERCENT', amount: '33' }).toString(),
+    ).toBe('495000');
+    expect(
+      discountFor('1500001', {
+        kind: 'PERCENT',
+        amount: '33',
+        maxDiscount: '100000',
+      }).toString(),
+    ).toBe('100000');
+    expect(
+      discountFor('490000', { kind: 'FIXED', amount: '999999' }).toString(),
+    ).toBe('490000');
+    expect(discountFor('0', { kind: 'FIXED', amount: '100' }).toString()).toBe(
+      '0',
+    );
+    for (const amount of ['0', '-1', '1.5', '101'])
+      expect(() =>
+        discountFor('490000', { kind: 'PERCENT', amount }),
+      ).toThrow();
+    expect(() =>
+      discountFor('490000', { kind: 'FIXED', amount: '1.5' }),
+    ).toThrow();
+  });
   it('totals exact decimal values and applies the existing free shipping threshold', () => {
     expect(
       totalForItems([

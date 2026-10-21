@@ -3,10 +3,10 @@ const path = require('node:path');
 const http = require('node:http');
 const assert = require('node:assert/strict');
 
-module.exports = async function verify({ root, fixture, payments=false, markFixturePaid }) {
+module.exports = async function verify({ root, fixture, payments=false, promotion=null, markFixturePaid }) {
   const { chromium } = require(path.join(root, '.tools/browser/node_modules/playwright'));
   const web = path.join(root, 'frontend/build/web');
-  const output = path.join(root, payments ? '.tools/api-payment-verification' : '.tools/api-shopping-verification');
+  const output = path.join(root, promotion ? '.tools/api-promotion-verification' : payments ? '.tools/api-payment-verification' : '.tools/api-shopping-verification');
   fs.mkdirSync(output, { recursive: true });
   const mime = { '.html': 'text/html', '.js': 'application/javascript', '.json': 'application/json', '.wasm': 'application/wasm', '.jpg': 'image/jpeg', '.png': 'image/png', '.ttf': 'font/ttf' };
   const server = http.createServer((req, res) => {
@@ -59,6 +59,26 @@ module.exports = async function verify({ root, fixture, payments=false, markFixt
       await page.waitForTimeout(120);
       assert.equal(await field.inputValue(), value, 'Field did not retain input: ' + name);
     }
+    if(promotion) {
+      await page.goto('http://127.0.0.1:4183/#/admin/login'); await semantics();
+      await fill('Email',promotion.adminEmail);await fill('Mật khẩu',promotion.password);await button('Đăng nhập quản trị');
+      await page.getByText('Một góc nhìn toàn cảnh.',{exact:true}).waitFor();
+      await route('/admin/promotions');await button('Thêm mã khuyến mãi');
+      async function dialogReveal(node) {
+        for(let i=0;i<24;i++) {
+          const box=await node.boundingBox().catch(()=>null),height=page.viewportSize().height;
+          if(box&&box.y>=120&&box.y+box.height<height-110)return;
+          await page.mouse.move(page.viewportSize().width/2,height/2);await page.mouse.wheel(0,box&&box.y<120?-220:220);await page.waitForTimeout(160);
+        }
+        throw Error('Promotion dialog control not visible');
+      }
+      async function promotionField(label,value){const node=page.getByRole('textbox',{name:label,exact:true});await dialogReveal(node);await node.click();await page.waitForTimeout(120);await node.fill(value);await page.waitForTimeout(120);}
+      await promotionField('Mã khuyến mãi',promotion.code);await promotionField('Giá trị giảm','50000');await promotionField('Tổng lượt tối đa (tùy chọn)','1');
+      const enabled=page.getByRole('switch',{name:'Đang áp dụng',exact:true});await dialogReveal(enabled);await enabled.click();
+      await button('Lưu thay đổi');await page.getByRole('button',{name:'Chỉnh sửa '+promotion.code,exact:true}).waitFor();
+      await page.screenshot({path:path.join(output,'promotion-admin-desktop.png'),fullPage:true});
+      console.log('Chrome: admin promotion created.');
+    }
     const email = 'browser-' + fixture + '@example.com';
     await page.goto('http://127.0.0.1:4183/#/register'); await semantics();
     await fill('Tên của bạn', 'Nguyễn Trình Duyệt');
@@ -89,6 +109,12 @@ module.exports = async function verify({ root, fixture, payments=false, markFixt
     if(payments) {
       const method=page.getByRole('button',{name:'Phương thức thanh toán COD',exact:true}); await reveal(method); await method.click();
       await page.getByRole('menuitem',{name:'VNPay sandbox',exact:true}).click();
+    }
+    if(promotion) {
+      const input=page.getByRole('textbox',{name:/^Mã khuyến mãi/});await reveal(input);await input.click();await page.waitForTimeout(120);await input.fill(promotion.code);await page.waitForTimeout(150);
+      await button('Áp dụng mã');await page.getByText('Khuyến mãi '+promotion.code,{exact:true}).waitFor();
+      assert((await page.locator('body').ariaSnapshot()).includes('470.000'));
+      await page.screenshot({path:path.join(output,'discount-checkout-mobile.png'),fullPage:true});
     }
     const confirm = page.getByRole('checkbox', { name: 'Tôi xác nhận thông tin nhận hàng và phương thức thanh toán.', exact: true });
     await reveal(confirm); await confirm.click();

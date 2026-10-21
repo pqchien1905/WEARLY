@@ -478,6 +478,8 @@ class _OrderDetail extends StatelessWidget {
           child: CartSummary(
             remote: remote,
             paymentMethod: order.paymentProvider,
+            discount: order.discount,
+            couponCode: order.couponCode,
             subtotal: order.subtotal,
             shipping: order.shipping,
           ),

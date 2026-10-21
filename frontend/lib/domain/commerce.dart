@@ -39,11 +39,15 @@ class CheckoutDraft {
     this.express = false,
     this.payment = 'COD demo',
     this.paymentMethod = 'cod',
+    this.couponCode,
+    this.discount = 0,
     this.addressId,
   });
   final String name, email, phone, address, payment, paymentMethod;
   final bool express;
   final String? addressId;
+  final String? couponCode;
+  final int discount;
 }
 
 class Order {
@@ -56,14 +60,18 @@ class Order {
     required this.createdAt,
     this.paymentProvider = 'cod',
     this.paymentStatus = 'PENDING',
+    this.discount = 0,
+    this.couponCode,
   });
   final String id, status, paymentProvider, paymentStatus;
   final List<CartItem> items;
   final CheckoutDraft draft;
   final int shipping;
+  final int discount;
+  final String? couponCode;
   final DateTime createdAt;
   int get subtotal => items.fold(0, (sum, i) => sum + i.total);
-  int get total => subtotal + shipping;
+  int get total => subtotal + shipping - discount;
   Order withStatus(String value) => Order(
     id: id,
     items: items,
@@ -73,6 +81,8 @@ class Order {
     createdAt: createdAt,
     paymentProvider: paymentProvider,
     paymentStatus: paymentStatus,
+    discount: discount,
+    couponCode: couponCode,
   );
 }
 

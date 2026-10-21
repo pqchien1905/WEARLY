@@ -79,6 +79,13 @@ class AdminRepository {
     id == null ? 'admin/products' : 'admin/products/${Uri.encodeComponent(id)}',
     body: body,
   );
+  Future<AdminRecord> savePromotion(String? id, AdminRecord body) => _call(
+    id == null ? 'POST' : 'PATCH',
+    id == null
+        ? 'admin/promotions'
+        : 'admin/promotions/${Uri.encodeComponent(id)}',
+    body: body,
+  );
   Future<AdminRecord> uploadImage(
     String id, {
     required Uint8List bytes,
