@@ -85,13 +85,13 @@ app/remote_route_gate.dart;test/remote_stylist_test.dart.
 Interfaces: request DTO and receipts from Task1, existing ApiClient + catalog parser.
 Page keyed by current user. Original demo remains usable in demo mode.
 
-- [ ] RED repository/widget tests: consent/configured status, pending/retry same UUID,
+- [x] RED repository/widget tests: consent/configured status, pending/retry same UUID,
   safe account-change disposal, exact chosen SKU prices/total, no invented cart item,
   terminal failure explicit new request, quota/cost disclosure,375px no overflow.
   Run flutter focused test; Expected FAIL missing remote screen/repository.
-- [ ] Implement remote status/error/loading/retry, style/budget/size inputs, optional
+- [x] Implement remote status/error/loading/retry, style/budget/size inputs, optional
   saved style profile, selected products and links, no demo scenario controls.
-- [ ] Full Flutter + analyze; Expected PASS. Commit.
+- [x] Full Flutter + analyze; Expected PASS. Commit.
 
 ## Task 3: browser acceptance, guide, review and migration
 

@@ -7,6 +7,7 @@ import 'api_providers.dart';
 import '../domain/staff_permissions.dart';
 import '../features/admin/remote/admin_pages.dart';
 import '../features/catalog/remote_wishlist_page.dart';
+import '../features/ai_stylist/remote_stylist_page.dart';
 
 class RemoteRouteGate extends ConsumerWidget {
   const RemoteRouteGate({super.key, required this.path, required this.child});
@@ -38,8 +39,18 @@ class RemoteRouteGate extends ConsumerWidget {
           ? const LoginRequired(next: '/wishlist')
           : const RemoteWishlistPage();
     }
+    if (path == '/ai-stylist') {
+      final user = ref.watch(accountProvider);
+      return user == null
+          ? const LoginRequired(next: '/ai-stylist')
+          : RemoteStylistPage(
+              key: ValueKey(user.id),
+              initialPrompt: GoRouterState.of(
+                context,
+              ).uri.queryParameters['prompt'],
+            );
+    }
     if ([
-      '/ai-stylist',
       '/virtual-try-on',
       '/account/try-ons',
     ].any((prefix) => path == prefix || path.startsWith('$prefix/'))) {

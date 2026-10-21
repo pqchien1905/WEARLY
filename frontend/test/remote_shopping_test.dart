@@ -342,7 +342,9 @@ void main() {
         child: NepApp(router: router),
       ),
     );
-    for (final path in ['/ai-stylist', '/virtual-try-on']) {
+    await tester.pumpAndSettle();
+    expect(find.text('Đăng nhập để tiếp tục'), findsOneWidget);
+    for (final path in ['/virtual-try-on']) {
       router.go(path);
       await tester.pumpAndSettle();
       expect(

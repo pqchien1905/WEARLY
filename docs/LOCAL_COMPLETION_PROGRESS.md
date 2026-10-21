@@ -396,3 +396,7 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   response receipt is erased after24h. Cost estimates are configurable operator
   allowances, never claimed as Google's bill or customer charges. Live Gemini
   verification still awaits configured key; private image try-on is next milestone.
+- Remote Stylist UI now implemented with consent/configuration/quota/cost states,
+  exact chosen-variant pricing, profile inputs, owner-scoped late-result guards and
+  safe receipt polling/retry.11 new focused tests; full393 Flutter+2skips, analyzer
+  clean. Browser acceptance/review/business migration remain pending.
