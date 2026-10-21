@@ -330,10 +330,10 @@ describe('VNPay sandbox workflow with PostgreSQL and signed transport fixtures',
     });
     expect(order.version).toBe(1);
     expect((await f.start().expect(201)).body.checkoutUrl).toBeNull();
-    await f.cancel().expect(409);
     await call('patch', `admin/orders/${f.order.id}/status`, admin)
       .send({ status: 'CONFIRMED', expectedVersion: 1 })
       .expect(200);
+    await f.cancel().expect(409);
     expect(
       await db.inventoryMovement.count({ where: { orderId: f.order.id } }),
     ).toBe(1);
@@ -461,11 +461,13 @@ describe('VNPay sandbox workflow with PostgreSQL and signed transport fixtures',
     ).toBe('PENDING');
     const paid = ipn(b.reference);
     const [cancel, payment] = await Promise.all([g.cancel(), callback(paid)]);
-    expect(cancel.status).toBe(409);
+    expect([201, 409]).toContain(cancel.status);
     expect(payment.body.RspCode).toBe('00');
     expect(
       (await db.payment.findUniqueOrThrow({ where: { orderId: g.order.id } }))
         .status,
     ).toBe('PAID');
+    expect((await db.order.findUniqueOrThrow({ where: { id: g.order.id } })).status).toBe(cancel.status === 201 ? 'CANCELLED' : 'PENDING');
+    expect(await db.inventoryMovement.count({ where: { orderId: g.order.id, reason: 'CANCEL' } })).toBe(cancel.status === 201 ? 1 : 0);
   });
 });

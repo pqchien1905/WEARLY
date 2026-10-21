@@ -19,6 +19,10 @@ export const orderInclude = {
   },
 };
 export const adminOrderInclude = {
+  returns: {
+    include: { items: true },
+    orderBy: [{ createdAt: 'desc' as const }, { id: 'desc' as const }],
+  },
   items: true,
   payment: {
     include: {

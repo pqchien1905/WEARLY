@@ -36,6 +36,12 @@ enum CouponKind {
   FIXED
   PERCENT
 }
+enum ReturnStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  RECEIVED
+}
 enum AIJobStatus {
   PENDING
   PROCESSING
@@ -60,6 +66,9 @@ enum AdminAuditAction {
   PROMOTION_CREATED
   PROMOTION_UPDATED
   SHIPMENT_UPDATED
+  ORDER_CANCELLED
+  RETURN_DECIDED
+  RETURN_RECEIVED
 }
 // Historical identifiers intentionally survive changes to the referenced entities.
 // Do not copy request bodies or credentials into activity history.
@@ -323,6 +332,7 @@ model Order {
   redemption CouponRedemption?
   shipment Shipment?
   history OrderEvent[]
+  returns ReturnRequest[]
   movements InventoryMovement[]
   @@unique([userId, idempotencyKey])
   @@index([userId, createdAt])
@@ -378,7 +388,40 @@ model OrderItem {
   unitPrice Decimal @db.Decimal(14, 0)
   quantity Int
   createdAt DateTime @default(now())
+  returns ReturnItem[]
   @@index([orderId])
+}
+model ReturnRequest {
+  id String @id @default(uuid()) @db.Uuid
+  orderId String @db.Uuid
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  requestKey String @db.Uuid
+  requestHash String @db.VarChar(64)
+  reason String @db.VarChar(300)
+  status ReturnStatus @default(REQUESTED)
+  amount Decimal @db.Decimal(14, 0)
+  version Int @default(0)
+  decisionNote String @default("") @db.VarChar(300)
+  decidedBy String? @db.Uuid
+  decidedAt DateTime?
+  receiptNote String @default("") @db.VarChar(300)
+  receivedBy String? @db.Uuid
+  receivedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  items ReturnItem[]
+  @@unique([orderId, requestKey])
+  @@index([orderId, createdAt])
+}
+model ReturnItem {
+  id String @id @default(uuid()) @db.Uuid
+  returnId String @db.Uuid
+  request ReturnRequest @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  orderItemId String @db.Uuid
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  quantity Int
+  amount Decimal @db.Decimal(14, 0)
+  @@unique([returnId, orderItemId])
 }
 model Payment {
   id String @id @default(uuid()) @db.Uuid

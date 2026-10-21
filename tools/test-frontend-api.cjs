@@ -35,6 +35,7 @@ const recovery = process.argv.includes('--recovery');
 const payments = process.argv.includes('--payments');
 const promotions = process.argv.includes('--promotions');
 const shipments = process.argv.includes('--shipments');
+const returns = process.argv.includes('--returns');
 const promotionCode = 'BROWSER' + fixture.replaceAll('-', '').slice(-12).toUpperCase();
 if (admin) {
   process.env.S3_BUCKET = test.TEST_S3_BUCKET || normal.S3_BUCKET + '-test';
@@ -134,6 +135,36 @@ async function main() {
       if (await db.passwordResetToken.count({ where: { userId: account.user.id, consumedAt: null } }) !== 0)
         throw new Error('Unconsumed reset token remained');
       console.log('PASS recovery database: token consumed and original session revoked.');
+    } else if (returns) {
+      const password = 'Browser-only-Password-2026', email = 'admin-' + fixture + '@example.com', customerEmail = 'browser-' + fixture + '@example.com';
+      const send = async (method, endpoint, body, token, headers = {}) => {
+        const response = await fetch(url + '/' + endpoint, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}), ...headers }, body: JSON.stringify(body) });
+        if (!response.ok) throw Error('Return fixture failed: ' + endpoint + ' ' + response.status);
+        return response.json();
+      };
+      const staff = await send('POST', 'auth/register', { name: 'Returns admin', email, password });
+      await db.user.update({ where: { id: staff.user.id }, data: { role: 'ADMIN' } });
+      const customer = await send('POST', 'auth/register', { name: 'Returns customer', email: customerEmail, password });
+      const address = await send('POST', 'users/me/addresses', { recipient: 'Khách kiểm thử', phone: '0901234567', address: '12 Nguyễn Huệ, TP.HCM', label: 'Nhà' }, customer.accessToken);
+      await send('POST', 'admin/promotions', { code: promotionCode, kind: 'FIXED', amount: '50000', active: true }, staff.accessToken);
+      await send('POST', 'cart/items', { sku: fixture, quantity: 2 }, customer.accessToken);
+      let order = await send('POST', 'orders', { addressId: address.id, expectedSubtotal: '980000', couponCode: promotionCode, expectedDiscount: '50000', shippingMethod: 'standard' }, customer.accessToken, { 'Idempotency-Key': randomUUID() });
+      for (const status of ['CONFIRMED', 'SHIPPED', 'DELIVERED']) order = await send('PATCH', 'admin/orders/' + order.id + '/status', { status, expectedVersion: order.version }, staff.accessToken);
+      order = await send('POST', 'admin/orders/' + order.id + '/settle-cod', { amount: '960000', reference: 'COD-RETURN-FIXTURE', expectedVersion: order.version }, staff.accessToken);
+      await send('POST', 'cart/items', { sku: fixture, quantity: 1 }, customer.accessToken);
+      let cancelled = await send('POST', 'orders', { addressId: address.id, expectedSubtotal: '490000', shippingMethod: 'standard' }, customer.accessToken, { 'Idempotency-Key': randomUUID() });
+      // Explicit synthetic prepaid snapshot; no claim of real gateway acceptance.
+      await db.payment.update({ where: { orderId: cancelled.id }, data: { provider: 'vnpay', status: 'PAID', providerTransactionId: 'FIXTURE-' + fixture } });
+      cancelled = await send('PATCH', 'admin/orders/' + cancelled.id + '/status', { status: 'CONFIRMED', expectedVersion: cancelled.version }, staff.accessToken);
+      await flutter(['build', 'web', '--release', '--dart-define=USE_REMOTE_API=true', '--dart-define=API_BASE_URL=' + url]);
+      await require('./verify-returns-browser.cjs')({ root, email, customerEmail, password, orderId: order.id, cancelId: cancelled.id });
+      const returned = await db.order.findUniqueOrThrow({ where: { id: order.id }, include: { returns: { include: { items: true } }, payment: true } });
+      if (returned.status !== 'DELIVERED' || returned.payment.status !== 'PAID' || returned.returns.length !== 1 || returned.returns[0].status !== 'RECEIVED' || returned.returns[0].amount.toString() !== '465000' || returned.returns[0].items[0].quantity !== 1) throw Error('Partial return entitlement/state mismatch');
+      const stopped = await db.order.findUniqueOrThrow({ where: { id: cancelled.id }, include: { payment: true } });
+      if (stopped.status !== 'CANCELLED' || stopped.payment.status !== 'PAID') throw Error('Paid cancellation lost its refund obligation');
+      const inventory = await db.inventory.findFirstOrThrow({ where: { variant: { productId: product.id } } });
+      if (inventory.quantity !== 9) throw Error('Return/cancellation stock compensation mismatch');
+      console.log('PASS partial discounted return, one receipt/restock, paid cancellation retains money; no refund/provider call fabricated.');
     } else if (shipments) {
       const password = 'Browser-only-Password-2026';
       const post = async (endpoint, body, token, headers = {}) => {
@@ -299,7 +330,7 @@ async function main() {
         await tx.inventoryMovement.deleteMany({ where: { order: owner } });
         await tx.paymentAttempt.deleteMany({ where: { payment: { order: owner } } });
         await tx.couponRedemption.deleteMany({where:{order:owner}});
-        if(promotions) await tx.coupon.deleteMany({where:{code:promotionCode}});
+        if(promotions || returns) await tx.coupon.deleteMany({where:{code:promotionCode}});
         await tx.payment.deleteMany({ where: { order: owner } });
         await tx.orderItem.deleteMany({ where: { order: owner } });
         await tx.order.deleteMany({ where: owner });

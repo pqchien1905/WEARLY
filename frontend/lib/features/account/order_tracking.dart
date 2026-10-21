@@ -43,6 +43,11 @@ class OrderTracking extends StatelessWidget {
             icon: Icons.cancel_outlined,
           ),
           const SizedBox(height: 24),
+          if (order.paymentStatus == 'PAID' && order.total > 0)
+            const Text(
+              'Đơn đã hủy, khoản đã thu cần xử lý hoàn tiền riêng.',
+              style: T.small,
+            ),
         ],
         Text('Theo dõi vận chuyển', style: T.display(26)),
         const SizedBox(height: 12),

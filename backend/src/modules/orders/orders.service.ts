@@ -14,6 +14,7 @@ import { PageDto } from '../products/dto/query-products.dto';
 import { VnpayProvider } from '../../integrations/payments/vnpay.provider';
 import { PromotionsService } from '../promotions/promotions.service';
 import { orderInclude as include } from './order-includes';
+import { cancelOrder } from './cancel-order';
 @Injectable()
 export class OrdersService {
   constructor(
@@ -229,57 +230,7 @@ export class OrdersService {
           'ORDER_STATE_CONFLICT',
           'Only pending orders can be cancelled',
         );
-      if (order.payment?.provider === 'vnpay') {
-        if (['PAID', 'REFUNDED'].includes(order.payment.status))
-          fail(
-            409,
-            'PAYMENT_REFUND_REQUIRED',
-            'Paid orders require a refund workflow',
-          );
-        if (
-          await tx.paymentAttempt.count({
-            where: { paymentId: order.payment.id, status: 'PENDING' },
-          })
-        )
-          fail(
-            409,
-            'PAYMENT_RECONCILIATION_REQUIRED',
-            'Verify pending payment before cancelling',
-          );
-      }
-      const changed = await tx.order.updateMany({
-        where: { id, userId, status: 'PENDING', version: order.version },
-        data: { status: 'CANCELLED', version: { increment: 1 } },
-      });
-      if (changed.count !== 1) fail(409, 'VERSION_CONFLICT', 'Order changed');
-      for (const item of [...order.items].sort((a, b) =>
-        a.variantId.localeCompare(b.variantId),
-      )) {
-        const inv = await tx.inventory.update({
-          where: { variantId: item.variantId },
-          data: {
-            quantity: { increment: item.quantity },
-            version: { increment: 1 },
-          },
-        });
-        await tx.inventoryMovement.create({
-          data: {
-            inventoryId: inv.id,
-            delta: item.quantity,
-            reason: 'CANCEL',
-            orderId: id,
-          },
-        });
-      }
-      await tx.payment.update({
-        where: { orderId: id },
-        data: { status: 'CANCELLED' },
-      });
-      await tx.couponRedemption.updateMany({
-        where: { orderId: id, releasedAt: null },
-        data: { releasedAt: new Date() },
-      });
-      await tx.orderEvent.create({ data: { orderId: id, status: 'CANCELLED', version: order.version + 1, actorId: userId } });
+      await cancelOrder(tx, order, userId, 'Khách hủy đơn trước xác nhận');
       return tx.order.findUniqueOrThrow({ where: { id }, include });
     });
   }

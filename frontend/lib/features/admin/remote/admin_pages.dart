@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../account/order_tracking.dart';
 import 'shipment_actions.dart';
+import 'return_actions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/design/tokens.dart';
@@ -582,6 +583,7 @@ class RemoteAdminOrder extends ConsumerWidget {
               ),
             ),
             AdminCard(child: OrderTracking(order: order)),
+            AdminReturnActions(data: data, order: order),
             for (final item in order.items)
               AdminCard(
                 child: Column(

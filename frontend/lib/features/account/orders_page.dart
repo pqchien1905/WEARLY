@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'order_tracking.dart';
+import 'returns_panel.dart';
 import '../checkout/payment_panel.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -421,11 +422,13 @@ class _OrderDetail extends StatelessWidget {
         else
           OrderProgress(status: order.status),
         if (remote) PaymentPanel(key: ValueKey(order.id), order: order),
-        if (remote &&
-            order.status == 'Chờ xác nhận' &&
-            !(order.paymentProvider == 'vnpay' &&
-                ['PAID', 'REFUNDED'].contains(order.paymentStatus)))
-          _CancelOrder(order.id),
+        if (remote && order.status == 'Chờ xác nhận')
+          _CancelOrder(
+            order.id,
+            paid: order.paymentStatus == 'PAID' && order.total > 0,
+          ),
+        if (remote && ['Đã giao', 'Đã hoàn về kho'].contains(order.status))
+          ReturnsPanel(key: ValueKey('returns-${order.id}'), order: order),
         const Divider(height: 64),
         Text('Thông tin nhận hàng', style: T.display(26)),
         const SizedBox(height: 16),
@@ -511,8 +514,9 @@ String orderDate(DateTime date) =>
     '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
 
 class _CancelOrder extends ConsumerStatefulWidget {
-  const _CancelOrder(this.id);
+  const _CancelOrder(this.id, {this.paid = false});
   final String id;
+  final bool paid;
   @override
   ConsumerState<_CancelOrder> createState() => _CancelOrderState();
 }
@@ -525,8 +529,10 @@ class _CancelOrderState extends ConsumerState<_CancelOrder> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Hủy đơn hàng này?'),
-        content: const Text(
-          'Đơn đang chờ xác nhận sẽ được hủy và sản phẩm được trả lại kho.',
+        content: Text(
+          widget.paid
+              ? 'Đơn đang chờ sẽ được hủy và sản phẩm được trả lại kho. Khoản đã thanh toán cần xử lý hoàn tiền riêng.'
+              : 'Đơn đang chờ xác nhận sẽ được hủy và sản phẩm được trả lại kho.',
         ),
         actions: [
           TextButton(

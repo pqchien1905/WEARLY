@@ -172,4 +172,28 @@ class AdminRepository {
       'expectedVersion': version,
     },
   );
+  Future<AdminRecord> cancelOrder(
+    String id, {
+    required int version,
+    required String reason,
+  }) => _call(
+    'POST',
+    'admin/orders/${Uri.encodeComponent(id)}/cancel',
+    body: {'expectedVersion': version, 'reason': reason},
+  );
+  Future<AdminRecord> returnAction(
+    String id,
+    String returnId, {
+    required int version,
+    required String action,
+    required String note,
+  }) => _call(
+    'POST',
+    'admin/orders/${Uri.encodeComponent(id)}/returns/${Uri.encodeComponent(returnId)}/${action == 'RECEIVED' ? 'receive' : 'decision'}',
+    body: {
+      'expectedVersion': version,
+      'note': note,
+      if (action != 'RECEIVED') 'status': action,
+    },
+  );
 }

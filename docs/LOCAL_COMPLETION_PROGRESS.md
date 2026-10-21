@@ -209,3 +209,24 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   final success may count as refunded. Preserve durable request identity; ambiguous
   network outcomes must not blindly resend a monetary request. Reference:
   https://sandbox.vnpayment.vn/apis/docs/truy-van-hoan-tien/querydr%26refund.html
+
+## Returns and cancellation — 22 October 2026
+
+- Persisted owner return requests, 7-day recorded-delivery eligibility, exact
+  discounted merchandise allocation, versioned decisions and physical receipts.
+  One open case; replay-safe partial quantities and inventory compensation.
+- Owner pending/admin pre-dispatch cancellation share an order-locked helper.
+  Collected money remains recorded; unresolved VNPay attempts block cancellation.
+  No actual refund execution in this milestone; that remains next.
+- Chrome customer quote/request -> admin approve/receive -> customer reload passed
+  at mobile/desktop; paid cancellation preserved PAID. Screenshots inspected.
+- Independent review's important retry/remount defect reproduced RED, then fixed:
+  restored immutable pending draft and bypassed editable-form validation on replay.
+  Minor full-return eligibility message also RED->GREEN. No deferred findings.
+- Final131/131 E2E,29/29unit,343 Flutter pass/2opt-in skips; lint/build/analyze clean.
+  No backend edits or client generation overlapped the final backend suite.
+- Backup before-returns-1792603472127.dump verified; business migrations19->20.
+  All34 original tables retained exact row counts/original-column fingerprints;
+  ReturnRequest empty. Compiled ready/catalog/content200 and private routes401.
+- Guide: docs/RETURNS_LOCAL.md. Full A-Z goal remains ACTIVE; refunds, AI, local
+  mail/support, roles/sessions, operational tools and final integration remain.
