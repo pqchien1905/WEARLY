@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import * as argon2 from 'argon2';
 import { PrismaService } from '../../database/prisma.service';
 import { Prisma, User } from '../../generated/prisma/client';
@@ -21,6 +21,9 @@ export const publicUser = (u: User) => ({
   createdAt: u.createdAt,
 });
 const digest = (s: string) => createHash('sha256').update(s).digest('hex');
+export type BrowserScope = 'customer' | 'admin';
+export const browserLifetime = (scope: BrowserScope) =>
+  scope === 'admin' ? 28800 : 604800;
 @Injectable()
 export class AuthService {
   constructor(
@@ -28,7 +31,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
   ) {}
-  async register(dto: RegisterDto) {
+  async register(dto: RegisterDto, scope?: BrowserScope, previous?: string) {
     const passwordHash = await argon2.hash(dto.password, {
       type: argon2.argon2id,
       memoryCost: 19456,
@@ -39,10 +42,15 @@ export class AuthService {
       const user = await tx.user.create({
         data: { email: dto.email, name: dto.name, passwordHash },
       });
-      return this.issue(tx, user, randomUUID());
+      return this.issue(tx, user, randomUUID(), scope, previous);
     });
   }
-  async login(dto: LoginDto, adminOnly = false) {
+  async login(
+    dto: LoginDto,
+    adminOnly = false,
+    scope?: BrowserScope,
+    previous?: string,
+  ) {
     const user = await this.db.user.findUnique({ where: { email: dto.email } });
     if (
       !user ||
@@ -59,37 +67,55 @@ export class AuthService {
         throw new UnauthorizedException('Invalid email or password');
       if (adminOnly && !isStaff(current.role))
         throw new ForbiddenException('Administrator access is required');
-      return this.issue(tx, current, randomUUID());
+      return this.issue(tx, current, randomUUID(), scope, previous);
     });
   }
   private async issue(
     tx: Prisma.TransactionClient,
     user: User,
     familyId: string,
+    scope?: BrowserScope,
+    previous?: string,
   ) {
     const id = randomUUID();
-    const refreshSeconds = this.config.getOrThrow<number>(
-      'JWT_REFRESH_EXPIRES_IN',
-    );
-    const refreshToken = await this.jwt.signAsync(
-      { sub: user.id, sid: id, typ: 'refresh' },
-      {
-        secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'),
-        expiresIn: refreshSeconds,
-        algorithm: 'HS256',
-        issuer: 'wearly',
-        audience: 'wearly-refresh',
-      },
-    );
+    const refreshSeconds = scope
+      ? browserLifetime(scope)
+      : this.config.getOrThrow<number>('JWT_REFRESH_EXPIRES_IN');
+    const refreshToken = scope
+      ? randomBytes(32).toString('base64url')
+      : await this.jwt.signAsync(
+          { sub: user.id, sid: id, typ: 'refresh' },
+          {
+            secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'),
+            expiresIn: refreshSeconds,
+            algorithm: 'HS256',
+            issuer: 'wearly',
+            audience: 'wearly-refresh',
+          },
+        );
+    if (scope && previous) {
+      await tx.refreshToken.updateMany({
+        where: {
+          tokenHash: digest(previous),
+          browserScope: scope,
+          revokedAt: null,
+        },
+        data: { revokedAt: new Date() },
+      });
+    }
     await tx.refreshToken.create({
       data: {
         id,
         userId: user.id,
         familyId,
+        browserScope: scope,
         tokenHash: digest(refreshToken),
         expiresAt: new Date(Date.now() + refreshSeconds * 1000),
       },
     });
+    return { ...(await this.access(user, id)), refreshToken };
+  }
+  private async access(user: User, id: string) {
     const expiresIn = this.config.getOrThrow<number>('JWT_ACCESS_EXPIRES_IN');
     const accessToken = await this.jwt.signAsync(
       { sub: user.id, sid: id, typ: 'access' },
@@ -101,7 +127,42 @@ export class AuthService {
         audience: 'wearly-api',
       },
     );
-    return { user: publicUser(user), accessToken, refreshToken, expiresIn };
+    return { user: publicUser(user), accessToken, expiresIn };
+  }
+  async resumeBrowser(token: string | undefined, scope: BrowserScope) {
+    if (!token || !/^[A-Za-z0-9_-]{43}$/.test(token))
+      throw new UnauthorizedException();
+    const candidate = await this.db.refreshToken.findUnique({
+      where: { tokenHash: digest(token) },
+    });
+    if (!candidate || candidate.browserScope !== scope)
+      throw new UnauthorizedException();
+    return transaction(this.db, async (tx) => {
+      await lockUser(tx, candidate.userId);
+      const session = await tx.refreshToken.findUnique({
+        where: { id: candidate.id },
+        include: { user: true },
+      });
+      if (
+        !session ||
+        session.revokedAt ||
+        session.expiresAt <= new Date() ||
+        !session.user.active ||
+        (scope === 'admin' && !isStaff(session.user.role))
+      )
+        throw new UnauthorizedException();
+      return this.access(session.user, session.id);
+    });
+  }
+  async logoutBrowser(token: string | undefined, scope: BrowserScope) {
+    if (token) {
+      const session = await this.db.refreshToken.findUnique({
+        where: { tokenHash: digest(token) },
+      });
+      if (session?.browserScope === scope)
+        await this.logout(session.userId, session.id);
+    }
+    return { loggedOut: true };
   }
   async refresh(token: string) {
     let claims: { sub: string; sid: string; typ: string };

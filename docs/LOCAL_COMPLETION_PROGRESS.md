@@ -339,3 +339,13 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   Cost: the fallback intentionally has no store chrome. No unimplemented screen
   is claimed complete. Schema isolation replaces unavailable CREATEDB for tests;
   cost: fixture migrations run once per owned schema, never change business users.
+
+## Persistent browser sessions — in progress, 22 October 2026
+
+- Backend scoped opaque HttpOnly cookies, hashed/revocable session rows, exact
+  Origin/custom-header CSRF checks, local-only plain HTTP and fixed absolute
+  lifetime. Native JSON refresh rotation retained. Parallel renewals do not rotate
+  or extend the cookie; new login revokes the previously presented session.
+- RED7 route tests -> GREEN8; full171 E2E/46unit, lint/build clean. Password reset
+  and staff administration revoke browser sessions too. Migration24 testDB only;
+  business DB remains23. Frontend/Chrome/review/business acceptance remain pending.

@@ -188,6 +188,14 @@ redisDescribe('Password recovery with PostgreSQL, Redis and SMTP', () => {
     const adminSession = await call('admin/login')
       .send({ email, password })
       .expect(201);
+    const browserSessions = [];
+    for (const scope of ['customer', 'admin']) {
+      const response = await call('browser/' + scope + '/login')
+        .set('Origin', 'http://localhost:4183').set('X-Wearly-Browser', '1')
+        .send({ email, password }).expect(201);
+      browserSessions.push({ scope, access: response.body.accessToken as string,
+        cookie: (response.headers['set-cookie'] as unknown as string[])[0].split(';')[0] });
+    }
     await call('reset-password')
       .send({ token: first, password: 'short' })
       .expect(400);
@@ -203,6 +211,13 @@ redisDescribe('Password recovery with PostgreSQL, Redis and SMTP', () => {
       .auth(access, { type: 'bearer' })
       .expect(401);
     await call('refresh').send({ refreshToken: refresh }).expect(401);
+    for (const session of browserSessions) {
+      await call('browser/' + session.scope + '/refresh')
+        .set('Origin', 'http://localhost:4183').set('X-Wearly-Browser', '1')
+        .set('Cookie', session.cookie).expect(401);
+      await request(app.getHttpServer()).get('/api/v1/auth/me')
+        .auth(session.access, { type: 'bearer' }).expect(401);
+    }
     await request(app.getHttpServer())
       .get('/api/v1/auth/me')
       .auth(adminSession.body.accessToken, { type: 'bearer' })

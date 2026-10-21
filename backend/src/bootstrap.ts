@@ -14,9 +14,14 @@ export function configureApp(app: INestApplication) {
       .getOrThrow<string>('CORS_ORIGINS')
       .split(',')
       .map((s) => s.trim()),
-    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Idempotency-Key',
+      'X-Wearly-Browser',
+    ],
     exposedHeaders: ['X-Request-Id'],
-    credentials: false,
+    credentials: true,
   });
   app.useGlobalPipes(
     new ValidationPipe({
