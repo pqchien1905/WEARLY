@@ -8,6 +8,8 @@ import '../domain/staff_permissions.dart';
 import '../features/admin/remote/admin_pages.dart';
 import '../features/catalog/remote_wishlist_page.dart';
 import '../features/ai_stylist/remote_stylist_page.dart';
+import '../features/virtual_tryon/remote_tryon_page.dart';
+import '../features/virtual_tryon/remote_tryon_history.dart';
 
 class RemoteRouteGate extends ConsumerWidget {
   const RemoteRouteGate({super.key, required this.path, required this.child});
@@ -54,11 +56,18 @@ class RemoteRouteGate extends ConsumerWidget {
       '/virtual-try-on',
       '/account/try-ons',
     ].any((prefix) => path == prefix || path.startsWith('$prefix/'))) {
-      return StatePanel(
-        title: 'Tính năng chưa được kết nối',
-        message:
-            'Chức năng này chưa khả dụng trong cửa hàng trực tuyến. Bạn có thể mua sắm, quản lý địa chỉ và theo dõi đơn hàng.',
-        action: AppButton('Về cửa hàng', onPressed: () => context.go('/shop')),
+      final user = ref.watch(accountProvider);
+      final uri = GoRouterState.of(context).uri;
+      if (user == null) return LoginRequired(next: uri.toString());
+      if (path == '/account/try-ons') {
+        return RemoteTryOnHistory(key: ValueKey(user.id));
+      }
+      return RemoteTryOnPage(
+        key: ValueKey((user.id, path)),
+        slug: uri.queryParameters['product'],
+        jobId: path.startsWith('/virtual-try-on/')
+            ? uri.pathSegments.last
+            : null,
       );
     }
     if ((path.startsWith('/account') ||

@@ -323,7 +323,7 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
-  testWidgets('unsupported remote features disclose unavailability', (
+  testWidgets('private AI pages require an authenticated account', (
     tester,
   ) async {
     final api = ApiClient(
@@ -344,14 +344,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Đăng nhập để tiếp tục'), findsOneWidget);
-    for (final path in ['/virtual-try-on']) {
+    for (final path in ['/virtual-try-on', '/account/try-ons']) {
       router.go(path);
       await tester.pumpAndSettle();
-      expect(
-        find.text('Tính năng chưa được kết nối'),
-        findsOneWidget,
-        reason: path,
-      );
+      expect(find.text('Đăng nhập để tiếp tục'), findsOneWidget, reason: path);
     }
     expect(tester.takeException(), isNull);
   });

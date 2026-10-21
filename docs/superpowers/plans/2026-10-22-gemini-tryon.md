@@ -147,13 +147,13 @@ uploads consented bytes with stable UUID; jobs create/get/list; delete source im
 also removes its dependent results from visible history. Use existing catalog/SKU
 models, file_selector and private_image eviction helper.
 
-- [ ] RED tests for no key/consent, strict photo validation/replacement race,
+- [x] RED tests for no key/consent, strict photo validation/replacement race,
   actualSKU selection, quota/cost display, upload/job lostresponse recovery, pending
   GET polling, failed explicitnewkey, reloadhistory, ownerchange/latebyte discard,
   delete during result load,375px layout and simulated-fit disclosure.
-- [ ] Implement remote pages/repository and memory-only private previews with
+- [x] Implement remote pages/repository and memory-only private previews with
   account-keyed lifecycle; preserve demo behavior and existing routes.
-- [ ] Run focused/full Flutter and analyze; expected PASS. Commit deliverable.
+- [x] Run focused/full Flutter and analyze;410 PASS,2 existing skips, analyze clean.
 
 ## Task 4: browser proof, operator guide, review and safe migration
 

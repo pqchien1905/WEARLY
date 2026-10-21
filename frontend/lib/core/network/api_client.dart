@@ -202,6 +202,15 @@ class ApiClient {
   Future<Object?> get(String path, {Map<String, String>? query}) =>
       request('GET', path, query: query);
 
+  Future<Uint8List> getBytes(String path) async =>
+      await request(
+            'GET',
+            path,
+            responseBytes: true,
+            headers: {'Accept': 'image/jpeg, image/png'},
+          )
+          as Uint8List;
+
   Future<Object?> request(
     String method,
     String path, {
@@ -210,6 +219,7 @@ class ApiClient {
     Map<String, String>? headers,
     bool authenticated = true,
     bool refresh = true,
+    bool responseBytes = false,
     void Function()? onLateCompletion,
   }) async {
     _validatePath(path);
@@ -221,6 +231,7 @@ class ApiClient {
       query: query,
       body: body,
       onLateCompletion: onLateCompletion,
+      maxResponseBytes: responseBytes ? 8 * 1024 * 1024 : null,
       headers: {
         if (access != null) 'Authorization': 'Bearer $access',
         ...?headers,
@@ -242,10 +253,24 @@ class ApiClient {
         headers: headers,
         authenticated: true,
         refresh: false,
+        responseBytes: responseBytes,
         onLateCompletion: onLateCompletion,
       );
     }
     if (response.statusCode == 401 && authenticated) tokens.clear();
+    if (responseBytes &&
+        response.statusCode >= 200 &&
+        response.statusCode < 300) {
+      final type = response.headers['content-type']?.split(';').first.trim();
+      if (!['image/jpeg', 'image/png'].contains(type) ||
+          response.bodyBytes.isEmpty) {
+        throw const ApiException(
+          'INVALID_IMAGE_RESPONSE',
+          'Chưa đọc được ảnh riêng tư. Hãy thử lại.',
+        );
+      }
+      return response.bodyBytes;
+    }
     return _decode(
       response,
       login: path == 'auth/login' || path == 'auth/admin/login',
@@ -315,6 +340,7 @@ class ApiClient {
     Map<String, Object?>? body,
     Map<String, String>? headers,
     void Function()? onLateCompletion,
+    int? maxResponseBytes,
   }) async {
     final request = http.Request(
       method,
@@ -325,18 +351,49 @@ class ApiClient {
       request.headers['Content-Type'] = 'application/json';
       request.body = jsonEncode(body);
     }
-    return _sendRequest(request, onLateCompletion: onLateCompletion);
+    return _sendRequest(
+      request,
+      onLateCompletion: onLateCompletion,
+      maxResponseBytes: maxResponseBytes,
+    );
   }
 
   Future<http.Response> _sendRequest(
     http.BaseRequest request, {
     void Function()? onLateCompletion,
+    int? maxResponseBytes,
   }) async {
     var timedOut = false;
     try {
       return await _client
           .send(request)
-          .then(http.Response.fromStream)
+          .then((response) async {
+            if (maxResponseBytes == null) {
+              return http.Response.fromStream(response);
+            }
+            const tooLarge = ApiException(
+              'INVALID_IMAGE_RESPONSE',
+              'Ảnh vượt dung lượng cho phép.',
+            );
+            if ((response.contentLength ?? 0) > maxResponseBytes) {
+              unawaited(response.stream.listen(null).cancel());
+              throw tooLarge;
+            }
+            final bytes = BytesBuilder(copy: false);
+            await for (final chunk in response.stream) {
+              if (bytes.length + chunk.length > maxResponseBytes) {
+                throw tooLarge;
+              }
+              bytes.add(chunk);
+            }
+            return http.Response.bytes(
+              bytes.takeBytes(),
+              response.statusCode,
+              headers: response.headers,
+              request: response.request,
+              reasonPhrase: response.reasonPhrase,
+            );
+          })
           .whenComplete(() {
             // A timeout stops waiting, but the server may still commit a write.
             if (timedOut) onLateCompletion?.call();
