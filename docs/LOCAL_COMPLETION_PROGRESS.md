@@ -230,3 +230,29 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   ReturnRequest empty. Compiled ready/catalog/content200 and private routes401.
 - Guide: docs/RETURNS_LOCAL.md. Full A-Z goal remains ACTIVE; refunds, AI, local
   mail/support, roles/sessions, operational tools and final integration remain.
+
+## Refunds — 22 October 2026
+
+- Durable source-specific refund ledger: COD explicit receipt, VNPay sandbox
+  persist-before-send, replay never sends money twice, processing/unknown amounts
+  remain reserved, verified query and rejection release. Partial refunds retain
+  original collection/attempt evidence; additional paid attempts refund separately.
+- Exact cancellation/carrier-return versus customer-return entitlement; no refund
+  inventory mutation. PARTIALLY_REFUNDED is handled across payment/return guards.
+  Admin/customer history, immutable browser retry after remount and source details.
+- Review fixed two important findings with RED->GREEN regressions: signed initial
+  response now matches request-specific OrderInfo; one unresolved refund/source;
+  legacy REFUNDED without ledger separated from determined net balance. Admin-only
+  provider request/source IDs and refunded fulfillment message also corrected.
+- Final141/141 E2E,40/40unit,350 Flutter pass/2opt-in skips; lint/build/analyze clean.
+  Chrome after review passes discounted partial COD receipt, paid cancellation,
+  signed-fixture VNPay PROCESSING->query->SUCCEEDED, source/stock assertions and
+  customer reload at mobile/desktop. Final screenshots inspected. Real sandbox
+  provider credentials/acceptance remain pending; no external money sent.
+- Backup before-refunds-1792604961374.dump verified; business migration20->21.
+  All36 original tables preserved by count/original-column fingerprints; Refund0.
+  Compiled readiness/catalog/content200 and protected resources401. Guide:
+  docs/REFUNDS_LOCAL.md; reused tools/test-frontend-api.cjs --refunds acceptance.
+- Remaining full scope: local inbox/order mail/support, staff roles/audit/session
+  renewal, Gemini Stylist/try-on, local operations/CI/monitoring/recovery and store
+  metadata/SEO, provider acceptance and final worktree integration. Goal ACTIVE.

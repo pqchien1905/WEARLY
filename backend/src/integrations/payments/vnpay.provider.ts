@@ -17,6 +17,20 @@ export type VnpayEvent = {
   status: 'PAID' | 'FAILED' | 'PENDING' | 'NOT_FOUND';
   transactionNo?: string;
 };
+export type VnpayRefund = {
+  requestId: string;
+  reference: string;
+  amount: string;
+  originalAmount: string;
+  originalTransactionNo: string;
+  transactionDate: Date;
+  createdAt: Date;
+  actorId: string;
+};
+export type VnpayRefundEvent = {
+  status: 'SUCCEEDED' | 'PROCESSING' | 'FAILED';
+  transactionNo: string;
+};
 export class VnpayProvider {
   constructor(
     private readonly config: ConfigService,
@@ -155,36 +169,7 @@ export class VnpayProvider {
     };
     data.vnp_SecureHash = this.hash(Object.values(data).join('|'));
     try {
-      const response = await this.http(
-        'https://sandbox.vnpayment.vn/merchant_webapi/api/transaction',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
-          signal: AbortSignal.timeout(5000),
-          redirect: 'error',
-        },
-      );
-      if (!response.ok || !response.body)
-        throw new Error('Provider unavailable');
-      const reader = response.body.getReader();
-      const chunks: Uint8Array[] = [];
-      let size = 0;
-      try {
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          size += value.length;
-          if (size > 65536) throw new Error('Provider response too large');
-          chunks.push(value);
-        }
-      } finally {
-        await reader.cancel().catch(() => undefined);
-        reader.releaseLock();
-      }
-      const fields = this.fields(
-        JSON.parse(Buffer.concat(chunks).toString('utf8')),
-      );
+      const fields = await this.post(data);
       const order = [
         'vnp_ResponseId',
         'vnp_Command',
@@ -231,6 +216,146 @@ export class VnpayProvider {
       throw new ServiceUnavailableException({
         code: 'PAYMENT_VERIFICATION_UNAVAILABLE',
         message: 'Payment could not be verified; try again',
+      });
+    }
+  }
+  private async post(data: Record<string, string>) {
+    const response = await this.http(
+      'https://sandbox.vnpayment.vn/merchant_webapi/api/transaction',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+        signal: AbortSignal.timeout(5000),
+        redirect: 'error',
+      },
+    );
+    if (!response.ok || !response.body) throw new Error('Provider unavailable');
+    const reader = response.body.getReader(),
+      chunks: Uint8Array[] = [];
+    let size = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.length;
+        if (size > 65536) throw new Error('Provider response too large');
+        chunks.push(value);
+      }
+    } finally {
+      await reader.cancel().catch(() => undefined);
+      reader.releaseLock();
+    }
+    return this.fields(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+  }
+  private refundType(request: VnpayRefund) {
+    if (
+      !/^[1-9]\d{0,9}$/.test(request.amount) ||
+      !/^[1-9]\d{0,9}$/.test(request.originalAmount) ||
+      BigInt(request.amount) > BigInt(request.originalAmount) ||
+      !/^[1-9]\d{0,14}$/.test(request.originalTransactionNo)
+    )
+      throw new BadRequestException('Invalid refund source or amount');
+    return request.amount === request.originalAmount ? '02' : '03';
+  }
+  async refund(request: VnpayRefund): Promise<VnpayRefundEvent> {
+    this.assertAvailable();
+    const data: Record<string, string> = {
+      vnp_RequestId: request.requestId,
+      vnp_Version: '2.1.0',
+      vnp_Command: 'refund',
+      vnp_TmnCode: this.config.getOrThrow<string>('VNPAY_TMN_CODE'),
+      vnp_TransactionType: this.refundType(request),
+      vnp_TxnRef: request.reference,
+      vnp_Amount: (BigInt(request.amount) * 100n).toString(),
+      vnp_TransactionNo: request.originalTransactionNo,
+      vnp_TransactionDate: gatewayTime(request.transactionDate),
+      vnp_CreateBy: request.actorId,
+      vnp_CreateDate: gatewayTime(request.createdAt),
+      vnp_IpAddr: '127.0.0.1',
+      vnp_OrderInfo: 'Hoan tien ' + request.requestId,
+    };
+    data.vnp_SecureHash = this.hash(Object.values(data).join('|'));
+    return this.refundResult(request, data, false);
+  }
+  async queryRefund(
+    request: VnpayRefund,
+    transactionNo: string,
+  ): Promise<VnpayRefundEvent> {
+    this.assertAvailable();
+    this.refundType(request);
+    if (
+      !/^[1-9]\d{0,14}$/.test(transactionNo) ||
+      transactionNo === request.originalTransactionNo
+    )
+      throw new BadRequestException('Use the refund transaction number');
+    const data: Record<string, string> = {
+      vnp_RequestId: randomUUID().replaceAll('-', ''),
+      vnp_Version: '2.1.0',
+      vnp_Command: 'querydr',
+      vnp_TmnCode: this.config.getOrThrow<string>('VNPAY_TMN_CODE'),
+      vnp_TxnRef: request.reference,
+      vnp_TransactionDate: gatewayTime(request.transactionDate),
+      vnp_CreateDate: gatewayTime(new Date()),
+      vnp_IpAddr: '127.0.0.1',
+      vnp_OrderInfo: 'Truy van hoan tien ' + request.requestId,
+    };
+    data.vnp_SecureHash = this.hash(Object.values(data).join('|'));
+    data.vnp_TransactionNo = transactionNo;
+    return this.refundResult(request, data, true, transactionNo);
+  }
+  private async refundResult(
+    request: VnpayRefund,
+    data: Record<string, string>,
+    query: boolean,
+    transactionNo?: string,
+  ): Promise<VnpayRefundEvent> {
+    try {
+      const f = await this.post(data);
+      const keys = [
+        'vnp_ResponseId',
+        'vnp_Command',
+        'vnp_ResponseCode',
+        'vnp_Message',
+        'vnp_TmnCode',
+        'vnp_TxnRef',
+        'vnp_Amount',
+        'vnp_BankCode',
+        'vnp_PayDate',
+        'vnp_TransactionNo',
+        'vnp_TransactionType',
+        'vnp_TransactionStatus',
+        'vnp_OrderInfo',
+        ...(query ? ['vnp_PromotionCode', 'vnp_PromotionAmount'] : []),
+      ];
+      this.verify(keys.map((k) => f[k] ?? '').join('|'), f.vnp_SecureHash);
+      if (
+        f.vnp_Command !== data.vnp_Command ||
+        f.vnp_ResponseCode !== '00' ||
+        f.vnp_TmnCode !== data.vnp_TmnCode ||
+        f.vnp_TxnRef !== request.reference ||
+        (!query && f.vnp_OrderInfo !== 'Hoan tien ' + request.requestId) ||
+        f.vnp_Amount !== (BigInt(request.amount) * 100n).toString() ||
+        f.vnp_TransactionType !== this.refundType(request) ||
+        !/^[1-9]\d{0,14}$/.test(f.vnp_TransactionNo ?? '') ||
+        f.vnp_TransactionNo === request.originalTransactionNo ||
+        (query && f.vnp_TransactionNo !== transactionNo)
+      )
+        throw new Error('Refund result mismatch');
+      const status =
+        f.vnp_TransactionStatus === '00'
+          ? 'SUCCEEDED'
+          : ['05', '06'].includes(f.vnp_TransactionStatus)
+            ? 'PROCESSING'
+            : f.vnp_TransactionStatus === '09'
+              ? 'FAILED'
+              : null;
+      if (!status) throw new Error('Refund result is not final or recognized');
+      return { status, transactionNo: f.vnp_TransactionNo };
+    } catch {
+      throw new ServiceUnavailableException({
+        code: 'REFUND_VERIFICATION_UNAVAILABLE',
+        message: 'Refund outcome is unknown; verify it before any new request',
       });
     }
   }

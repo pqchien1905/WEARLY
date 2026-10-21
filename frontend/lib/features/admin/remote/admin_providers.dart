@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/account_state.dart';
 import '../../../app/api_providers.dart';
+import '../../../app/refund_providers.dart';
 import '../../../core/network/api_client.dart';
 import '../../../data/remote_admin.dart';
 export '../../../data/remote_admin.dart';
@@ -41,6 +42,7 @@ final adminContentProvider = FutureProvider.autoDispose<AdminRecord>(
 );
 
 void refreshAdmin(WidgetRef ref) {
+  ref.invalidate(adminRefundStateProvider);
   ref.invalidate(adminListProvider);
   ref.invalidate(adminDetailProvider);
   ref.invalidate(adminSummaryProvider);

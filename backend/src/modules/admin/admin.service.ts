@@ -50,6 +50,9 @@ export class AdminService {
       customers,
       paid,
       awaiting,
+      refunded,
+      extra,
+      legacy,
     ] = await this.db.$transaction(
       [
         this.db.product.count(),
@@ -58,7 +61,7 @@ export class AdminService {
         this.db.order.count({ where: { status: 'PENDING' } }),
         this.db.user.count({ where: { role: 'CUSTOMER' } }),
         this.db.payment.aggregate({
-          where: { status: 'PAID' },
+          where: { status: { in: ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'] } },
           _sum: { amount: true },
           _count: true,
         }),
@@ -70,16 +73,38 @@ export class AdminService {
           },
           _sum: { amount: true },
         }),
+        this.db.refund.aggregate({
+          where: { status: 'SUCCEEDED' },
+          _sum: { amount: true },
+        }),
+        this.db.$queryRaw<
+          { amount: string }[]
+        >`SELECT COALESCE(sum(a.amount),0)::text AS amount FROM "PaymentAttempt" a JOIN "Payment" p ON p.id=a."paymentId" WHERE a.status='PAID' AND a."transactionNo"<>p."providerTransactionId"`,
+        this.db.payment.aggregate({
+          where: {
+            status: 'REFUNDED',
+            refunds: { none: { primary: true, status: 'SUCCEEDED' } },
+          },
+          _sum: { amount: true },
+        }),
       ],
       { isolationLevel: 'RepeatableRead' },
     );
+    const gross =
+        BigInt(paid._sum.amount?.toFixed(0) ?? '0') + BigInt(extra[0].amount),
+      returned = BigInt(refunded._sum.amount?.toFixed(0) ?? '0'),
+      unverified = BigInt(legacy._sum.amount?.toFixed(0) ?? '0');
     return {
       products,
       inventoryUnits: inventory._sum.quantity ?? 0,
       orders,
       pendingOrders,
       customers,
-      paidRevenueVnd: paid._sum.amount?.toFixed(0) ?? '0',
+      paidRevenueVnd: gross.toString(),
+      refundedVnd: returned.toString(),
+      netCollectedVnd: (gross - returned - unverified).toString(),
+      legacyRefundUnverifiedVnd: unverified.toString(),
+      extraCollectedVnd: extra[0].amount,
       paidOrders: paid._count,
       codAwaitingSettlementVnd: awaiting._sum.amount?.toFixed(0) ?? '0',
     };
@@ -247,7 +272,10 @@ export class AdminService {
     return transaction(this.db, async (tx) => {
       await tx.$queryRaw`SELECT id FROM "Order" WHERE id = ${id}::uuid FOR UPDATE`;
       const payment = await tx.payment.findUnique({ where: { orderId: id } });
-      if (payment?.provider === 'vnpay' && payment.status !== 'PAID')
+      if (
+        payment?.provider === 'vnpay' &&
+        !['PAID', 'PARTIALLY_REFUNDED'].includes(payment.status)
+      )
         fail(
           409,
           'PAYMENT_REQUIRED',
@@ -268,7 +296,13 @@ export class AdminService {
           'ORDER_STATE_CONFLICT',
           'Order changed or transition is invalid',
         );
-      await recordFulfillment(tx, id, dto.status, dto.expectedVersion + 1, actorId);
+      await recordFulfillment(
+        tx,
+        id,
+        dto.status,
+        dto.expectedVersion + 1,
+        actorId,
+      );
       await recordAdminActivity(tx, actorId, 'ORDER_STATUS_CHANGED', id);
       // Delivery is not proof of payment: payment stays PENDING until a separate
       // settlement is explicitly recorded.

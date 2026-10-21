@@ -120,6 +120,7 @@ Order commerceOrder(Object? value, {required String email}) {
     'PENDING' =>
       payment['provider'] == 'vnpay' ? 'Chờ thanh toán' : 'Chưa thu tiền',
     'PAID' => 'Đã thanh toán',
+    'PARTIALLY_REFUNDED' => 'Đã hoàn một phần',
     'CANCELLED' => 'Đã hủy',
     'FAILED' => 'Thanh toán thất bại',
     'REFUNDED' => 'Đã hoàn tiền',

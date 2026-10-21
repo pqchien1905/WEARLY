@@ -1,7 +1,14 @@
 import '../core/network/api_client.dart';
 import 'commerce_json.dart';
 
-const paymentStatuses = ['PENDING', 'PAID', 'FAILED', 'CANCELLED', 'REFUNDED'];
+const paymentStatuses = [
+  'PENDING',
+  'PAID',
+  'PARTIALLY_REFUNDED',
+  'FAILED',
+  'CANCELLED',
+  'REFUNDED',
+];
 Uri sandboxPaymentUrl(String url) {
   final uri = Uri.tryParse(url);
   if (uri == null ||

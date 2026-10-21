@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../account/order_tracking.dart';
 import 'shipment_actions.dart';
 import 'return_actions.dart';
+import 'refund_actions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/design/tokens.dart';
@@ -87,6 +88,22 @@ class RemoteAdminDashboard extends ConsumerWidget {
                   '/admin/orders',
                 ),
                 ('Đơn đã thanh toán', 'paidOrders', '/admin/orders'),
+                ('Tiền đã hoàn có biên nhận', 'refundedVnd', '/admin/orders'),
+                (
+                  'Tiền còn lại đã xác định',
+                  'netCollectedVnd',
+                  '/admin/orders',
+                ),
+                (
+                  'Hoàn cũ cần đối chiếu',
+                  'legacyRefundUnverifiedVnd',
+                  '/admin/orders',
+                ),
+                (
+                  'Khoản thanh toán thu thêm',
+                  'extraCollectedVnd',
+                  '/admin/orders',
+                ),
                 ('Sản phẩm', 'products', '/admin/products'),
                 ('Số lượng trong kho', 'inventoryUnits', '/admin/inventory'),
                 ('Đơn hàng', 'orders', '/admin/orders'),
@@ -541,7 +558,11 @@ class RemoteAdminOrder extends ConsumerWidget {
                           '${attempt['reference']} · ${attempt['status']} · ${money(vnd(attempt['amount']))}\nMã giao dịch: ${attempt['transactionNo'] ?? 'Chưa có'}${attempt['reviewRequired'] == true ? '\nCẦN KIỂM TRA: thanh toán trùng hoặc đơn đã hủy.' : ''}',
                         ),
                       ),
-                    if (payment['status'] != 'PAID')
+                    if (![
+                      'PAID',
+                      'PARTIALLY_REFUNDED',
+                      'REFUNDED',
+                    ].contains(payment['status']))
                       const Text(
                         'Chờ xác minh thanh toán trước khi xử lý giao hàng.',
                         style: T.small,
@@ -550,7 +571,10 @@ class RemoteAdminOrder extends ConsumerWidget {
                   if (next != null &&
                       order.shipment?.status != 'DELIVERY_FAILED' &&
                       (payment['provider'] != 'vnpay' ||
-                          payment['status'] == 'PAID')) ...[
+                          [
+                            'PAID',
+                            'PARTIALLY_REFUNDED',
+                          ].contains(payment['status']))) ...[
                     const SizedBox(height: 20),
                     AppButton(
                       next.$2,
@@ -584,6 +608,10 @@ class RemoteAdminOrder extends ConsumerWidget {
             ),
             AdminCard(child: OrderTracking(order: order)),
             AdminReturnActions(data: data, order: order),
+            AdminRefundActions(
+              key: ValueKey('refunds-${order.id}'),
+              orderId: order.id,
+            ),
             for (final item in order.items)
               AdminCard(
                 child: Column(

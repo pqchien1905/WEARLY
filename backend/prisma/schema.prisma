@@ -28,9 +28,16 @@ enum ShipmentStatus {
 enum PaymentStatus {
   PENDING
   PAID
+  PARTIALLY_REFUNDED
   FAILED
   REFUNDED
   CANCELLED
+}
+enum RefundStatus {
+  REVIEW
+  PROCESSING
+  SUCCEEDED
+  FAILED
 }
 enum CouponKind {
   FIXED
@@ -69,6 +76,8 @@ enum AdminAuditAction {
   ORDER_CANCELLED
   RETURN_DECIDED
   RETURN_RECEIVED
+  REFUND_CREATED
+  REFUND_UPDATED
 }
 // Historical identifiers intentionally survive changes to the referenced entities.
 // Do not copy request bodies or credentials into activity history.
@@ -435,6 +444,7 @@ model Payment {
   updatedAt DateTime @updatedAt
   settlement PaymentSettlement?
   attempts PaymentAttempt[]
+  refunds Refund[]
 }
 model PaymentAttempt {
   id String @id @default(uuid()) @db.Uuid
@@ -450,6 +460,29 @@ model PaymentAttempt {
   expiresAt DateTime
   lastQueryAt DateTime?
   updatedAt DateTime @updatedAt
+  refunds Refund[]
+  @@index([paymentId, createdAt])
+}
+model Refund {
+  id String @id @default(uuid()) @db.Uuid
+  paymentId String @db.Uuid
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  attemptId String? @db.Uuid
+  attempt PaymentAttempt? @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  primary Boolean
+  requestKey String @db.Uuid
+  payloadHash String @db.Char(64)
+  providerRequestId String @unique @db.VarChar(32)
+  amount Decimal @db.Decimal(14, 0)
+  status RefundStatus @default(REVIEW)
+  reference String? @unique @db.VarChar(100)
+  providerTransactionNo String? @unique @db.VarChar(15)
+  actorId String @db.Uuid
+  lastQueryAt DateTime?
+  completedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([paymentId, requestKey])
   @@index([paymentId, createdAt])
 }
 model PaymentSettlement {

@@ -28,5 +28,5 @@ opt-in bỏ qua); lint/build/analyze sạch. Chrome thực hiện yêu cầu tr�
 giảm giá, duyệt, nhận, tải lại và hủy đơn đã thu tiền. Các giao dịch trong bài
 kiểm thử là dữ liệu tổng hợp ở DB test, không chứng minh kết nối VNPay thật.
 
-Tại mốc này, số tiền dự kiến hoàn chưa phải biên nhận hoàn tiền. Quy trình hoàn
-tiền COD/VNPay được triển khai trong mốc thanh toán kế tiếp.
+Số tiền dự kiến hoàn chưa phải biên nhận hoàn tiền. Sau khi nhận hàng, thực hiện
+quy trình riêng tại [REFUNDS_LOCAL.md](REFUNDS_LOCAL.md).

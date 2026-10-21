@@ -64,7 +64,7 @@ function eligibility(order: ReturnOrder) {
       ? 'NOTHING_LEFT'
       : order.status !== 'DELIVERED'
         ? 'NOT_DELIVERED'
-        : order.payment?.status !== 'PAID'
+        : !['PAID', 'PARTIALLY_REFUNDED'].includes(order.payment?.status ?? '')
           ? 'PAYMENT_NOT_SETTLED'
           : !deadline
             ? 'DELIVERY_DATE_UNKNOWN'

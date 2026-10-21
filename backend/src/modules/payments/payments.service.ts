@@ -49,6 +49,7 @@ export class PaymentsService {
       this.gateway.enabled &&
       order.status === 'PENDING' &&
       payment.status !== 'PAID' &&
+      payment.status !== 'PARTIALLY_REFUNDED' &&
       payment.status !== 'REFUNDED' &&
       attempt?.status === 'PENDING' &&
       attempt.expiresAt.getTime() > Date.now();
@@ -77,7 +78,7 @@ export class PaymentsService {
     return transaction(this.db, async (tx) => {
       const order = await this.owned(tx, userId, id),
         payment = order.payment!;
-      if (payment.status === 'PAID' || payment.status === 'REFUNDED')
+      if (['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(payment.status))
         return this.state(order);
       this.gateway.assertAvailable();
       if (order.status !== 'PENDING')
@@ -121,7 +122,7 @@ export class PaymentsService {
       const pending = payment.attempts.find((a) => a.status === 'PENDING');
       if (
         !pending &&
-        (payment.status === 'PAID' || payment.status === 'REFUNDED')
+        ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(payment.status)
       )
         return { state: this.state(order) };
       this.gateway.assertAvailable();
@@ -222,8 +223,9 @@ export class PaymentsService {
           where: { transactionNo: event.transactionNo },
         });
         if (duplicate && duplicate.id !== attempt.id) return '99';
-        const alreadyPaid =
-          payment.status === 'PAID' || payment.status === 'REFUNDED';
+        const alreadyPaid = ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(
+          payment.status,
+        );
         await tx.paymentAttempt.update({
           where: { id: attempt.id },
           data: {
@@ -262,7 +264,9 @@ export class PaymentsService {
         });
         if (
           latest?.id === attempt.id &&
-          !['PAID', 'REFUNDED', 'CANCELLED'].includes(payment.status)
+          !['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED', 'CANCELLED'].includes(
+            payment.status,
+          )
         )
           await tx.payment.update({
             where: { id: payment.id },

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'order_tracking.dart';
 import 'returns_panel.dart';
+import 'refund_panel.dart';
 import '../checkout/payment_panel.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -429,6 +430,14 @@ class _OrderDetail extends StatelessWidget {
           ),
         if (remote && ['Đã giao', 'Đã hoàn về kho'].contains(order.status))
           ReturnsPanel(key: ValueKey('returns-${order.id}'), order: order),
+        if (remote &&
+            order.total > 0 &&
+            [
+              'PAID',
+              'PARTIALLY_REFUNDED',
+              'REFUNDED',
+            ].contains(order.paymentStatus))
+          RefundPanel(key: ValueKey('refunds-${order.id}'), orderId: order.id),
         const Divider(height: 64),
         Text('Thông tin nhận hàng', style: T.display(26)),
         const SizedBox(height: 16),

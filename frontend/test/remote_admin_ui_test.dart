@@ -710,11 +710,15 @@ void main() {
               'customers': 1,
               'paidOrders': 1,
               'paidRevenueVnd': '520000',
+              'refundedVnd': '0',
+              'netCollectedVnd': '520000',
+              'extraCollectedVnd': '0',
+              'legacyRefundUnverifiedVnd': '0',
               'codAwaitingSettlementVnd': '30000',
             }),
     );
     expect(find.text('Tiền đã thu · toàn thời gian'), findsOneWidget);
-    expect(find.textContaining('520.000'), findsOneWidget);
+    expect(find.textContaining('520.000'), findsNWidgets(2));
     expect(find.text('COD đã giao, chờ đối soát'), findsOneWidget);
   });
   testWidgets('order detail advances exact version and keeps COD unpaid', (

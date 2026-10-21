@@ -48,7 +48,7 @@ export async function cancelOrder(
   if (
     order.payment &&
     (order.payment.amount.eq(0) ||
-      !['PAID', 'REFUNDED'].includes(order.payment.status))
+      !['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(order.payment.status))
   )
     await tx.payment.update({
       where: { id: order.payment.id },

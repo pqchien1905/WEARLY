@@ -36,6 +36,7 @@ const payments = process.argv.includes('--payments');
 const promotions = process.argv.includes('--promotions');
 const shipments = process.argv.includes('--shipments');
 const returns = process.argv.includes('--returns');
+const refunds = process.argv.includes('--refunds');
 const promotionCode = 'BROWSER' + fixture.replaceAll('-', '').slice(-12).toUpperCase();
 if (admin) {
   process.env.S3_BUCKET = test.TEST_S3_BUCKET || normal.S3_BUCKET + '-test';
@@ -72,18 +73,31 @@ async function main() {
     });
   }
   const fixtureSecret = randomUUID()+randomUUID();
-  if(payments) Object.assign(process.env,{ VNPAY_ENABLED:'true',VNPAY_TMN_CODE:'TEST0001',VNPAY_HASH_SECRET:fixtureSecret,
+  if(payments || refunds) Object.assign(process.env,{ VNPAY_ENABLED:'true',VNPAY_TMN_CODE:'TEST0001',VNPAY_HASH_SECRET:fixtureSecret,
     VNPAY_RETURN_URL:'http://127.0.0.1:3000/api/v1/payments/vnpay/return',VNPAY_WEB_RETURN_URL:'http://127.0.0.1:4183/#/payments/return' });
   let fixturePaid = false;
+  const refundFixtures = new Map();
   const fixtureHttp = async (_url, init) => {
     const body=JSON.parse(init.body);
+    if(refunds) {
+      if(body.vnp_Command==='refund') {
+        if(refundFixtures.has(body.vnp_RequestId))throw Error('Duplicate outbound refund');
+        refundFixtures.set(body.vnp_RequestId,{info:body.vnp_OrderInfo,amount:body.vnp_Amount,reference:body.vnp_TxnRef,number:String(Date.now()),type:body.vnp_TransactionType});
+      }
+      const row=body.vnp_Command==='refund'?refundFixtures.get(body.vnp_RequestId):[...refundFixtures.values()].find(r=>r.number===body.vnp_TransactionNo);
+      if(!row)throw Error('Unknown synthetic refund');
+      const reply={vnp_ResponseId:randomUUID().replaceAll('-',''),vnp_Command:body.vnp_Command,vnp_ResponseCode:'00',vnp_Message:'Signed local refund fixture',vnp_TmnCode:'TEST0001',vnp_TxnRef:row.reference,vnp_Amount:row.amount,vnp_BankCode:'NCB',vnp_PayDate:'20261022120000',vnp_TransactionNo:row.number,vnp_TransactionType:row.type,vnp_TransactionStatus:body.vnp_Command==='refund'?'05':'00',vnp_OrderInfo:row.info};
+      if(body.vnp_Command==='querydr')Object.assign(reply,{vnp_PromotionCode:'',vnp_PromotionAmount:''});
+      reply.vnp_SecureHash=createHmac('sha512',fixtureSecret).update(Object.values(reply).join('|')).digest('hex');
+      return Response.json(reply);
+    }
     const fields = ['vnp_ResponseId','vnp_Command','vnp_ResponseCode','vnp_Message','vnp_TmnCode','vnp_TxnRef','vnp_Amount','vnp_BankCode','vnp_PayDate','vnp_TransactionNo','vnp_TransactionType','vnp_TransactionStatus','vnp_OrderInfo','vnp_PromotionCode','vnp_PromotionAmount'];
     const reply = {vnp_ResponseId:randomUUID().replaceAll('-',''),vnp_Command:'querydr',vnp_ResponseCode:'00',vnp_Message:'Signed local fixture',vnp_TmnCode:'TEST0001',vnp_TxnRef:body.vnp_TxnRef,vnp_Amount:'52000000',vnp_BankCode:'NCB',vnp_PayDate:'20261021120000',vnp_TransactionNo:String(Date.now()),vnp_TransactionType:'01',vnp_TransactionStatus:fixturePaid?'00':'01',vnp_OrderInfo:'Test',vnp_PromotionCode:'',vnp_PromotionAmount:''};
     reply.vnp_SecureHash=createHmac('sha512',fixtureSecret).update(fields.map(k=>reply[k]).join('|')).digest('hex');
     return Response.json(reply);
   };
   const { AppModule } = requireBackend('./dist/app.module');
-  const app = payments
+  const app = payments || refunds
     ? (await requireBackend('@nestjs/testing').Test.createTestingModule({imports:[AppModule]}).overrideProvider('VNPAY_HTTP').useValue(fixtureHttp).compile()).createNestApplication({logger:false})
     : await NestFactory.create(AppModule, { logger: false });
   const db = app.get(PrismaService);
@@ -135,7 +149,7 @@ async function main() {
       if (await db.passwordResetToken.count({ where: { userId: account.user.id, consumedAt: null } }) !== 0)
         throw new Error('Unconsumed reset token remained');
       console.log('PASS recovery database: token consumed and original session revoked.');
-    } else if (returns) {
+    } else if (returns || refunds) {
       const password = 'Browser-only-Password-2026', email = 'admin-' + fixture + '@example.com', customerEmail = 'browser-' + fixture + '@example.com';
       const send = async (method, endpoint, body, token, headers = {}) => {
         const response = await fetch(url + '/' + endpoint, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}), ...headers }, body: JSON.stringify(body) });
@@ -154,17 +168,23 @@ async function main() {
       await send('POST', 'cart/items', { sku: fixture, quantity: 1 }, customer.accessToken);
       let cancelled = await send('POST', 'orders', { addressId: address.id, expectedSubtotal: '490000', shippingMethod: 'standard' }, customer.accessToken, { 'Idempotency-Key': randomUUID() });
       // Explicit synthetic prepaid snapshot; no claim of real gateway acceptance.
-      await db.payment.update({ where: { orderId: cancelled.id }, data: { provider: 'vnpay', status: 'PAID', providerTransactionId: 'FIXTURE-' + fixture } });
+      const paymentNumber=String(Date.now());
+      await db.payment.update({ where: { orderId: cancelled.id }, data: { provider: 'vnpay', status: 'PAID', providerTransactionId: paymentNumber,
+        ...(refunds?{attempts:{create:{reference:randomUUID().replaceAll('-',''),amount:'520000',status:'PAID',transactionNo:paymentNumber,ipAddress:'127.0.0.1',expiresAt:new Date(Date.now()+900000)}}}:{}) } });
       cancelled = await send('PATCH', 'admin/orders/' + cancelled.id + '/status', { status: 'CONFIRMED', expectedVersion: cancelled.version }, staff.accessToken);
       await flutter(['build', 'web', '--release', '--dart-define=USE_REMOTE_API=true', '--dart-define=API_BASE_URL=' + url]);
-      await require('./verify-returns-browser.cjs')({ root, email, customerEmail, password, orderId: order.id, cancelId: cancelled.id });
-      const returned = await db.order.findUniqueOrThrow({ where: { id: order.id }, include: { returns: { include: { items: true } }, payment: true } });
-      if (returned.status !== 'DELIVERED' || returned.payment.status !== 'PAID' || returned.returns.length !== 1 || returned.returns[0].status !== 'RECEIVED' || returned.returns[0].amount.toString() !== '465000' || returned.returns[0].items[0].quantity !== 1) throw Error('Partial return entitlement/state mismatch');
-      const stopped = await db.order.findUniqueOrThrow({ where: { id: cancelled.id }, include: { payment: true } });
-      if (stopped.status !== 'CANCELLED' || stopped.payment.status !== 'PAID') throw Error('Paid cancellation lost its refund obligation');
+      await require('./verify-returns-browser.cjs')({ root, email, customerEmail, password, orderId: order.id, cancelId: cancelled.id, refunds });
+      const returned = await db.order.findUniqueOrThrow({ where: { id: order.id }, include: { returns: { include: { items: true } }, payment: {include:{refunds:true}} } });
+      if (returned.status !== 'DELIVERED' || returned.payment.status !== (refunds?'PARTIALLY_REFUNDED':'PAID') || returned.returns.length !== 1 || returned.returns[0].status !== 'RECEIVED' || returned.returns[0].amount.toString() !== '465000' || returned.returns[0].items[0].quantity !== 1) throw Error('Partial return entitlement/state mismatch');
+      const stopped = await db.order.findUniqueOrThrow({ where: { id: cancelled.id }, include: { payment: {include:{refunds:true}} } });
+      if (stopped.status !== 'CANCELLED' || stopped.payment.status !== (refunds?'REFUNDED':'PAID')) throw Error('Paid cancellation refund state mismatch');
+      if(refunds) {
+        if(returned.payment.refunds.length!==1 || returned.payment.refunds[0].amount.toString()!=='465000' || returned.payment.refunds[0].status!=='SUCCEEDED')throw Error('COD partial refund mismatch');
+        if(stopped.payment.refunds.length!==1 || stopped.payment.refunds[0].amount.toString()!=='520000' || stopped.payment.refunds[0].status!=='SUCCEEDED' || refundFixtures.size!==1)throw Error('VNPay verified refund mismatch');
+      }
       const inventory = await db.inventory.findFirstOrThrow({ where: { variant: { productId: product.id } } });
       if (inventory.quantity !== 9) throw Error('Return/cancellation stock compensation mismatch');
-      console.log('PASS partial discounted return, one receipt/restock, paid cancellation retains money; no refund/provider call fabricated.');
+      console.log(refunds?'PASS partial COD and verified signed-fixture VNPay refund; stock unchanged by refund; one outbound sandbox fixture request.':'PASS partial discounted return, one receipt/restock, paid cancellation retains money; no real provider call.');
     } else if (shipments) {
       const password = 'Browser-only-Password-2026';
       const post = async (endpoint, body, token, headers = {}) => {
@@ -328,9 +348,10 @@ async function main() {
         await tx.adminAuditEvent.deleteMany({ where: { actorId: owner.userId } });
         await tx.review.deleteMany({ where: owner });
         await tx.inventoryMovement.deleteMany({ where: { order: owner } });
+        await tx.refund.deleteMany({ where: { payment: { order: owner } } });
         await tx.paymentAttempt.deleteMany({ where: { payment: { order: owner } } });
         await tx.couponRedemption.deleteMany({where:{order:owner}});
-        if(promotions || returns) await tx.coupon.deleteMany({where:{code:promotionCode}});
+        if(promotions || returns || refunds) await tx.coupon.deleteMany({where:{code:promotionCode}});
         await tx.payment.deleteMany({ where: { order: owner } });
         await tx.orderItem.deleteMany({ where: { order: owner } });
         await tx.order.deleteMany({ where: owner });

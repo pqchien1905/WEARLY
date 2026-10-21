@@ -2,9 +2,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
 const assert = require('node:assert/strict');
-module.exports = async function verify({ root, email, customerEmail, password, orderId, cancelId }) {
+module.exports = async function verify({ root, email, customerEmail, password, orderId, cancelId, refunds=false }) {
   const { chromium } = require(path.join(root, '.tools/browser/node_modules/playwright'));
-  const web = path.join(root, 'frontend/build/web'), output = path.join(root, '.tools/api-return-verification');
+  const web = path.join(root, 'frontend/build/web'), output = path.join(root, refunds?'.tools/api-refund-verification':'.tools/api-return-verification');
   fs.mkdirSync(output, { recursive: true });
   const mime = { '.html': 'text/html', '.js': 'application/javascript', '.json': 'application/json', '.wasm': 'application/wasm', '.jpg': 'image/jpeg', '.png': 'image/png', '.ttf': 'font/ttf' };
   const server = http.createServer((req, res) => {
@@ -47,15 +47,35 @@ module.exports = async function verify({ root, email, customerEmail, password, o
     await page.getByText('Đã nhận hàng khách trả', { exact: true }).waitFor();
     await reveal(page.getByText('Đã nhận hàng khách trả', { exact: true })); await page.screenshot({ path: path.join(output, 'received-admin-mobile.png') });
     assert(!(await page.locator('body').ariaSnapshot()).includes('Đã hoàn tiền'));
+    if(refunds) {
+      await button('Ghi nhận hoàn COD');await fill('Mã biên nhận hoàn tiền','BROWSER-COD-'+orderId);
+      const response=page.waitForResponse(r=>r.url().endsWith('/refunds')&&r.request().method()==='POST');
+      await button('Xác nhận đã hoàn COD');assert((await response).ok());
+      await page.getByText('Đã hoàn tiền',{exact:true}).waitFor();await reveal(page.getByText('Đã hoàn tiền',{exact:true}));
+      await page.screenshot({path:path.join(output,'cod-refunded-admin-mobile.png')});
+    }
     await page.setViewportSize({ width: 1440, height: 1000 }); await route('/admin/orders/' + cancelId);
     await action('Hủy đơn trước khi gửi', 'Lý do hủy đơn', 'Khách đổi ý trước khi gửi hàng');
     await page.getByText('Đơn đã hủy', { exact: true }).waitFor();
     assert((await page.locator('body').ariaSnapshot()).includes('Đã thanh toán'));
+    if(refunds) {
+      await button('Hoàn qua VNPay sandbox');
+      let response=page.waitForResponse(r=>r.url().endsWith('/refunds')&&r.request().method()==='POST');
+      await button('Gửi yêu cầu hoàn sandbox');assert((await response).ok());
+      await page.getByText('VNPay đang xử lý hoàn',{exact:true}).waitFor();
+      assert(!(await page.locator('body').ariaSnapshot()).includes('Đã hoàn tiền'));
+      await button('Kiểm tra kết quả hoàn');response=page.waitForResponse(r=>r.url().endsWith('/query')&&r.request().method()==='POST');
+      await button('Truy vấn VNPay');assert((await response).ok());
+      await page.getByText('Đã hoàn tiền',{exact:true}).waitFor();await reveal(page.getByText('Đã hoàn tiền',{exact:true}));
+      await page.screenshot({path:path.join(output,'vnpay-refunded-admin-desktop.png')});
+    }
     await route('/account/orders/' + orderId); await button('Cập nhật yêu cầu trả hàng');
     await page.getByText('Đã nhận hàng khách trả', { exact: true }).waitFor();
+    if(refunds){await button('Cập nhật hoàn tiền');await page.getByText('Đã hoàn tiền',{exact:true}).waitFor();}
     await reveal(page.getByText('Đã nhận hàng khách trả', { exact: true })); await page.screenshot({ path: path.join(output, 'received-customer-desktop.png') });
     await page.reload(); await semantics(); await button('Đăng nhập'); await login(customerEmail, false);
     await page.getByText('Đã nhận hàng khách trả', { exact: true }).waitFor();
+    if(refunds){await page.getByText('Đã hoàn tiền',{exact:true}).waitFor();await reveal(page.getByText('Đã hoàn tiền',{exact:true}));await page.screenshot({path:path.join(output,'refunded-customer-desktop.png')});}
     assert.deepEqual(errors, []); assert(!requests.some(r => r.status >= 400), 'Unexpected API error');
     console.log('PASS Chrome returns: discounted partial request, approve, receive, paid cancellation, customer persistence, desktop/mobile.');
   } catch (error) {

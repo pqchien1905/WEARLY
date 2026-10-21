@@ -22,6 +22,8 @@ const _actions = {
   'ORDER_CANCELLED': 'Hủy đơn trước khi gửi',
   'RETURN_DECIDED': 'Duyệt yêu cầu trả hàng',
   'RETURN_RECEIVED': 'Nhận hàng khách trả',
+  'REFUND_CREATED': 'Tạo khoản hoàn tiền',
+  'REFUND_UPDATED': 'Xác minh kết quả hoàn tiền',
   'PROMOTION_CREATED': 'Tạo mã khuyến mãi',
   'PROMOTION_UPDATED': 'Cập nhật mã khuyến mãi',
   'CONTENT_DRAFT_SAVED': 'Lưu bản nháp nội dung',

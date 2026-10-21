@@ -46,9 +46,10 @@ class _PaymentPanelState extends ConsumerState<PaymentPanel> {
   Widget build(BuildContext context) {
     if (widget.order.paymentProvider != 'vnpay') return const SizedBox.shrink();
     final status = result?.status ?? widget.order.paymentStatus;
-    final paid = ['PAID', 'REFUNDED'].contains(status);
+    final paid = ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'].contains(status);
     final label = switch (status) {
       'PAID' => 'Đã thanh toán',
+      'PARTIALLY_REFUNDED' => 'Đã hoàn một phần',
       'REFUNDED' => 'Đã hoàn tiền',
       'FAILED' => 'Thanh toán thất bại',
       'CANCELLED' => 'Đã hủy thanh toán',
