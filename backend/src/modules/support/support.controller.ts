@@ -34,7 +34,7 @@ export class SupportController {
     return this.service.create(dto);
   }
 }
-@Admin()
+@Admin('support.manage')
 @ApiBearerAuth()
 @ApiTags('support')
 @Controller('admin/support')

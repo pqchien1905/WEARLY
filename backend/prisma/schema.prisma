@@ -9,6 +9,9 @@ datasource db {
 enum Role {
   CUSTOMER
   ADMIN
+  MANAGER
+  WAREHOUSE
+  SUPPORT
 }
 enum OrderStatus {
   PENDING
@@ -56,6 +59,7 @@ enum AIJobStatus {
   FAILED
 }
 enum AdminAuditAction {
+  STAFF_UPDATED
   SUPPORT_REPLIED
   SUPPORT_STATUS_CHANGED
   PRODUCT_CREATED
@@ -88,6 +92,7 @@ model AdminAuditEvent {
   actorId String @db.Uuid
   action AdminAuditAction
   targetId String @db.Uuid
+  details Json @default("{}")
   createdAt DateTime @default(now())
   @@index([createdAt, id])
 }
@@ -113,6 +118,7 @@ model User {
   phone String @default("")
   role Role @default(CUSTOMER)
   active Boolean @default(true)
+  staffVersion Int @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   refreshTokens RefreshToken[]

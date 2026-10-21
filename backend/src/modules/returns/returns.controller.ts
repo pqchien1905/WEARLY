@@ -48,14 +48,18 @@ export class ReturnsController {
 @Controller('admin/orders/:id')
 export class AdminReturnsController {
   constructor(private readonly service: ReturnsService) {}
-  @Post('cancel') cancel(
+  @Admin('orders.cancel')
+  @Post('cancel')
+  cancel(
     @CurrentUser() u: Identity,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: AdminCancelDto,
   ) {
     return this.service.cancel(u.id, id, dto);
   }
-  @Post('returns/:returnId/decision') decide(
+  @Admin('returns.decide')
+  @Post('returns/:returnId/decision')
+  decide(
     @CurrentUser() u: Identity,
     @Param('id', ParseUUIDPipe) id: string,
     @Param('returnId', ParseUUIDPipe) returnId: string,
@@ -63,7 +67,9 @@ export class AdminReturnsController {
   ) {
     return this.service.decide(u.id, id, returnId, dto);
   }
-  @Post('returns/:returnId/receive') receive(
+  @Admin('returns.receive')
+  @Post('returns/:returnId/receive')
+  receive(
     @CurrentUser() u: Identity,
     @Param('id', ParseUUIDPipe) id: string,
     @Param('returnId', ParseUUIDPipe) returnId: string,

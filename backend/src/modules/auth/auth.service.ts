@@ -11,6 +11,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { Prisma, User } from '../../generated/prisma/client';
 import { RegisterDto, LoginDto } from './dto/auth.dto';
 import { transaction, lockUser } from '../../common/transaction';
+import { isStaff } from '../../common/permissions';
 export const publicUser = (u: User) => ({
   id: u.id,
   email: u.email,
@@ -49,14 +50,14 @@ export class AuthService {
       !(await argon2.verify(user.passwordHash, dto.password))
     )
       throw new UnauthorizedException('Invalid email or password');
-    if (adminOnly && user.role !== 'ADMIN')
+    if (adminOnly && !isStaff(user.role))
       throw new ForbiddenException('Administrator access is required');
     return transaction(this.db, async (tx) => {
       await lockUser(tx, user.id);
       const current = await tx.user.findUnique({ where: { id: user.id } });
       if (!current?.active || current.passwordHash !== user.passwordHash)
         throw new UnauthorizedException('Invalid email or password');
-      if (adminOnly && current.role !== 'ADMIN')
+      if (adminOnly && !isStaff(current.role))
         throw new ForbiddenException('Administrator access is required');
       return this.issue(tx, current, randomUUID());
     });

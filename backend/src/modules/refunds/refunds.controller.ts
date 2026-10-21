@@ -22,7 +22,7 @@ export class RefundsController {
     return this.service.state(id, u.id);
   }
 }
-@Admin()
+@Admin('payments.manage')
 @ApiBearerAuth()
 @ApiTags('refunds')
 @Controller('admin/orders/:id/refunds')

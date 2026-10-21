@@ -18,7 +18,7 @@ export class ContentController {
   }
 }
 
-@Admin()
+@Admin('content.manage')
 @ApiBearerAuth()
 @ApiTags('admin')
 @Controller('admin/content')

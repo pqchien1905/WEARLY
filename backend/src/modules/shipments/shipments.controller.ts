@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Admin, CurrentUser, Identity } from '../../common/decorators/auth';
 import { ShipmentEventDto } from './shipments.dto';
 import { ShipmentsService } from './shipments.service';
-@Admin()
+@Admin('orders.fulfill')
 @ApiBearerAuth()
 @ApiTags('shipments')
 @Controller('admin/orders')

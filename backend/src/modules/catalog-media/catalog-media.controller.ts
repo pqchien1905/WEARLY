@@ -50,7 +50,7 @@ class CatalogUploadDto {
 @Controller()
 export class CatalogMediaController {
   constructor(private readonly service: CatalogMediaService) {}
-  @Admin()
+  @Admin('catalog.write')
   @ApiBearerAuth()
   @Post('admin/products/:id/images')
   @Throttle({ default: { limit: 30, ttl: 60000 } })

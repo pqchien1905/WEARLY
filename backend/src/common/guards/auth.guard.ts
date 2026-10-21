@@ -10,6 +10,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../database/prisma.service';
 import { AuthRequest } from '../decorators/auth';
+import { can, Capability } from '../permissions';
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(
@@ -58,13 +59,11 @@ export class AuthGuard implements CanActivate {
       role: session.user.role,
       sessionId: session.id,
     };
-    if (
-      this.reflector.getAllAndOverride<boolean>('admin', [
-        context.getHandler(),
-        context.getClass(),
-      ]) &&
-      session.user.role !== 'ADMIN'
-    )
+    const capability = this.reflector.getAllAndOverride<Capability>('admin', [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (capability && !can(session.user.role, capability))
       throw new ForbiddenException();
     return true;
   }

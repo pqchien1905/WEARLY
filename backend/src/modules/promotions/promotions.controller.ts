@@ -26,7 +26,7 @@ export class PromotionsController {
     return this.service.preview(u.id, dto);
   }
 }
-@Admin()
+@Admin('promotions.manage')
 @Controller('admin/promotions')
 export class AdminPromotionsController {
   constructor(private readonly service: PromotionsService) {}

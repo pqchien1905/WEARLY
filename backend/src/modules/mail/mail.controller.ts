@@ -2,7 +2,7 @@ import { Controller, Get } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Admin } from '../../common/decorators/auth';
 import { MailService } from './mail.service';
-@Admin()
+@Admin('mail.read')
 @ApiBearerAuth()
 @ApiTags('mail')
 @Controller('admin/mail')

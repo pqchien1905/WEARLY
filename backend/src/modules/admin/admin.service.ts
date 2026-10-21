@@ -167,8 +167,10 @@ export class AdminService {
         limit: q.limit,
       };
     return {
-      items: (await this.db.user.findMany(args)).map(publicUser),
-      total: await this.db.user.count(),
+      items: (
+        await this.db.user.findMany({ ...args, where: { role: 'CUSTOMER' } })
+      ).map(publicUser),
+      total: await this.db.user.count({ where: { role: 'CUSTOMER' } }),
       page: q.page,
       limit: q.limit,
     };

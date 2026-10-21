@@ -293,3 +293,19 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   persistence is not claimed as proven. Guide: docs/MAIL_SUPPORT_LOCAL.md.
 - Full A-Z goal remains ACTIVE: staff permissions/audit, persistent sessions, Gemini,
   operations/CI/recovery/SEO, configured providers and final integration remain.
+
+## Staff and audit — in progress, 22 October 2026
+
+- Task1 backend: explicit role/capability matrix and default ADMIN-only guard,
+  versioned staff lookup/change, current-actor recheck, session revocation, atomic
+  audit, last-active-admin protection under concurrent edits. Registration cannot
+  grant roles; customer listing excludes staff. Focused7 and full160 E2E GREEN,
+  lint/build clean. TestDB migration23 only; business DB remains22 until final review.
+- Staff last-admin tests own a random schema inside the dedicated_test database;
+  all unrelated accounts stay untouched. Original database-create setup lacked
+  CREATEDB; switched to isolated-schema Prisma override only in tests.
+- Full verification caught two expected integration updates: audit response now
+  includes details; test runner must disable local feature flags before fixtures
+  opt in, so enabled recovery in local.env cannot break test-specific origins.
+- UI permission gates, safe detailed audit, Chrome, review and business migration
+  remain pending. Persistent browser sessions are a separate next milestone.

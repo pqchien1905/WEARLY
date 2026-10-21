@@ -432,7 +432,7 @@ describe('Administration with PostgreSQL', () => {
     const own = history.body.items.filter((e: { actorId: string }) => e.actorId === users[0]);
     expect(own.length).toBeGreaterThanOrEqual(4);
     for (const row of own) {
-      expect(Object.keys(row).sort()).toEqual(['action', 'actorId', 'createdAt', 'id', 'targetId']);
+      expect(Object.keys(row).sort()).toEqual(['action', 'actorId', 'createdAt', 'details', 'id', 'targetId']);
     }
     expect(JSON.stringify(history.body)).not.toContain('Private draft description');
     const first = await call('get', 'admin/audit?limit=1').expect(200);

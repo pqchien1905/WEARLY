@@ -33,100 +33,133 @@ export class AdminController {
     private readonly service: AdminService,
     private readonly taxonomy: TaxonomyService,
   ) {}
-  @Get('summary') summary() {
+  @Admin('reports.read')
+  @Get('summary')
+  summary() {
     return this.service.summary();
   }
-  @Get('audit') audit(@Query() q: PageDto) {
+  @Admin('audit.read')
+  @Get('audit')
+  audit(@Query() q: PageDto) {
     return this.service.audit(q);
   }
-  @Get('products/:id') product(@Param('id', ParseUUIDPipe) id: string) {
+  @Admin('catalog.read')
+  @Get('products/:id')
+  product(@Param('id', ParseUUIDPipe) id: string) {
     return this.service.product(id);
   }
-  @Get('orders/:id') order(@Param('id', ParseUUIDPipe) id: string) {
+  @Admin('orders.read')
+  @Get('orders/:id')
+  order(@Param('id', ParseUUIDPipe) id: string) {
     return this.service.order(id);
   }
-  @Get('products') products(@Query() q: PageDto) {
+  @Admin('catalog.read')
+  @Get('products')
+  products(@Query() q: PageDto) {
     return this.service.list('products', q);
   }
-  @Post('products') createProduct(
-    @CurrentUser() u: Identity,
-    @Body() dto: CreateProductDto,
-  ) {
+  @Admin('catalog.write')
+  @Post('products')
+  createProduct(@CurrentUser() u: Identity, @Body() dto: CreateProductDto) {
     return this.service.createProduct(u.id, dto);
   }
-  @Patch('products/:id') updateProduct(
+  @Admin('catalog.write')
+  @Patch('products/:id')
+  updateProduct(
     @CurrentUser() u: Identity,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateProductDto,
   ) {
     return this.service.updateProduct(u.id, id, dto);
   }
-  @Post('skus') createSku(
-    @CurrentUser() u: Identity,
-    @Body() dto: CreateSkuDto,
-  ) {
+  @Admin('catalog.write')
+  @Post('skus')
+  createSku(@CurrentUser() u: Identity, @Body() dto: CreateSkuDto) {
     return this.service.createSku(u.id, dto);
   }
-  @Patch('skus/:id') updateSku(
+  @Admin('catalog.write')
+  @Patch('skus/:id')
+  updateSku(
     @CurrentUser() u: Identity,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateSkuDto,
   ) {
     return this.service.updateSku(u.id, id, dto);
   }
-  @Post('categories') category(
-    @CurrentUser() u: Identity,
-    @Body() dto: CategoryDto,
-  ) {
+  @Admin('catalog.write')
+  @Post('categories')
+  category(@CurrentUser() u: Identity, @Body() dto: CategoryDto) {
     return this.taxonomy.create(u.id, 'categories', dto);
   }
-  @Get('categories') categories(@Query() q: PageDto) {
+  @Admin('catalog.read')
+  @Get('categories')
+  categories(@Query() q: PageDto) {
     return this.taxonomy.list('categories', q);
   }
-  @Patch('categories/:id') renameCategory(
+  @Admin('catalog.write')
+  @Patch('categories/:id')
+  renameCategory(
     @CurrentUser() u: Identity,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: RenameTaxonomyDto,
   ) {
     return this.taxonomy.rename(u.id, 'categories', id, dto);
   }
-  @Post('brands') brand(@CurrentUser() u: Identity, @Body() dto: CategoryDto) {
+  @Admin('catalog.write')
+  @Post('brands')
+  brand(@CurrentUser() u: Identity, @Body() dto: CategoryDto) {
     return this.taxonomy.create(u.id, 'brands', dto);
   }
-  @Get('brands') brands(@Query() q: PageDto) {
+  @Admin('catalog.read')
+  @Get('brands')
+  brands(@Query() q: PageDto) {
     return this.taxonomy.list('brands', q);
   }
-  @Patch('brands/:id') renameBrand(
+  @Admin('catalog.write')
+  @Patch('brands/:id')
+  renameBrand(
     @CurrentUser() u: Identity,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: RenameTaxonomyDto,
   ) {
     return this.taxonomy.rename(u.id, 'brands', id, dto);
   }
-  @Get('inventory') inventory(@Query() q: PageDto) {
+  @Admin('inventory.read')
+  @Get('inventory')
+  inventory(@Query() q: PageDto) {
     return this.service.list('inventory', q);
   }
-  @Post('inventory/:id/adjust') adjust(
+  @Admin('inventory.write')
+  @Post('inventory/:id/adjust')
+  adjust(
     @CurrentUser() u: Identity,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: AdjustInventoryDto,
   ) {
     return this.service.adjust(u.id, id, dto);
   }
-  @Get('orders') orders(@Query() q: PageDto) {
+  @Admin('orders.read')
+  @Get('orders')
+  orders(@Query() q: PageDto) {
     return this.service.list('orders', q);
   }
-  @Patch('orders/:id/status') status(
+  @Admin('orders.fulfill')
+  @Patch('orders/:id/status')
+  status(
     @CurrentUser() u: Identity,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: OrderStatusDto,
   ) {
     return this.service.status(u.id, id, dto);
   }
-  @Get('users') users(@Query() q: PageDto) {
+  @Admin('customers.read')
+  @Get('users')
+  users(@Query() q: PageDto) {
     return this.service.list('users', q);
   }
-  @Post('orders/:id/settle-cod') settleCod(
+  @Admin('payments.manage')
+  @Post('orders/:id/settle-cod')
+  settleCod(
     @CurrentUser() u: Identity,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: SettleCodDto,
