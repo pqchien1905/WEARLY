@@ -1,1 +1,1 @@
-module.exports = { testEnvironment: 'node', testMatch: ['<rootDir>/test/**/*.spec.ts'], transform: { '^.+\\.tsx?$': ['ts-jest', { tsconfig: { ...require('./tsconfig.json').compilerOptions, rootDir: '.' } }] } };
+module.exports = { testEnvironment: 'node', testMatch: ['**/test/**/*.spec.ts'], transform: { '^.+\\.tsx?$': ['ts-jest', { tsconfig: { ...require('./tsconfig.json').compilerOptions, rootDir: '.' } }] } };

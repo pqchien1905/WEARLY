@@ -9,7 +9,11 @@ $portableNode = Join-Path $workspace '.tools/node-v24.22.0-win-x64'
 if (Test-Path -LiteralPath $portableNode) { $env:PATH = "$portableNode;$env:PATH" }
 Push-Location (Join-Path $workspace 'backend')
 try {
+  # Windows PowerShell 5.1 wraps redirected native stderr (including Prisma's
+  # normal config notice) as ErrorRecord. Native exit codes remain authoritative.
+  $ErrorActionPreference = 'Continue'
   & node (Join-Path $PSScriptRoot 'create-test-db.cjs')
+  $ErrorActionPreference = 'Stop'
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   $line = Get-Content '.env.test' | Where-Object { $_.StartsWith('TEST_DATABASE_URL=') } | Select-Object -First 1
   if (!$line) { throw 'TEST_DATABASE_URL missing from backend/.env.test' }
@@ -28,11 +32,15 @@ try {
     if (!$env:TEST_S3_ENDPOINT) { $env:TEST_S3_ENDPOINT = $storage['S3_ENDPOINT'] }
     if (!$env:TEST_S3_BUCKET) { $env:TEST_S3_BUCKET = $storage['S3_BUCKET'] + '-test' }
   }
+  $ErrorActionPreference = 'Continue'
   & npm.cmd run prisma:deploy
+  $ErrorActionPreference = 'Stop'
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  $ErrorActionPreference = 'Continue'
   & npm.cmd run test:e2e
   $result = $LASTEXITCODE
 } finally {
+  $ErrorActionPreference = 'Stop'
   Pop-Location
   foreach ($name in $previousEnvironment.Keys) {
     [Environment]::SetEnvironmentVariable($name,$previousEnvironment[$name],'Process')

@@ -277,3 +277,20 @@ Try-On, off-host recovery, encryption/key recovery hoặc RPO/RTO.
 - npm11 chặn lifecycle script: package.json đã lưu allowScripts cho Prisma/argon2/esbuild/native packages; telemetry @scarf/scarf bị deny.
 - pg8 hiện có deprecation warning từ query scheduling của Prisma khi include relations; không có query/test thất bại, chưa nâng pg9.
 - PowerShell báo scripts disabled: dùng lệnh -ExecutionPolicy Bypass -File cho đúng script local như ví dụ; không cần đổi execution policy toàn máy.
+
+## Cập nhật local ngày 21/10/2026
+
+Ứng dụng dùng UTC trên mọi kết nối PostgreSQL, kể cả khi máy chủ hoặc URL kết nối
+yêu cầu múi giờ khác. Không tự đổi múi giờ server hoặc dịch chuyển dữ liệu cũ.
+`GET /api/v1/health/ready` kiểm tra các bảng/cột và giá trị enum cần thiết của
+Prisma cùng Redis; trả503 nếu thiếu schema. Đây là kiểm tra tương thích lúc chạy,
+không thay thế `prisma migrate deploy` hoặc đối chiếu schema khi triển khai.
+
+Native PostgreSQL trên máy hiện tại dùng cổng5432; database nghiệp vụ là `wearly`,
+database test là `wearly_test`. `backend/.env.test` phải trỏ đúng database test,
+không trỏ vào container5433 đã dừng. Script `tools/test-backend.ps1` kiểm tra mã
+thoát của công cụ native, không coi thông báo cấu hình Prisma trên stderr là lỗi.
+
+Đợt nâng cấp ngày21/10 đã sao lưu trước migration và xác minh dữ liệu cũ nguyên vẹn.
+Bằng chứng local nằm trong `.tools/local-completion-20261021/`; đây là dữ liệu
+riêng tư, đã được gitignore. Tiến độ toàn bộ chức năng ở `LOCAL_COMPLETION_PROGRESS.md`.

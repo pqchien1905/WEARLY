@@ -63,6 +63,6 @@ Khách có đơn **đã giao** có thể chọn **Xem đánh giá** trên trang 
 
 Hai khu vực có giao diện và phiên đăng nhập riêng; đăng xuất một bên giữ nguyên phiên bên kia. ADMIN có thể đăng nhập riêng ở cửa hàng để mua sắm. Sau khi tải lại trang cần đăng nhập lại; dữ liệu vẫn được lưu trên máy chủ. Yêu thích lưu theo tài khoản trên PostgreSQL: bấm trái tim ở sản phẩm hoặc **Lưu yêu thích** trong giỏ; mở `http://localhost:8080/#/wishlist` để xem/bỏ. Danh sách tối đa200 mục, sản phẩm không còn mở bán được báo rõ và vẫn bỏ được.
 
-Chạy `.\tools\frontend.ps1 run` để xem demo độc lập. AI và khôi phục mật khẩu chưa nối vào chế độ API; chưa có thanh toán online.
+Chạy `.\tools\frontend.ps1 run` để xem demo độc lập. Khôi phục mật khẩu đã có API/worker/SMTP, cần bật và cấu hình gửi thư; xem [hướng dẫn](docs/password-recovery.md). AI và thanh toán online đang được hoàn thiện theo phạm vi local, Gemini và VNPay sandbox; xem [tiến độ hiện tại](docs/LOCAL_COMPLETION_PROGRESS.md).
 
 Cấp ADMIN cho một tài khoản đã đăng ký, từ thư mục gốc: `node tools/grant-admin.cjs email-cua-ban@example.com`. Công cụ chỉ đổi quyền tài khoản hiện có và thu hồi các phiên cũ; không tạo mật khẩu mặc định. Đăng nhập lại sau khi được cấp quyền. Chi tiết: [Quản trị trực tuyến](docs/admin.md).

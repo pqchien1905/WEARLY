@@ -1,6 +1,6 @@
 module.exports = {
   ...require('../jest.config.cjs'),
   rootDir: '..',
-  testMatch: ['<rootDir>/test/**/*.e2e-spec.ts'],
+  testMatch: ['**/test/**/*.e2e-spec.ts'],
   testTimeout: 30000,
 };
