@@ -160,7 +160,7 @@ models, file_selector and private_image eviction helper.
 Files: tools/test-frontend-api.cjs --tryon;tools/verify-tryon-browser.cjs;
 docs/GEMINI_LOCAL.md;docs/LOCAL_COMPLETION_PROGRESS.md.
 
-- [ ] Chrome/testDB+Redis/MinIO+actual adapter with deterministic Gemini HTTP image
+- [x] Chrome/testDB+Redis/MinIO+actual adapter with deterministic Gemini HTTP image
   reply: upload, explicitconsent, selectedgarment, onejob/result, lostreply/reload,
   owned history, unauthorizedbytes404, delete bothinput/output, quota/config/failure;
  375/1440 screenshots inspected. No real photo/external call in fixtures.

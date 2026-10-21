@@ -1,12 +1,11 @@
 # Gemini trên máy local
 
-Stylist dùng Gemini thật khi backend có khóa. Không có khóa, màn hình báo dịch vụ
-chưa được cấu hình và không tạo phản hồi giả. Thử đồ bằng ảnh riêng tư là mốc tiếp
-theo, chưa được tính là hoàn tất trong phần Stylist này.
+Stylist và thử đồ bằng ảnh riêng tư dùng Gemini khi backend có khóa. Không có khóa,
+màn hình báo dịch vụ chưa được cấu hình và không tạo phản hồi giả.
 
 ## Cấu hình
 
-Đặt các biến trong `backend/.env`, rồi khởi động lại backend:
+Đặt các biến trong `backend/.env`, rồi khởi động lại backend và worker:
 
 ```dotenv
 GEMINI_API_KEY=
@@ -14,6 +13,10 @@ GEMINI_STYLIST_MODEL=gemini-3.5-flash-lite
 AI_STYLIST_USER_DAILY_LIMIT=20
 AI_STYLIST_GLOBAL_DAILY_LIMIT=200
 AI_STYLIST_ESTIMATE_VND=500
+GEMINI_TRYON_MODEL=gemini-nano-banana-2.1
+AI_TRYON_USER_DAILY_LIMIT=3
+AI_TRYON_GLOBAL_DAILY_LIMIT=20
+AI_TRYON_ESTIMATE_VND=3000
 AI_GLOBAL_DAILY_ESTIMATE_VND=100000
 ```
 
@@ -58,6 +61,44 @@ nhập được khôi phục theo hướng dẫn `BROWSER_SESSIONS_LOCAL.md`.
 
 ## Dữ liệu và kiểm chứng
 
+### Thử đồ bằng ảnh riêng tư
+
+Mở `/virtual-try-on` hoặc nút thử đồ trên sản phẩm có hỗ trợ. Chọn JPEG/PNG tĩnh,
+tối đa8MB,16megapixel, mỗi chiều64–8192pixel. Đồng ý lưu ảnh tại cửa hàng rồi bấm
+“Lưu ảnh riêng tư”. Chọn sản phẩm và đúng màu/size còn hàng; đồng ý gửi ảnh người
+và ảnh trang phục tới Google Gemini, sau đó bấm “Thử trang phục”. Ảnh tạo ra chỉ
+mô phỏng vẻ ngoài, không đo cơ thể và không đảm bảo sản phẩm vừa vặn.
+
+Worker cần Redis và MinIO đang chạy. Hệ thống giữ một lượt trong hạn mức khi tiếp
+nhận yêu cầu, đưa vào hàng đợi và chỉ cho phép một lần gọi Google. Yêu cầu chờ quá
+5phút kết thúc; yêu cầu đang chạy quá hạn được đánh dấu không rõ kết quả. Cuộc gọi
+ảnh tối đa90giây, toàn bước xử lý tối đa120giây. Lỗi không tự gọi Google lần nữa.
+“Thử lượt mới” là một yêu cầu mới có tính hạn mức. Ngân sách ước tính và giới hạn
+đồng thời được dùng chung với Stylist.
+
+Mất phản hồi tải ảnh: bấm “Kiểm tra ảnh đã gửi”. Mất phản hồi tạo ảnh: bấm “Kiểm tra
+yêu cầu đã gửi”. Máy chủ trả lại cùng ảnh/yêu cầu theo mã đã gửi; tải lại trang
+chỉ đọc ảnh và yêu cầu gần nhất của tài khoản. Lịch sử `/account/try-ons` hiển thị
+tối đa20 lượt gần nhất còn trong thời gian lưu, tải ảnh khi bạn bấm xem.
+
+Ảnh đầu vào được chuẩn hóa, bỏ metadata và lưu riêng tư tối đa24giờ; kết quả hết
+hạn cùng ảnh gốc. Trình duyệt lấy bytes qua API có xác thực, không nhận liên kết
+ảnh có thể dùng như mật khẩu, không lưu ảnh vào localStorage. Khi rời trang, đổi
+ảnh hoặc xóa, bản hiển thị được bỏ khỏi bộ nhớ đệm Flutter. Bytes đã tải xuống
+thiết bị khác không thể thu hồi.
+
+“Xóa ảnh và các kết quả” chặn đọc mới và chặn xuất bản kết quả đang xử lý ngay
+khi máy chủ ghi nhận xóa. Dọn ảnh vật lý ở MinIO được thử lại khi lưu trữ lỗi,
+kể cả đối tượng đến muộn. Việc xóa tại cửa hàng không thu hồi dữ liệu đã gửi tới
+Google. `store:false` không thay thế chính sách xử lý dữ liệu của nhà cung cấp.
+
+Ảnh trang phục chỉ lấy từ tài sản catalog đã xác minh thuộc sản phẩm hoặc ảnh
+seed cục bộ hợp lệ. URL bên ngoài chưa nhập vào kho ảnh quản lý sẽ không chạy thử
+đồ. Các job cũ chưa có bản ghi giữ hạn mức được kết thúc với mã
+`AI_REQUEST_LEGACY`, tránh tự phát sinh lượt có phí sau nâng cấp.
+
+### Stylist
+
 Nội dung yêu cầu chỉ được lưu dưới dạng hash để kiểm tra gửi trùng. SKU đã chọn,
 giá và điều kiện kiểm tra size/màu/ngân sách được lưu tối đa24giờ; sau đó bị xóa khi đọc hoặc trong đợt dọn dẹp
 mỗi5phút. Nhật ký tối thiểu về model, trạng thái, token đã dùng, hash và ước tính
@@ -71,6 +112,7 @@ là cấu hình lưu tương tác của API; chính sách xử lý dữ liệu c
 ```powershell
 powershell.exe -NoProfile -File tools/test-backend.ps1 -WithWorker -WithStorage
 node tools/test-frontend-api.cjs --stylist
+node tools/test-frontend-api.cjs --tryon
 ```
 
 Kiểm thử chỉ dùng tài khoản/dữ liệu tạo riêng trong database `_test`. Gemini HTTP

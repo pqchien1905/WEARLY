@@ -437,3 +437,13 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
 - Final193/193 E2E with Redis/MinIO,77unit,lint/build PASS; existing worker assertions
   now enforce one attempt and private byte access. TestDB26 only; business25 unchanged.
   Remote photo/history UI, Chrome, independent review and final migration remain.
+- Remote upload/generation/history UI complete with separate consents, stable keys,
+  GET recovery/polling, explicit new requests, account-scoped private byte loading
+  and cache eviction.15 new tests; full410 Flutter+2 existing skips, analyze clean.
+- Chrome --tryon PASS using real PostgreSQL/Redis/MinIO and actual Gemini adapter
+  with deterministic HTTP response: lost upload and job replies, reload without
+  extra generation, exact SKU, private history, foreign/deleted bytes404, limits,
+  provider failure and missing configuration. Exactly1source/3attempts/2results;
+  source/result access revoked after deletion.375/1440 screenshots inspected.
+  Synthetic pixels only; no live Gemini call. Independent review and business
+  migration pending; business remains25, test26.

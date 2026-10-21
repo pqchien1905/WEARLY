@@ -43,9 +43,10 @@ const support = process.argv.includes('--support');
 const staffMode = process.argv.includes('--staff');
 const sessions = process.argv.includes('--sessions');
 const stylist = process.argv.includes('--stylist');
+const tryon = process.argv.includes('--tryon');
 const mailpit = process.argv.includes('--mailpit');
 const promotionCode = 'BROWSER' + fixture.replaceAll('-', '').slice(-12).toUpperCase();
-if (admin) {
+if (admin || tryon) {
   process.env.S3_BUCKET = test.TEST_S3_BUCKET || normal.S3_BUCKET + '-test';
   if (!process.env.S3_BUCKET.endsWith('-test') || process.env.S3_BUCKET === normal.S3_BUCKET)
     throw new Error('Catalog browser upload requires a dedicated test bucket.');
@@ -61,7 +62,7 @@ function flutter(args) {
   });
 }
 async function main() {
-  let smtp, recoveryWorker, recoveryQueue, mailWorker;
+  let smtp, recoveryWorker, recoveryQueue, mailWorker, tryonWorker, tryonQueue, suiteLock;
   const mails = [];
   if (support || (recovery && mailpit)) {
     const health=await fetch('http://127.0.0.1:8025/livez',{signal:AbortSignal.timeout(2000)});
@@ -109,17 +110,36 @@ async function main() {
     return Response.json(reply);
   };
   if(stylist)Object.assign(process.env,{GEMINI_API_KEY:'local-fixture-not-a-real-key-2026',AI_STYLIST_USER_DAILY_LIMIT:'3'});
+  let fixturePhoto;
+  if(tryon) {
+    Object.assign(process.env,{GEMINI_API_KEY:'local-fixture-not-a-real-key-2026',AI_TRYON_USER_DAILY_LIMIT:'3',
+      S3_ENDPOINT:test.TEST_S3_ENDPOINT||normal.S3_ENDPOINT,
+      REDIS_HOST:test.TEST_REDIS_HOST||normal.REDIS_HOST,REDIS_PORT:test.TEST_REDIS_PORT||normal.REDIS_PORT});
+    fixturePhoto=await requireBackend('sharp')({create:{width:240,height:320,channels:3,background:'#b8c4d4'}}).png().toBuffer();
+    const {Client}=requireBackend('pg');suiteLock=new Client({connectionString:target.href});await suiteLock.connect();
+    const lock=await suiteLock.query('SELECT pg_try_advisory_lock(hashtext($1)) AS locked',['wearly-worker-e2e']);
+    if(!lock.rows[0].locked){await suiteLock.end();throw Error('Another worker suite uses the test database');}
+    const pending=await suiteLock.query(`SELECT EXISTS(SELECT 1 FROM "OutboxEvent" WHERE "publishedAt" IS NULL) OR EXISTS(SELECT 1 FROM "AIJob" WHERE status IN ('PENDING','PROCESSING')) AS pending`);
+    if(pending.rows[0].pending){await suiteLock.end();throw Error('Unfinished AI fixtures exist; inspect before browser worker');}
+  }
   const { AppModule } = requireBackend('./dist/app.module');
   let fixtureAiCalls = 0;
   const fixtureAiHttp = async (endpoint, init) => {
     if(endpoint !== 'https://generativelanguage.googleapis.com/v1/interactions')throw Error('Unexpected Gemini endpoint');
+    if(tryon) {
+      const body=JSON.parse(init.body),images=body.input.filter(x=>x.type==='image');
+      if(body.store!==false||body.background!==false||images.length!==2||images.some(x=>!x.data||x.uri))throw Error('Invalid private inline image request');
+      fixtureAiCalls++;
+      if(fixtureAiCalls===3)return new Response('fixture rate limit',{status:429});
+      return Response.json({status:'completed',steps:[{type:'model_output',content:[{type:'image',mime_type:'image/png',data:fixturePhoto.toString('base64')}]}],usage:{total_input_tokens:42,total_output_tokens:20}});
+    }
     const body=JSON.parse(init.body),input=JSON.parse(body.input);
     if(body.store!==false || !input.catalog.some(p=>p.sku===fixture))throw Error('Invalid stateless catalog request');
     fixtureAiCalls++;
     if(fixtureAiCalls===3)return new Response('fixture rate limit',{status:429});
     return Response.json({status:'completed',steps:[{type:'model_output',content:[{type:'text',text:JSON.stringify({message:'Áo cotton phù hợp cho ngày đi làm.',skus:[fixture]})}]}],usage:{total_input_tokens:42,total_output_tokens:20}});
   };
-  const app = stylist
+  const app = stylist || tryon
     ? (await requireBackend('@nestjs/testing').Test.createTestingModule({imports:[AppModule]}).overrideProvider(requireBackend('./dist/integrations/ai-providers/gemini.client').GEMINI_HTTP).useValue(fixtureAiHttp).compile()).createNestApplication({logger:false})
     : payments || refunds
     ? (await requireBackend('@nestjs/testing').Test.createTestingModule({imports:[AppModule]}).overrideProvider('VNPAY_HTTP').useValue(fixtureHttp).compile()).createNestApplication({logger:false})
@@ -131,13 +151,37 @@ async function main() {
     await app.listen(0, '127.0.0.1');
     category = await db.category.create({ data: { slug: fixture, name: 'Áo kiểm thử' } });
     brand = await db.brand.create({ data: { slug: fixture, name: 'Wearly kiểm thử' } });
-    product = await db.product.create({ data: { slug: fixture, name: 'Áo cotton kiểm thử', description: 'Sản phẩm chỉ dành cho kiểm thử.', material: 'Cotton', style: 'Tối giản',
+    product = await db.product.create({ data: { slug: fixture, name: 'Áo cotton kiểm thử', description: 'Sản phẩm chỉ dành cho kiểm thử.', material: 'Cotton', style: 'Tối giản', tryOnSupported:tryon,
       categoryId: category.id, brandId: brand.id,
       images: { create: { url: 'assets/images/shirt.jpg', alt: 'Áo cotton', position: 0 } },
       variants: { create: { sku: fixture, size: 'M', color: stylist?'Trắng thử nghiệm':'Trắng', colorHex: '#FFFFFF', price: '490000', inventory: { create: { quantity: 10 } } } } } });
     const url = (await app.getUrl()) + '/api/v1';
     if(payments) app.get(requireBackend('@nestjs/config').ConfigService).set('VNPAY_RETURN_URL',url+'/payments/vnpay/return');
-    if (recovery) {
+    if(tryon) {
+      const config=app.get(requireBackend('@nestjs/config').ConfigService);
+      const storage=app.get(requireBackend('./dist/integrations/storage/storage.service').StorageService);
+      const {AiProcessor}=requireBackend('./dist/worker/ai.processor');
+      tryonWorker=new AiProcessor(db,config,app.get(requireBackend('./dist/integrations/ai-providers/try-on.provider').TryOnProvider),storage,
+        app.get(requireBackend('./dist/modules/ai/ai-usage.service').AiUsageService),app.get(requireBackend('./dist/integrations/ai-providers/garment-reader.service').GarmentReader));
+      tryonWorker.onModuleInit();
+      tryonQueue=new (requireBackend('bullmq').Queue)('wearly-try-on',{prefix:process.env.AI_QUEUE_PREFIX,connection:{host:process.env.REDIS_HOST,port:Number(process.env.REDIS_PORT)}});
+      const email=fixture+'@example.com',password='Tryon-browser-fixture-2026',accounts=[];
+      for(const who of [email,'browser-'+fixture+'@example.com']) {
+        const r=await fetch(url+'/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Khách thử đồ',email:who,password})});
+        if(r.status!==201)throw Error('Try-on fixture registration failed');accounts.push(await r.json());
+      }
+      await flutter(['build','web','--release','--dart-define=USE_REMOTE_API=true','--dart-define=API_BASE_URL='+url]);
+      const read=(endpoint,account=1)=>fetch(url+'/'+endpoint,{headers:{Authorization:'Bearer '+accounts[account].accessToken}});
+      await require('./verify-tryon-browser.cjs')({root,url,email,password,fixture,photo:fixturePhoto,callCount:()=>fixtureAiCalls,
+        foreignRead:async endpoint=>(await read(endpoint)).status,
+        deletedRead:async endpoint=>(await read(endpoint,0)).status,
+        disable:()=>config.set('GEMINI_API_KEY',''),
+      });
+      const owner={userId:accounts[0].user.id};
+      const jobs=await db.aIJob.findMany({where:owner}),usage=await db.aiUsage.findMany({where:owner}),images=await db.imageAsset.findMany({where:owner});
+      if(jobs.length!==3||usage.length!==3||usage.filter(r=>r.status==='COMPLETED').length!==2||fixtureAiCalls!==3||images.length!==1||!images[0].deletedAt)throw Error('Try-on accounting/deletion mismatch');
+      console.log('PASS try-on database: one source, three accepted attempts, two completions, one rate limit, deleted source/results. Deterministic Gemini HTTP only.');
+    } else if (recovery) {
       const { ConfigService } = requireBackend('@nestjs/config');
       const { RecoveryService } = requireBackend('./dist/modules/recovery/recovery.service');
       const { RecoveryWorker } = requireBackend('./dist/worker/recovery.worker');
@@ -435,6 +479,8 @@ async function main() {
     }
     console.log('PASS real PostgreSQL shopping; normal development database untouched.');
   } finally {
+    await tryonWorker?.onModuleDestroy();
+    if(tryonQueue){await tryonQueue.obliterate({force:true});await tryonQueue.close();}
     await mailWorker?.onModuleDestroy();
     await recoveryWorker?.onModuleDestroy();
     if (recoveryQueue) { await recoveryQueue.obliterate({ force: true }); await recoveryQueue.close(); }
@@ -442,6 +488,11 @@ async function main() {
     try {
       const users = await db.user.findMany({ where: { email: { in: [fixture + '@example.com', 'browser-' + fixture + '@example.com', 'admin-' + fixture + '@example.com'] } }, select: { id: true } });
       const owner = { userId: { in: users.map(user => user.id) } };
+      if(tryon) {
+        const storage=app.get(requireBackend('./dist/integrations/storage/storage.service').StorageService);
+        const images=await db.imageAsset.findMany({where:owner}),results=await db.tryOnResult.findMany({where:{job:owner}});
+        await storage.deleteObjects([...images.map(r=>r.objectKey),...results.map(r=>r.objectKey)]);
+      }
       if (admin) {
         const { StorageService } = requireBackend('./dist/integrations/storage/storage.service');
         const assets = await db.catalogAsset.findMany({ where: { actorId: owner.userId } });
@@ -449,6 +500,10 @@ async function main() {
         await db.catalogAsset.deleteMany({ where: { id: { in: assets.map(asset => asset.id) } } });
       }
       await db.$transaction(async tx => {
+        if(tryon) {
+          await tx.tryOnResult.deleteMany({where:{job:owner}});await tx.outboxEvent.deleteMany({where:{job:owner}});
+          await tx.aIJob.deleteMany({where:owner});await tx.aiUsage.deleteMany({where:owner});await tx.imageAsset.deleteMany({where:owner});
+        }
         if(stylist)await tx.aiUsage.deleteMany({where:owner});
         if(support||staffMode)await tx.supportTicket.deleteMany({where:{email:fixture+'@example.com'}});
         const contentEvents = await tx.adminAuditEvent.findMany({
@@ -479,6 +534,7 @@ async function main() {
       });
     } finally {
       await app.close();
+      await suiteLock?.end();
       if (smtp) await new Promise(resolve => smtp.close(resolve));
     }
   }
