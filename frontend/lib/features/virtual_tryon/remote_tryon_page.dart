@@ -13,6 +13,7 @@ import '../../core/format.dart';
 import '../../core/network/api_client.dart';
 import '../../core/widgets/primitives.dart';
 import '../../data/remote_tryon.dart';
+import '../../data/tryon_pending_store.dart';
 import '../../domain/catalog.dart';
 import 'image_validation.dart';
 import 'private_image.dart';
@@ -27,6 +28,8 @@ class RemoteTryOnPage extends ConsumerStatefulWidget {
 
 class _RemoteTryOnPageState extends ConsumerState<RemoteTryOnPage> {
   late final repo = RemoteTryOnRepository(ref.read(apiClientProvider));
+  late final pendingStore = ref.read(tryOnPendingStoreProvider);
+  late final owner = repo.api.tokens.userId ?? '';
   late final catalog = ref.read(productRepositoryProvider);
   final search = TextEditingController();
   List<Product> products = [];
@@ -78,6 +81,14 @@ class _RemoteTryOnPageState extends ConsumerState<RemoteTryOnPage> {
   }
 
   bool current(int value) => mounted && value == version;
+  void clearPending(String kind, String key) {
+    try {
+      pendingStore.clear(owner, kind, key);
+    } catch (e) {
+      loadError = tryonError(e);
+    }
+  }
+
   List<Product> eligible(ProductPage page) => page.items
       .where((p) => p.active && p.tryOn && p.variants.any((v) => v.stock > 0))
       .toList();
@@ -101,6 +112,8 @@ class _RemoteTryOnPageState extends ConsumerState<RemoteTryOnPage> {
       loadError = null;
     });
     try {
+      final pendingJob = pendingStore.read(owner, 'job');
+      final pendingUpload = pendingStore.read(owner, 'upload');
       final values = await Future.wait<Object?>([
         repo.status(),
         repo.images(),
@@ -108,8 +121,24 @@ class _RemoteTryOnPageState extends ConsumerState<RemoteTryOnPage> {
         catalog.list(const ProductQuery(limit: 100, inStock: true)),
         widget.slug == null ? Future.value(null) : catalog.bySlug(widget.slug!),
         widget.jobId == null ? Future.value(null) : repo.get(widget.jobId!),
+        pendingUpload == null
+            ? Future.value(null)
+            : repo.uploadStatus(pendingUpload.key),
       ]);
       if (!current(mark)) return;
+      final uploadState =
+          values[6] as ({String state, PrivateImageAsset? image})?;
+      if (pendingUpload != null &&
+          ['available', 'unavailable'].contains(uploadState?.state)) {
+        clearPending('upload', pendingUpload.key);
+      }
+      final jobs = values[2] as List<RemoteTryOnJob>;
+      final pendingResult = pendingJob == null
+          ? null
+          : jobs.where((j) => j.requestKey == pendingJob.key).firstOrNull;
+      if (pendingResult != null && !pendingResult.pending) {
+        clearPending('job', pendingJob!.key);
+      }
       setState(() {
         info = values[0] as RemoteTryOnStatus;
         images = values[1] as List<PrivateImageAsset>;
@@ -121,21 +150,46 @@ class _RemoteTryOnPageState extends ConsumerState<RemoteTryOnPage> {
             !products.any((p) => p.id == requested.id)) {
           products.insert(0, requested);
         }
-        final jobs = values[2] as List<RemoteTryOnJob>;
-        job = values[5] as RemoteTryOnJob? ?? jobs.firstOrNull;
+        job = pendingJob != null
+            ? pendingResult
+            : values[5] as RemoteTryOnJob? ?? jobs.firstOrNull;
+        submittedImage = pendingJob?.imageId;
+        submittedSku = pendingJob?.sku;
         photo =
-            images.where((p) => p.id == job?.imageId).firstOrNull ??
+            images
+                .where((p) => p.id == (pendingJob?.imageId ?? job?.imageId))
+                .firstOrNull ??
             images.firstOrNull;
         final previousProduct = products
-            .where((p) => p.variants.any((v) => v.sku == job?.sku))
+            .where(
+              (p) =>
+                  p.variants.any((v) => v.sku == (pendingJob?.sku ?? job?.sku)),
+            )
             .firstOrNull;
         chooseProduct(
-          previousProduct?.slug ??
+          (pendingJob != null || widget.jobId != null
+                  ? previousProduct?.slug
+                  : requested?.slug) ??
+              previousProduct?.slug ??
               requested?.slug ??
               (products.length == 1 ? products.single.slug : null),
-          preferredSku: job?.sku,
+          preferredSku: pendingJob?.sku ?? job?.sku,
         );
-        requestKey = job?.requestKey;
+        requestKey = pendingJob?.key ?? job?.requestKey;
+        uploadPending =
+            pendingJob == null &&
+            pendingUpload != null &&
+            !['available', 'unavailable'].contains(uploadState?.state);
+        uploadKey = uploadPending ? pendingUpload?.key : null;
+        if (uploadPending) {
+          photo = null;
+          job = null;
+          requestKey = null;
+        }
+        if (uploadState?.image != null) {
+          photo = uploadState!.image;
+          if (!images.any((p) => p.id == photo!.id)) images.insert(0, photo!);
+        }
         polls = 0;
         hidePrivate = false;
         error = job?.errorCode == null ? null : tryonError(job!.errorCode!);
@@ -179,7 +233,15 @@ class _RemoteTryOnPageState extends ConsumerState<RemoteTryOnPage> {
   }
 
   Future<void> pick() async {
-    if (locked) return;
+    if (locked &&
+        !(uploadPending &&
+            !loading &&
+            !busy &&
+            !picking &&
+            !unresolved &&
+            loadError == null)) {
+      return;
+    }
     final mark = ++version;
     setState(() {
       picking = true;
@@ -232,7 +294,7 @@ class _RemoteTryOnPageState extends ConsumerState<RemoteTryOnPage> {
         job = null;
         uploadConsent = false;
         aiConsent = false;
-        uploadKey = null;
+        if (!uploadPending) uploadKey = null;
         requestKey = null;
         hidePrivate = false;
       });
@@ -250,6 +312,7 @@ class _RemoteTryOnPageState extends ConsumerState<RemoteTryOnPage> {
   }
 
   void acceptPhoto(PrivateImageAsset value) {
+    if (uploadKey != null) clearPending('upload', uploadKey!);
     unawaited(evictPrivateImage(draft));
     setState(() {
       photo = value;
@@ -265,7 +328,14 @@ class _RemoteTryOnPageState extends ConsumerState<RemoteTryOnPage> {
   Future<void> upload() async {
     if (busy || draft == null || !uploadConsent) return;
     final mark = version;
-    uploadKey ??= const Uuid().v4();
+    final key = uploadKey ?? const Uuid().v4();
+    try {
+      pendingStore.save(owner, 'upload', PendingTryOn(key));
+    } catch (e) {
+      setState(() => error = tryonError(e));
+      return;
+    }
+    uploadKey = key;
     setState(() {
       busy = true;
       uploadPending = true;
@@ -283,9 +353,9 @@ class _RemoteTryOnPageState extends ConsumerState<RemoteTryOnPage> {
       if (current(mark)) {
         setState(() {
           error = tryonError(e);
-          if (e is ApiException &&
-              ([400, 401, 403, 413, 429].contains(e.status) ||
-                  e.code == 'UPLOAD_UNAVAILABLE')) {
+          // A rejected reselection does not settle the original in-flight upload.
+          if (e is ApiException && e.code == 'UPLOAD_UNAVAILABLE') {
+            clearPending('upload', uploadKey!);
             uploadPending = false;
             uploadKey = null;
           }
@@ -305,13 +375,29 @@ class _RemoteTryOnPageState extends ConsumerState<RemoteTryOnPage> {
     });
     var missing = false;
     try {
-      final rows = await repo.images();
+      final status = await repo.uploadStatus(uploadKey!);
       if (!current(mark)) return;
-      final match = rows.where((p) => p.requestKey == uploadKey).firstOrNull;
-      if (match != null) {
-        acceptPhoto(match);
-      } else {
+      if (status.image != null) {
+        acceptPhoto(status.image!);
+      } else if (status.state == 'unavailable') {
+        clearPending('upload', uploadKey!);
+        setState(() {
+          uploadPending = false;
+          uploadKey = null;
+          error =
+              'Ảnh trước không còn khả dụng. Bạn có thể chọn và gửi ảnh mới.';
+        });
+      } else if (status.state == 'processing') {
+        setState(
+          () => error = 'Ảnh đang được lưu. Hãy kiểm tra lại sau ít giây.',
+        );
+      } else if (draft != null && uploadConsent) {
         missing = true;
+      } else {
+        setState(
+          () => error =
+              'Chọn lại đúng ảnh trước đó và đồng ý lưu để tiếp tục cùng yêu cầu.',
+        );
       }
     } catch (e) {
       if (current(mark)) setState(() => error = tryonError(e));
@@ -323,7 +409,18 @@ class _RemoteTryOnPageState extends ConsumerState<RemoteTryOnPage> {
 
   Future<void> start() async {
     if (!canStart) return;
-    requestKey = const Uuid().v4();
+    final key = const Uuid().v4();
+    try {
+      pendingStore.save(
+        owner,
+        'job',
+        PendingTryOn(key, imageId: photo!.id, sku: sku!),
+      );
+    } catch (e) {
+      setState(() => error = tryonError(e));
+      return;
+    }
+    requestKey = key;
     submittedImage = photo!.id;
     submittedSku = sku;
     polls = 0;
@@ -361,6 +458,7 @@ class _RemoteTryOnPageState extends ConsumerState<RemoteTryOnPage> {
           if (e is ApiException &&
               ([400, 401, 403, 404, 409, 429].contains(e.status) ||
                   e.code == 'AI_PROVIDER_NOT_CONFIGURED')) {
+            clearPending('job', requestKey!);
             requestKey = null;
           }
         });
@@ -374,6 +472,7 @@ class _RemoteTryOnPageState extends ConsumerState<RemoteTryOnPage> {
   }
 
   void acceptJob(RemoteTryOnJob value) {
+    if (!value.pending && requestKey != null) clearPending('job', requestKey!);
     setState(() {
       job = value;
       requestKey = value.requestKey;
@@ -440,6 +539,8 @@ class _RemoteTryOnPageState extends ConsumerState<RemoteTryOnPage> {
     try {
       if (id != null) await repo.deleteImage(id);
       if (current(mark)) {
+        if (requestKey != null) clearPending('job', requestKey!);
+        if (uploadKey != null) clearPending('upload', uploadKey!);
         setState(() {
           images.removeWhere((p) => p.id == id);
           photo = null;
@@ -485,10 +586,23 @@ class _RemoteTryOnPageState extends ConsumerState<RemoteTryOnPage> {
           ),
         const SizedBox(height: 16),
         AppButton(
-          draft == null && photo == null ? 'Chọn ảnh từ thiết bị' : 'Đổi ảnh',
+          uploadPending
+              ? 'Chọn lại ảnh để tiếp tục'
+              : draft == null && photo == null
+              ? 'Chọn ảnh từ thiết bị'
+              : 'Đổi ảnh',
           outlined: true,
           busy: picking,
-          onPressed: locked ? null : pick,
+          onPressed:
+              locked &&
+                  !(uploadPending &&
+                      !loading &&
+                      !busy &&
+                      !picking &&
+                      !unresolved &&
+                      loadError == null)
+              ? null
+              : pick,
         ),
         const SizedBox(height: 8),
         const Text(
@@ -534,23 +648,26 @@ class _RemoteTryOnPageState extends ConsumerState<RemoteTryOnPage> {
             contentPadding: EdgeInsets.zero,
             controlAffinity: ListTileControlAffinity.leading,
             value: uploadConsent,
-            onChanged: busy || uploadPending
+            onChanged: busy
                 ? null
                 : (v) => setState(() => uploadConsent = v ?? false),
             title: const Text(
               'Tôi đồng ý lưu ảnh này tại cửa hàng để thử đồ và có quyền sử dụng ảnh.',
             ),
           ),
+        ],
+        if (draft != null || uploadPending)
           AppButton(
             uploadPending ? 'Kiểm tra ảnh đã gửi' : 'Lưu ảnh riêng tư',
             busy: busy && uploadPending,
-            onPressed: busy || !uploadConsent
+            onPressed: busy || picking
                 ? null
                 : uploadPending
                 ? recoverUpload
-                : upload,
+                : uploadConsent
+                ? upload
+                : null,
           ),
-        ],
         if (photo != null || draft != null)
           Padding(
             padding: const EdgeInsets.only(top: 12),

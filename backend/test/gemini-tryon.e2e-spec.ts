@@ -527,4 +527,52 @@ storageDescribe('Private Gemini jobs with PostgreSQL and MinIO', () => {
     );
     expect(await db.imageAsset.count({ where: { userId: c.id } })).toBe(1);
   });
+  it('recovers an unfinished upload by its owned key without exposing private bytes', async () => {
+    const c = await customer(),
+      other = await customer(),
+      key = randomUUID();
+    let entered!: () => void, release!: () => void;
+    const started = new Promise<void>((r) => {
+      entered = r;
+    });
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const original = storage.putImage.bind(storage);
+    const spy = jest
+      .spyOn(storage, 'putImage')
+      .mockImplementationOnce(async (...args) => {
+        entered();
+        await gate;
+        return original(...args);
+      });
+    const pending = upload(c.token, key).then((r) => r);
+    try {
+      await started;
+      const status = await get(
+        c.token,
+        'uploads/images/requests/' + key,
+      ).expect(200);
+      expect(status.body).toEqual({ state: 'processing', image: null });
+      expect(
+        (await get(other.token, 'uploads/images/requests/' + key).expect(200))
+          .body,
+      ).toEqual({ state: 'missing', image: null });
+    } finally {
+      release();
+      spy.mockRestore();
+    }
+    const complete = await pending;
+    expect(complete.status).toBe(201);
+    expect(
+      (await get(c.token, 'uploads/images/requests/' + key).expect(200)).body,
+    ).toEqual({ state: 'available', image: complete.body });
+    await request(app.getHttpServer())
+      .delete('/api/v1/uploads/images/' + complete.body.id)
+      .auth(c.token, { type: 'bearer' })
+      .expect(202);
+    expect(
+      (await get(c.token, 'uploads/images/requests/' + key).expect(200)).body,
+    ).toEqual({ state: 'unavailable', image: null });
+  });
 });

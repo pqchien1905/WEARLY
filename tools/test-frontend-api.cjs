@@ -63,6 +63,7 @@ function flutter(args) {
 }
 async function main() {
   let smtp, recoveryWorker, recoveryQueue, mailWorker, tryonWorker, tryonQueue, suiteLock;
+  const releaseTryonGates=[];
   const mails = [];
   if (support || (recovery && mailpit)) {
     const health=await fetch('http://127.0.0.1:8025/livez',{signal:AbortSignal.timeout(2000)});
@@ -173,6 +174,18 @@ async function main() {
       await flutter(['build','web','--release','--dart-define=USE_REMOTE_API=true','--dart-define=API_BASE_URL='+url]);
       const read=(endpoint,account=1)=>fetch(url+'/'+endpoint,{headers:{Authorization:'Bearer '+accounts[account].accessToken}});
       await require('./verify-tryon-browser.cjs')({root,url,email,password,fixture,photo:fixturePhoto,callCount:()=>fixtureAiCalls,
+        pauseUpload:()=>{
+          let release,entered;const gate=new Promise(r=>{release=r}),started=new Promise(r=>{entered=r}),original=storage.putImage.bind(storage);
+          storage.putImage=async(...args)=>{storage.putImage=original;entered();await gate;return original(...args);};
+          releaseTryonGates.push(release);return {wait:()=>started,release};
+        },
+        holdJob:async()=>{
+          const held=new (requireBackend('pg').Client)({connectionString:target.href});await held.connect();await held.query('BEGIN');
+          await held.query("SELECT pg_advisory_xact_lock(hashtextextended('ai:usage:reservation',0))");
+          let released=false;const release=async()=>{if(released)return;released=true;try{await held.query('COMMIT');}finally{await held.end();}};
+          releaseTryonGates.push(release);
+          return {release,wait:async()=>{for(let i=0;i<80;i++){const r=await held.query("SELECT EXISTS(SELECT 1 FROM pg_locks WHERE locktype='advisory' AND NOT granted) AS waiting");if(r.rows[0].waiting)return;await new Promise(r=>setTimeout(r,50));}throw Error('Try-on POST did not wait for reservation');}};
+        },
         foreignRead:async endpoint=>(await read(endpoint)).status,
         deletedRead:async endpoint=>(await read(endpoint,0)).status,
         disable:()=>config.set('GEMINI_API_KEY',''),
@@ -180,7 +193,13 @@ async function main() {
       const owner={userId:accounts[0].user.id};
       const jobs=await db.aIJob.findMany({where:owner}),usage=await db.aiUsage.findMany({where:owner}),images=await db.imageAsset.findMany({where:owner});
       if(jobs.length!==3||usage.length!==3||usage.filter(r=>r.status==='COMPLETED').length!==2||fixtureAiCalls!==3||images.length!==1||!images[0].deletedAt)throw Error('Try-on accounting/deletion mismatch');
-      console.log('PASS try-on database: one source, three accepted attempts, two completions, one rate limit, deleted source/results. Deterministic Gemini HTTP only.');
+      await app.get(requireBackend('./dist/modules/uploads/image-lifecycle.service').ImageLifecycleService).purge(images[0].id);
+      const results=await db.tryOnResult.findMany({where:{job:owner}});
+      for(const key of [images[0].objectKey,...results.map(r=>r.objectKey)]) {
+        let missing=false;try{await storage.readImage(key);}catch(error){if(error.$metadata?.httpStatusCode===404)missing=true;else throw error;}
+        if(!missing)throw Error('Private object remains after purge');
+      }
+      console.log('PASS try-on database: one source, three accepted attempts, two completions, one rate limit, source/results revoked and physically purged. Deterministic Gemini HTTP only.');
     } else if (recovery) {
       const { ConfigService } = requireBackend('@nestjs/config');
       const { RecoveryService } = requireBackend('./dist/modules/recovery/recovery.service');
@@ -479,6 +498,7 @@ async function main() {
     }
     console.log('PASS real PostgreSQL shopping; normal development database untouched.');
   } finally {
+    for(const release of releaseTryonGates)await release();
     await tryonWorker?.onModuleDestroy();
     if(tryonQueue){await tryonQueue.obliterate({force:true});await tryonQueue.close();}
     await mailWorker?.onModuleDestroy();

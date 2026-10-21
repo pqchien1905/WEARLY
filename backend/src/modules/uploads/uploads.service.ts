@@ -160,6 +160,37 @@ export class UploadsService {
       });
     }
   }
+  async requestStatus(userId: string, requestKey: string) {
+    const row = await this.db.imageAsset.findUnique({
+      where: { userId_requestKey: { userId, requestKey } },
+      select: {
+        ...publicFields,
+        verifiedAt: true,
+        deletedAt: true,
+        purgedAt: true,
+      },
+    });
+    if (!row) return { state: 'missing', image: null };
+    if (
+      row.deletedAt ||
+      row.purgedAt ||
+      row.expiresAt <= new Date() ||
+      (!row.verifiedAt && row.createdAt.getTime() < Date.now() - 15 * 60000)
+    )
+      return { state: 'unavailable', image: null };
+    if (!row.verifiedAt) return { state: 'processing', image: null };
+    const image = {
+      id: row.id,
+      mimeType: row.mimeType,
+      size: row.size,
+      width: row.width,
+      height: row.height,
+      createdAt: row.createdAt,
+      expiresAt: row.expiresAt,
+      requestKey: row.requestKey,
+    };
+    return { state: 'available', image };
+  }
   async list(userId: string) {
     const items = await this.db.imageAsset.findMany({
       where: {

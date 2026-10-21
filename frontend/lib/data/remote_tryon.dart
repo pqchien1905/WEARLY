@@ -67,6 +67,30 @@ class RemoteTryOnJob {
 class RemoteTryOnRepository {
   RemoteTryOnRepository(this.api);
   final ApiClient api;
+  Future<({String state, PrivateImageAsset? image})> uploadStatus(
+    String key,
+  ) async {
+    final value = await api.get(
+      'uploads/images/requests/${Uri.encodeComponent(key)}',
+    );
+    try {
+      final row = value as Map, state = row['state'] as String;
+      if (![
+        'missing',
+        'processing',
+        'available',
+        'unavailable',
+      ].contains(state)) {
+        throw _invalid;
+      }
+      final image = state == 'available' ? _image(row['image']) : null;
+      if (image != null && image.requestKey != key) throw _invalid;
+      return (state: state, image: image);
+    } catch (_) {
+      throw _invalid;
+    }
+  }
+
   Future<RemoteTryOnStatus> status() async {
     final value = await api.get('ai/try-on/status');
     try {

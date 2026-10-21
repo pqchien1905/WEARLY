@@ -1,6 +1,6 @@
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
 const {isAnonymousRestore}=require('./browser-session-assertions.cjs');
-module.exports=async function verify({root,url,email,password,fixture,photo,callCount,foreignRead,deletedRead,disable}) {
+module.exports=async function verify({root,url,email,password,fixture,photo,callCount,foreignRead,deletedRead,disable,pauseUpload,holdJob}) {
   const {chromium}=require(path.join(root,'.tools/browser/node_modules/playwright'));
   const web=path.join(root,'frontend/build/web'),output=path.join(root,'.tools/api-tryon-verification');fs.mkdirSync(output,{recursive:true});
   const mime={'.html':'text/html','.js':'application/javascript','.json':'application/json','.wasm':'application/wasm','.jpg':'image/jpeg','.png':'image/png','.ttf':'font/ttf'};
@@ -31,13 +31,18 @@ module.exports=async function verify({root,url,email,password,fixture,photo,call
     await page.getByRole('button',{name:'Lưu ảnh riêng tư',exact:true}).waitFor();
     assert(await page.getByRole('button',{name:'Lưu ảnh riêng tư',exact:true}).isDisabled());
     await consent('Tôi đồng ý lưu ảnh');
-    let imageId,uploadPosts=0;
+    let imageId,uploadPosts=0,uploaded;
+    const uploadFinished=new Promise(r=>{uploaded=r}),uploadGate=pauseUpload();
     await page.route('**/api/v1/uploads/images',async interception=>{
       if(interception.request().method()==='POST'){
-        uploadPosts++;const r=await interception.fetch();assert.equal(r.status(),201);imageId=(await r.json()).id;await interception.abort('failed');
+        uploadPosts++;const r=await interception.fetch();assert.equal(r.status(),201);imageId=(await r.json()).id;uploaded();await interception.abort('failed').catch(()=>{});
       }else await interception.continue();
     });
-    await button('Lưu ảnh riêng tư');await button('Kiểm tra ảnh đã gửi');
+    await button('Lưu ảnh riêng tư');await uploadGate.wait();
+    await page.reload();await semantics();await page.getByRole('button',{name:'Kiểm tra ảnh đã gửi',exact:true}).waitFor();
+    assert.equal(uploadPosts,1);await button('Kiểm tra ảnh đã gửi');
+    await page.getByText('Ảnh đang được lưu. Hãy kiểm tra lại sau ít giây.',{exact:true}).waitFor();
+    uploadGate.release();await uploadFinished;await button('Kiểm tra ảnh đã gửi');
     await page.getByText(/Thời hạn ảnh:/).first().waitFor();assert.equal(uploadPosts,1);assert.equal(callCount(),0);
     await page.unroute('**/api/v1/uploads/images');
     assert.equal(await foreignRead('uploads/images/'+imageId+'/content'),404);
@@ -49,14 +54,19 @@ module.exports=async function verify({root,url,email,password,fixture,photo,call
     const result=page.getByRole('img',{name:'Ảnh thử đồ do Gemini tạo',exact:true});await result.waitFor();await reveal(result);
     assert.equal(callCount(),1);assert.equal(await foreignRead('ai/try-on/jobs/'+job.id+'/result'),404);
     await page.screenshot({path:path.join(output,'tryon-desktop.png')});
-    let lost=false,secondId;
+    let lost=false,secondId,accepted;
+    const secondFinished=new Promise(r=>{accepted=r}),jobGate=await holdJob();
     await page.route('**/api/v1/ai/try-on/jobs',async interception=>{
       if(!lost&&interception.request().method()==='POST'){
-        lost=true;const r=await interception.fetch();assert.equal(r.status(),201);secondId=(await r.json()).id;await interception.abort('failed');
+        lost=true;const r=await interception.fetch();assert.equal(r.status(),201);secondId=(await r.json()).id;accepted();await interception.abort('failed').catch(()=>{});
       }else await interception.continue();
     });
-    await button('Thử lượt mới');await page.getByRole('button',{name:'Kiểm tra yêu cầu đã gửi',exact:true}).waitFor();
-    await page.unroute('**/api/v1/ai/try-on/jobs');await page.reload();await semantics();
+    await button('Thử lượt mới');await jobGate.wait();await page.reload();await semantics();
+    await page.getByRole('button',{name:'Kiểm tra yêu cầu đã gửi',exact:true}).waitFor();
+    assert.equal(await page.getByText('Đã tạo ảnh thử đồ',{exact:true}).count(),0);assert.equal(callCount(),1);
+    assert(await page.getByRole('button',{name:'Thử trang phục',exact:true}).isDisabled());
+    await jobGate.release();await secondFinished;await page.unroute('**/api/v1/ai/try-on/jobs');
+    await button('Kiểm tra yêu cầu đã gửi');
     await page.getByText('Đã tạo ảnh thử đồ',{exact:true}).waitFor();assert(secondId);assert.equal(callCount(),2);
     await page.setViewportSize({width:375,height:900});await page.waitForTimeout(400);await reveal(result);
     await page.screenshot({path:path.join(output,'tryon-mobile.png')});
@@ -72,7 +82,7 @@ module.exports=async function verify({root,url,email,password,fixture,photo,call
     disable();await page.goto(entry);await semantics();await page.getByText('Gemini chưa được cấu hình',{exact:true}).waitFor();
     assert.equal(callCount(),3);assert.deepEqual(errors,[]);
     assert(!requests.some(r=>r.status>=400&&!isAnonymousRestore(r)));
-    console.log('PASS Chrome try-on: upload/AI consent, lost upload and job replies, reload without another generation, exact SKU, owned history, private byte ownership/deletion, quota/rate/config and375/1440. Synthetic photo and Gemini fixture only.');
+    console.log('PASS Chrome try-on: consent, reload before upload verification/job commit (including older history), same-key recovery, exact SKU, private history/ownership/deletion, quota/rate/config and375/1440. Synthetic photo and Gemini fixture only.');
   }catch(error){if(page){fs.writeFileSync(path.join(output,'failure-aria.txt'),await page.locator('body').ariaSnapshot());await page.screenshot({path:path.join(output,'failure.png')});}throw error;}
   finally{fs.writeFileSync(path.join(output,'result.json'),JSON.stringify({errors,requests},null,2));await browser?.close();await new Promise(r=>server.close(r));}
 };

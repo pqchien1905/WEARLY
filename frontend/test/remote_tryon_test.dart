@@ -17,6 +17,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:nep_storefront/core/network/api_client.dart';
 import 'package:nep_storefront/data/remote_tryon.dart';
+import 'package:nep_storefront/data/tryon_pending_store.dart';
 import 'remote_session_test.dart' show jsonResponse;
 import 'remote_catalog_test.dart' show productJson;
 import 'tryon_replacement_test.dart' show PhotoPicker, DelayedPhoto;
@@ -24,6 +25,13 @@ import 'tryon_replacement_test.dart' show PhotoPicker, DelayedPhoto;
 const photoId = '56c7f311-0efa-40da-bd51-d53eb42e81a0';
 const jobId = '6e25d71e-75bb-4212-a6c5-7b3ce9f311f9';
 const tryonKey = '79b8ba48-ecbb-4563-b3fc-539656d6d613';
+
+class BlockedPendingStore extends MemoryTryOnPendingStore {
+  @override
+  void save(String owner, String kind, PendingTryOn value) =>
+      throw recoveryUnavailable;
+}
+
 Map<String, Object?> privatePhoto() => {
   'id': photoId,
   'requestKey': tryonKey,
@@ -59,6 +67,7 @@ Map<String, Object?> tryonStatus({bool configured = true, int remaining = 3}) =>
       'resetsAt': '2026-10-23T00:00:00Z',
     };
 void main() {
+  final pendingStores = <ApiClient, TryOnPendingStore>{};
   ApiClient client(Future<http.Response> Function(http.Request) handler) {
     final api = ApiClient(
       baseUrl: 'http://localhost/api/v1',
@@ -74,6 +83,7 @@ void main() {
     ApiClient api, {
     double width = 1000,
     Widget page = const RemoteTryOnPage(slug: 'nep-1'),
+    List<Map<String, Object?>> additionalProducts = const [],
   }) async {
     t.view.devicePixelRatio = 1;
     t.view.physicalSize = Size(width, 1100);
@@ -83,10 +93,16 @@ void main() {
     catalog.products
       ..clear()
       ..add(RemoteProductRepository.productFromJson(productJson()));
+    catalog.products.addAll(
+      additionalProducts.map(RemoteProductRepository.productFromJson),
+    );
     await t.pumpWidget(
       ProviderScope(
         overrides: [
           apiClientProvider.overrideWithValue(api),
+          tryOnPendingStoreProvider.overrideWithValue(
+            pendingStores.putIfAbsent(api, MemoryTryOnPendingStore.new),
+          ),
           productRepositoryProvider.overrideWithValue(catalog),
         ],
         child: MaterialApp(
@@ -123,6 +139,12 @@ void main() {
       return jsonResponse(tryonStatus(configured: configured));
     }
     if (r.url.path.endsWith('/jobs')) return jsonResponse({'items': jobs});
+    if (r.url.path.contains('/images/requests/')) {
+      return jsonResponse({
+        'state': 'available',
+        'image': {...privatePhoto(), 'requestKey': r.url.pathSegments.last},
+      });
+    }
     if (r.url.path.endsWith('/images')) {
       return jsonResponse({
         'items': [privatePhoto()],
@@ -231,6 +253,88 @@ void main() {
     expect(find.text('Đã tạo ảnh thử đồ'), findsOneWidget);
     expect(writes, 0);
   });
+
+  for (final older in [false, true]) {
+    testWidgets(
+      'reload retains an unresolved key before commit, older history=$older',
+      (t) async {
+        final keys = <String>[];
+        final api = client((r) async {
+          if (r.method == 'POST') {
+            keys.add(r.headers['Idempotency-Key']!);
+            if (keys.length == 1) {
+              throw http.ClientException('request still unresolved on server');
+            }
+            return jsonResponse({...remoteJob(), 'requestKey': keys.last});
+          }
+          return defaultRead(r, jobs: older ? [remoteJob()] : []);
+        });
+        await mount(t, api);
+        await agree(t);
+        await tap(t, older ? 'Thử lượt mới' : 'Thử trang phục');
+        await t.pumpWidget(const SizedBox());
+        await mount(t, api);
+        expect(find.text('Kiểm tra yêu cầu đã gửi'), findsOneWidget);
+        expect(
+          t
+              .widget<FilledButton>(
+                find.widgetWithText(FilledButton, 'Thử trang phục'),
+              )
+              .onPressed,
+          isNull,
+        );
+        await tap(t, 'Kiểm tra yêu cầu đã gửi');
+        expect(keys.length, 2);
+        expect(keys.first, keys.last);
+        expect(find.text('Đã tạo ảnh thử đồ'), findsOneWidget);
+      },
+    );
+  }
+
+  testWidgets(
+    'explicit product entry selects garment B after completed garment A',
+    (t) async {
+      final second = {
+        ...productJson(),
+        'id': 'product-b',
+        'slug': 'nep-2',
+        'name': 'Áo thứ hai',
+        'variants': [
+          {
+            ...(productJson()['variants'] as List).single
+                as Map<String, Object?>,
+            'sku': 'WRL-2-MAIN-M',
+          },
+        ],
+      };
+      String? selected;
+      await mount(
+        t,
+        client((r) async {
+          if (r.method == 'POST') {
+            selected = (jsonDecode(r.body) as Map)['sku'] as String;
+            return jsonResponse({
+              ...remoteJob(status: 'failed'),
+              'sku': selected,
+            });
+          }
+          return defaultRead(r, jobs: [remoteJob()]);
+        }),
+        page: const RemoteTryOnPage(slug: 'nep-2'),
+        additionalProducts: [second],
+      );
+      await agree(t);
+      final run =
+          find
+              .widgetWithText(FilledButton, 'Thử trang phục')
+              .evaluate()
+              .isNotEmpty
+          ? 'Thử trang phục'
+          : 'Thử lượt mới';
+      await tap(t, run);
+      expect(selected, 'WRL-2-MAIN-M');
+    },
+  );
   testWidgets('pending job polls status without creating another job', (
     t,
   ) async {
@@ -252,6 +356,150 @@ void main() {
     expect(writes, 0);
     expect(find.text('Đã tạo ảnh thử đồ'), findsOneWidget);
   });
+
+  testWidgets(
+    'reload recovers an unfinished upload despite an older completed job',
+    (t) async {
+      var verified = false, writes = 0;
+      final api = client((r) async {
+        if (r.method == 'POST') writes++;
+        if (r.url.path.contains('/images/requests/')) {
+          return jsonResponse({
+            'state': verified ? 'available' : 'processing',
+            'image': verified ? privatePhoto() : null,
+          });
+        }
+        return defaultRead(r, jobs: [remoteJob()]);
+      });
+      pendingStores[api] = MemoryTryOnPendingStore()
+        ..save('customer', 'upload', const PendingTryOn(tryonKey));
+      await mount(t, api);
+      expect(find.text('Kiểm tra ảnh đã gửi'), findsOneWidget);
+      expect(find.text('Đã tạo ảnh thử đồ'), findsNothing);
+      await tap(t, 'Kiểm tra ảnh đã gửi');
+      expect(find.textContaining('Ảnh đang được lưu'), findsOneWidget);
+      expect(writes, 0);
+      verified = true;
+      await tap(t, 'Kiểm tra ảnh đã gửi');
+      expect(find.text('Kiểm tra ảnh đã gửi'), findsNothing);
+      expect(pendingStores[api]!.read('customer', 'upload'), isNull);
+      expect(writes, 0);
+    },
+  );
+
+  testWidgets(
+    'missing upload after reload requires reselect and consent and keeps the old key',
+    (t) async {
+      final original = FileSelectorPlatform.instance;
+      addTearDown(() => FileSelectorPlatform.instance = original);
+      final bytes = (await rootBundle.load(
+        'assets/images/shirt.jpg',
+      )).buffer.asUint8List();
+      final file = XFile.fromData(bytes, name: 'same-private.jpg');
+      FileSelectorPlatform.instance = PhotoPicker(file, file);
+      final keys = <String>[];
+      final api = client((r) async {
+        if (r.method == 'POST') {
+          keys.add(r.headers['Idempotency-Key']!);
+          if (keys.length == 1) {
+            return jsonResponse({
+              'error': {'code': 'INVALID_IMAGE'},
+            }, 400);
+          }
+          return jsonResponse(privatePhoto());
+        }
+        if (r.url.path.contains('/images/requests/')) {
+          return jsonResponse({'state': 'missing', 'image': null});
+        }
+        return defaultRead(r);
+      });
+      pendingStores[api] = MemoryTryOnPendingStore()
+        ..save('customer', 'upload', const PendingTryOn(tryonKey));
+      await mount(t, api);
+      await tap(t, 'Kiểm tra ảnh đã gửi');
+      expect(keys, isEmpty);
+      await t.runAsync(() async {
+        final picker = find.widgetWithText(
+          OutlinedButton,
+          'Chọn lại ảnh để tiếp tục',
+        );
+        await t.ensureVisible(picker);
+        await t.tap(picker);
+        for (
+          var i = 0;
+          i < 100 &&
+              find
+                  .byKey(const ValueKey('tryon-upload-consent'))
+                  .evaluate()
+                  .isEmpty;
+          i++
+        ) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          await t.pump();
+        }
+      });
+      await t.pumpAndSettle();
+      await tap(t, 'Kiểm tra ảnh đã gửi');
+      expect(keys, isEmpty);
+      final consent = find.byKey(const ValueKey('tryon-upload-consent'));
+      await t.ensureVisible(consent);
+      await t.tap(consent);
+      await t.pumpAndSettle();
+      await tap(t, 'Kiểm tra ảnh đã gửi');
+      expect(keys, [tryonKey]);
+      // Invalid reselected bytes do not prove the original upload was rejected.
+      expect(pendingStores[api]!.read('customer', 'upload')?.key, tryonKey);
+      await tap(t, 'Kiểm tra ảnh đã gửi');
+      expect(keys, [tryonKey, tryonKey]);
+      expect(pendingStores[api]!.read('customer', 'upload'), isNull);
+      expect(
+        t
+            .widget<CheckboxListTile>(
+              find.byKey(const ValueKey('tryon-ai-consent')),
+            )
+            .value,
+        isFalse,
+      );
+    },
+  );
+
+  testWidgets(
+    'blocked recovery storage prevents a paid POST before it is sent',
+    (t) async {
+      var writes = 0;
+      final api = client((r) async {
+        if (r.method == 'POST') writes++;
+        return defaultRead(r);
+      });
+      pendingStores[api] = BlockedPendingStore();
+      await mount(t, api);
+      await agree(t);
+      await tap(t, 'Thử trang phục');
+      expect(writes, 0);
+      expect(
+        find.textContaining('Chưa lưu hoặc đọc được mã khôi phục'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'another account cannot inherit a pending photo or paid operation',
+    (t) async {
+      final api = client((r) async => defaultRead(r));
+      pendingStores[api] = MemoryTryOnPendingStore()
+        ..save(
+          'other-owner',
+          'job',
+          const PendingTryOn(tryonKey, imageId: photoId, sku: 'WRL-1-MAIN-M'),
+        )
+        ..save('other-owner', 'upload', const PendingTryOn(tryonKey));
+      await mount(t, api);
+      expect(find.text('Kiểm tra ảnh đã gửi'), findsNothing);
+      expect(find.text('Kiểm tra yêu cầu đã gửi'), findsNothing);
+      expect(pendingStores[api]!.read('other-owner', 'job'), isNotNull);
+    },
+  );
 
   testWidgets('an accepted failed job needs an explicit new request key', (
     t,

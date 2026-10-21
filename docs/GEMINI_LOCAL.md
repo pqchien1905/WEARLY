@@ -77,9 +77,18 @@ nhận yêu cầu, đưa vào hàng đợi và chỉ cho phép một lần gọi
 đồng thời được dùng chung với Stylist.
 
 Mất phản hồi tải ảnh: bấm “Kiểm tra ảnh đã gửi”. Mất phản hồi tạo ảnh: bấm “Kiểm tra
-yêu cầu đã gửi”. Máy chủ trả lại cùng ảnh/yêu cầu theo mã đã gửi; tải lại trang
-chỉ đọc ảnh và yêu cầu gần nhất của tài khoản. Lịch sử `/account/try-ons` hiển thị
+yêu cầu đã gửi”. Máy chủ trả lại cùng ảnh/yêu cầu theo mã đã gửi. Trước khi gửi,
+trình duyệt lưu mã thao tác theo tài khoản, cùng ID ảnh/SKU đối với lượt thử đồ;
+không lưu ảnh, tên tệp, nội dung riêng tư, khóa đăng nhập hoặc URL ảnh. Mã chưa
+rõ kết quả được giữ qua tải lại trang, kể cả trước khi máy chủ ghi nhận yêu cầu.
+Nếu bộ nhớ trang web bị chặn, không bắt đầu lượt mới để tránh mất mã khôi phục.
+
+Ảnh đang được lưu có trạng thái riêng để kiểm tra. Nếu lần tải ảnh chưa tới máy
+chủ, chọn lại đúng ảnh, đồng ý lưu rồi tiếp tục bằng mã cũ; không tự tải ảnh từ
+thiết bị. Không tự tạo lượt Gemini khi tải lại trang. Lịch sử `/account/try-ons` hiển thị
 tối đa20 lượt gần nhất còn trong thời gian lưu, tải ảnh khi bạn bấm xem.
+Đi từ trang chi tiết sản phẩm sẽ chọn sản phẩm đó cho lượt mới; đường dẫn tới
+một yêu cầu cụ thể vẫn khôi phục đúng yêu cầu và trang phục cũ.
 
 Ảnh đầu vào được chuẩn hóa, bỏ metadata và lưu riêng tư tối đa24giờ; kết quả hết
 hạn cùng ảnh gốc. Trình duyệt lấy bytes qua API có xác thực, không nhận liên kết

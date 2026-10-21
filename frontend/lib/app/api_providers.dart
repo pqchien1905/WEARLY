@@ -3,9 +3,15 @@ import 'package:flutter/foundation.dart';
 import '../core/network/api_client.dart';
 import '../core/network/session_tokens.dart';
 import 'config.dart';
+import '../data/tryon_pending_store.dart';
+import '../data/tryon_pending_native.dart'
+    if (dart.library.js_interop) '../data/tryon_pending_web.dart';
 
 final remoteApiProvider = Provider<bool>((ref) => BrandConfig.useRemoteApi);
 final apiBaseUrlProvider = Provider<String>((ref) => BrandConfig.apiBaseUrl);
+final tryOnPendingStoreProvider = Provider<TryOnPendingStore>(
+  (ref) => tryOnPendingStore(ref.watch(apiBaseUrlProvider)),
+);
 final browserSessionsEnabledProvider = Provider<bool>((ref) => kIsWeb);
 final sessionTokensProvider = Provider<SessionTokens>((ref) {
   final tokens = SessionTokens();

@@ -71,6 +71,14 @@ export class UploadsController {
     return this.service.list(user.id);
   }
   @Header('Cache-Control', 'private, no-store')
+  @Get('requests/:key')
+  requestStatus(
+    @CurrentUser() user: Identity,
+    @Param('key', new ParseUUIDPipe({ version: '4' })) key: string,
+  ) {
+    return this.service.requestStatus(user.id, key);
+  }
+  @Header('Cache-Control', 'private, no-store')
   @Get(':id/content')
   async content(
     @CurrentUser() user: Identity,

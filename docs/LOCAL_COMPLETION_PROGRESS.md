@@ -421,7 +421,7 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   Private image try-on, local operations/SEO/provider acceptance/final integration
   remain required; full A-Z goal ACTIVE.
 
-## Private Gemini try-on — in progress, 22 October 2026
+## Private Gemini try-on — completed locally, 22 October 2026
 
 - Plan docs/superpowers/plans/2026-10-22-gemini-tryon.md. Bounded Gemini image
   adapter and verified local/managed garment reader implemented; shared text/image
@@ -447,3 +447,22 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   source/result access revoked after deletion.375/1440 screenshots inspected.
   Synthetic pixels only; no live Gemini call. Independent review and business
   migration pending; business remains25, test26.
+- One independent review0ab3ad6..52f74e7 found2Important issues. RED->GREEN fixes:
+  persist owner/API-scoped pending operation IDs and selected image/SKU before POST;
+  recover unfinished upload reservations and reload-before-commit without another
+  paid key; explicit product entry now selects that garment instead of the previous
+  completed job's garment. No photos/tokens/private URLs in browser storage; blocked
+  storage prevents starting a new paid operation. Invalid reselected photo does not
+  clear an unresolved original upload key. No second review loop.
+- Final194/194E2E with realRedis/MinIO,77unit,417Flutter+2 opt-in skips, lint/build
+  and analyze PASS. Chrome --tryon PASS additionally pauses actual upload storage
+  verification and PostgreSQL reservation before reload, including older history.
+  Still1source/3attempts/2completed, no duplicate generation; physical MinIO purge
+  of source/results verified.375/1440 screenshots inspected. Synthetic pixels and
+  deterministic Gemini HTTP only, no live call or assertion of generated quality.
+- Verified backup before-gemini-tryon-1792616673825.dump; business25->26, all41
+  original tables preserve counts/original-column fingerprints, AiUsage remains0.
+  Compiled readiness/products/content200 and private admin/uploads401 PASS.
+  Guide: docs/GEMINI_LOCAL.md. Root.env Gemini/VNPay fields still empty; external
+  acceptance, local operations/CI/backup-restore, identity/policies/SEO and final
+  root integration remain required. Full A-Z goal ACTIVE.

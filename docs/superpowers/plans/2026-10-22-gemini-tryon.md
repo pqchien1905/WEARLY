@@ -164,9 +164,9 @@ docs/GEMINI_LOCAL.md;docs/LOCAL_COMPLETION_PROGRESS.md.
   reply: upload, explicitconsent, selectedgarment, onejob/result, lostreply/reload,
   owned history, unauthorizedbytes404, delete bothinput/output, quota/config/failure;
  375/1440 screenshots inspected. No real photo/external call in fixtures.
-- [ ] One independent review of whole milestone; regrade then one RED->GREEN fix
+- [x] One independent review of whole milestone; regrade then one RED->GREEN fix
   pass and relevant final suites. No additional review loop.
-- [ ] Verified business backup, additive migration, all original-column hashes and
+- [x] Verified business backup, additive migration, all original-column hashes and
   compiled smoke. Update guide/ledger/checklist, commit and delete only own scratch.
   Keep A-Z active for operations/SEO/configured providers/final integration.
 
