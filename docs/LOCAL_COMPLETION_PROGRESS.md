@@ -102,3 +102,24 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   analyze clean; real Chrome admin desktop/mobile pass including delivered?explicit
   COD collection?persisted receipt, no browser errors. Local ready/content/products200.
   All review findings resolved; log/screenshot evidence under `.tools/`.
+
+## Next work: VNPay sandbox (research started)
+
+- Checkpoint commits:16acc75 foundation;3901971 shipping/COD. Main workspace branch
+  remains at363bea0; implementation remains in the isolated worktree until integration.
+- Root backend/.env checked for presence only: GEMINI_API_KEY, VNPAY_TMN_CODE and
+  VNPAY_HASH_SECRET are absent. Existing async credential question remains pending.
+- Official provider HTML retrieved to private `.tools/vnpay-doc-0.html` (PAY) and
+  `.tools/vnpay-doc-1.html` (querydr/refund); companion `.txt` files strip tags.
+  Web open timed out, official indexed content and direct HTTPS fetch succeeded.
+- Upcoming design must account for local callback reachability: authenticated
+  querydr reconciliation is needed when the provider cannot reach local IPN.
+  Return navigation alone must never mark paid. Persist attempt reference/create
+  date; verify HMAC and merchant/reference/amount/status; guard callback/cancel races,
+  retries and late successes. Sandbox URLs are fixed; no real-money endpoint.
+- Checkout currently hardcodes COD, remote_orders request lacks paymentMethod,
+  commerce_json rejects nonCOD, frontend sessions remain in memory. VNPay frontend
+  return experience therefore depends on session restoration or retaining the
+  original checkout tab; resolve that explicitly in the next milestone plan.
+- No VNPay production code written yet. Full objective remains ACTIVE with all
+  remaining milestones listed above; do not mistake a checkpoint for completion.
