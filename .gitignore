@@ -17,4 +17,5 @@ backend/src/generated/
 .superpowers/
 .agents/
 .codex/
+.worktrees/
 *.log
