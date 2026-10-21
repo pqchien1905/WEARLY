@@ -1,10 +1,8 @@
 import { Injectable } from '@nestjs/common';
 export type TryOnInput = {
   jobId: string;
-  // Legacy worker input is removed when durable private jobs are connected.
-  imageUrl?: string;
-  image?: { bytes: Uint8Array; contentType: 'image/jpeg' | 'image/png' };
-  garment?: { bytes: Uint8Array; contentType: 'image/jpeg' | 'image/png' };
+  image: { bytes: Uint8Array; contentType: 'image/jpeg' | 'image/png' };
+  garment: { bytes: Uint8Array; contentType: 'image/jpeg' | 'image/png' };
   sku: string;
   signal: AbortSignal;
 };
@@ -16,6 +14,9 @@ export type TryOnOutput = {
 };
 export abstract class TryOnProvider {
   abstract readonly enabled: boolean;
+  get model(): string {
+    return 'unconfigured';
+  }
   abstract generate(input: TryOnInput): Promise<TryOnOutput>;
 }
 @Injectable()

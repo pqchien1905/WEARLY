@@ -46,6 +46,7 @@ it('accounts a reservation waiting across UTC midnight in the post-lock database
   };
   const db = {
     aiUsage: { updateMany: async () => ({ count: 0 }) },
+    aIJob: { updateMany: async () => ({ count: 0 }) },
     $transaction: async (work: (tx: unknown) => unknown) => work(tx),
   };
   const service = new AiUsageService(

@@ -34,6 +34,17 @@ export class ImageLifecycleService {
           where: { imageId: id, status: { in: ['PENDING', 'PROCESSING'] } },
           data: { status: 'FAILED', errorCode: 'IMAGE_UNAVAILABLE' },
         });
+        await tx.aiUsage.updateMany({
+          where: {
+            job: { imageId: id },
+            status: { in: ['RESERVED', 'PROCESSING'] },
+          },
+          data: {
+            status: 'FAILED',
+            errorCode: 'IMAGE_UNAVAILABLE',
+            finishedAt: new Date(),
+          },
+        });
         return [
           image.objectKey,
           ...image.jobs.flatMap((job) => [
@@ -110,6 +121,17 @@ export class ImageLifecycleService {
         await tx.aIJob.updateMany({
           where: { imageId: id, status: { in: ['PENDING', 'PROCESSING'] } },
           data: { status: 'FAILED', errorCode: 'IMAGE_UNAVAILABLE' },
+        });
+        await tx.aiUsage.updateMany({
+          where: {
+            job: { imageId: id },
+            status: { in: ['RESERVED', 'PROCESSING'] },
+          },
+          data: {
+            status: 'FAILED',
+            errorCode: 'IMAGE_UNAVAILABLE',
+            finishedAt: new Date(),
+          },
         });
         return { id, deleted: true };
       },

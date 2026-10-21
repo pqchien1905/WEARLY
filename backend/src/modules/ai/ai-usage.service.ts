@@ -33,6 +33,14 @@ export class AiUsageService implements OnModuleInit, OnModuleDestroy {
   async cleanup() {
     const now = new Date();
     await this.db.aiUsage.updateMany({
+      where: { status: 'RESERVED', deadlineAt: { lte: now } },
+      data: {
+        status: 'FAILED',
+        errorCode: 'AI_QUEUE_EXPIRED',
+        finishedAt: now,
+      },
+    });
+    await this.db.aiUsage.updateMany({
       where: { status: 'PROCESSING', deadlineAt: { lte: now } },
       data: {
         status: 'UNKNOWN',
@@ -44,90 +52,112 @@ export class AiUsageService implements OnModuleInit, OnModuleDestroy {
       where: { expiresAt: { lte: now }, receipt: { not: Prisma.DbNull } },
       data: { receipt: Prisma.DbNull },
     });
+    await this.db.aIJob.updateMany({
+      where: {
+        status: { in: ['PENDING', 'PROCESSING'] },
+        usage: { status: 'UNKNOWN' },
+      },
+      data: { status: 'FAILED', errorCode: 'AI_OUTCOME_UNKNOWN' },
+    });
+    await this.db.aIJob.updateMany({
+      where: {
+        status: { in: ['PENDING', 'PROCESSING'] },
+        usage: { status: 'FAILED', errorCode: 'AI_QUEUE_EXPIRED' },
+      },
+      data: { status: 'FAILED', errorCode: 'AI_QUEUE_EXPIRED' },
+    });
   }
   async reserve(
     userId: string,
-    kind: 'STYLIST',
+    kind: 'STYLIST' | 'TRY_ON',
+    key: string | undefined,
+    hash: string,
+    model: string,
+  ) {
+    await this.cleanup();
+    return this.db.$transaction(
+      (tx) => this.reserveTx(tx, userId, kind, key, hash, model),
+      { timeout: 15000 },
+    );
+  }
+  async reserveTx(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    kind: 'STYLIST' | 'TRY_ON',
     key: string | undefined,
     hash: string,
     model: string,
   ) {
     if (!key || !isUUID(key, '4'))
       fail(400, 'INVALID_IDEMPOTENCY_KEY', 'Idempotency-Key must be a UUID v4');
-    await this.cleanup();
-    return this.db.$transaction(
-      async (tx) => {
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('ai:usage:reservation', 0))::text`;
-        // CURRENT_TIMESTAMP is the transaction start, potentially the previous
-        // UTC day after waiting for the lock. Use one post-lock wall-clock value.
-        const [{ now }] = await tx.$queryRaw<Array<{ now: Date }>>`
-          SELECT clock_timestamp() AS now`;
-        const prior = await tx.aiUsage.findUnique({
-          where: { userId_kind_requestKey: { userId, kind, requestKey: key } },
-        });
-        if (prior) {
-          if (prior.inputHash !== hash)
-            fail(
-              409,
-              'IDEMPOTENCY_CONFLICT',
-              'Request key already used with different input',
-            );
-          return { row: prior, isNew: false };
-        }
-        const day = today(now);
-        const userUsed = await tx.aiUsage.count({
-          where: { userId, kind, createdAt: { gte: day } },
-        });
-        const globalUsed = await tx.aiUsage.count({
-          where: { kind, createdAt: { gte: day } },
-        });
-        const active = {
-          status: 'PROCESSING' as const,
-          deadlineAt: { gt: now },
-        };
-        const userActive = await tx.aiUsage.count({
-          where: { ...active, userId },
-        });
-        const globalActive = await tx.aiUsage.count({ where: active });
-        const estimate = this.config.getOrThrow<number>(
-          'AI_STYLIST_ESTIMATE_VND',
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('ai:usage:reservation', 0))::text`;
+    // One post-lock database wall clock, never transaction-start CURRENT_TIMESTAMP.
+    const [{ now }] = await tx.$queryRaw<
+      Array<{ now: Date }>
+    >`SELECT clock_timestamp() AS now`;
+    const prior = await tx.aiUsage.findUnique({
+      where: { userId_kind_requestKey: { userId, kind, requestKey: key } },
+    });
+    if (prior) {
+      if (prior.inputHash !== hash)
+        fail(
+          409,
+          'IDEMPOTENCY_CONFLICT',
+          'Request key already used with different input',
         );
-        const spent =
-          (
-            await tx.aiUsage.aggregate({
-              where: { createdAt: { gte: day } },
-              _sum: { estimatedCostVnd: true },
-            })
-          )._sum.estimatedCostVnd ?? new Prisma.Decimal(0);
-        if (
-          userUsed >=
-            this.config.getOrThrow<number>('AI_STYLIST_USER_DAILY_LIMIT') ||
-          globalUsed >=
-            this.config.getOrThrow<number>('AI_STYLIST_GLOBAL_DAILY_LIMIT') ||
-          spent
-            .plus(estimate)
-            .gt(this.config.getOrThrow<number>('AI_GLOBAL_DAILY_ESTIMATE_VND'))
-        )
-          fail(429, 'AI_DAILY_LIMIT', 'Daily AI allowance reached');
-        if (userActive >= 2 || globalActive >= 8)
-          fail(429, 'AI_BUSY', 'Wait for current AI requests to finish');
-        const row = await tx.aiUsage.create({
-          data: {
-            userId,
-            kind,
-            requestKey: key,
-            inputHash: hash,
-            model,
-            estimatedCostVnd: estimate,
-            createdAt: now,
-            deadlineAt: new Date(now.getTime() + 30000),
-            expiresAt: new Date(now.getTime() + 86400000),
-          },
-        });
-        return { row, isNew: true };
+      return { row: prior, isNew: false };
+    }
+    const day = today(now),
+      prefix = kind === 'TRY_ON' ? 'AI_TRYON' : 'AI_STYLIST';
+    const userUsed = await tx.aiUsage.count({
+      where: { userId, kind, createdAt: { gte: day } },
+    });
+    const globalUsed = await tx.aiUsage.count({
+      where: { kind, createdAt: { gte: day } },
+    });
+    const active = {
+      status: { in: ['RESERVED', 'PROCESSING'] as AiUsageStatus[] },
+      deadlineAt: { gt: now },
+    };
+    const userActive = await tx.aiUsage.count({ where: { ...active, userId } });
+    const globalActive = await tx.aiUsage.count({ where: active });
+    const estimate = this.config.getOrThrow<number>(prefix + '_ESTIMATE_VND');
+    const spent =
+      (
+        await tx.aiUsage.aggregate({
+          where: { createdAt: { gte: day } },
+          _sum: { estimatedCostVnd: true },
+        })
+      )._sum.estimatedCostVnd ?? new Prisma.Decimal(0);
+    if (
+      userUsed >=
+        this.config.getOrThrow<number>(prefix + '_USER_DAILY_LIMIT') ||
+      globalUsed >=
+        this.config.getOrThrow<number>(prefix + '_GLOBAL_DAILY_LIMIT') ||
+      spent
+        .plus(estimate)
+        .gt(this.config.getOrThrow<number>('AI_GLOBAL_DAILY_ESTIMATE_VND'))
+    )
+      fail(429, 'AI_DAILY_LIMIT', 'Daily AI allowance reached');
+    if (userActive >= 2 || globalActive >= 8)
+      fail(429, 'AI_BUSY', 'Wait for current AI requests to finish');
+    const row = await tx.aiUsage.create({
+      data: {
+        userId,
+        kind,
+        requestKey: key,
+        inputHash: hash,
+        model,
+        estimatedCostVnd: estimate,
+        status: kind === 'TRY_ON' ? 'RESERVED' : 'PROCESSING',
+        createdAt: now,
+        deadlineAt: new Date(
+          now.getTime() + (kind === 'TRY_ON' ? 300000 : 30000),
+        ),
+        expiresAt: new Date(now.getTime() + 86400000),
       },
-      { timeout: 15000 },
-    );
+    });
+    return { row, isNew: true };
   }
   async finish(
     id: string,
@@ -148,7 +178,7 @@ export class AiUsageService implements OnModuleInit, OnModuleDestroy {
       },
     });
   }
-  async ownedByKey(userId: string, kind: 'STYLIST', key: string) {
+  async ownedByKey(userId: string, kind: 'STYLIST' | 'TRY_ON', key: string) {
     await this.cleanup();
     const row = await this.db.aiUsage.findUnique({
       where: { userId_kind_requestKey: { userId, kind, requestKey: key } },
@@ -156,13 +186,14 @@ export class AiUsageService implements OnModuleInit, OnModuleDestroy {
     if (!row) throw new NotFoundException();
     return row;
   }
-  async status(userId: string) {
+  async status(userId: string, kind: 'STYLIST' | 'TRY_ON' = 'STYLIST') {
+    const prefix = kind === 'TRY_ON' ? 'AI_TRYON' : 'AI_STYLIST';
     const rows = await this.db.aiUsage.aggregate({
-      where: { userId, kind: 'STYLIST', createdAt: { gte: today() } },
+      where: { userId, kind, createdAt: { gte: today() } },
       _count: true,
       _sum: { estimatedCostVnd: true },
     });
-    const limit = this.config.getOrThrow<number>('AI_STYLIST_USER_DAILY_LIMIT');
+    const limit = this.config.getOrThrow<number>(prefix + '_USER_DAILY_LIMIT');
     return {
       used: rows._count,
       limit,
@@ -171,7 +202,7 @@ export class AiUsageService implements OnModuleInit, OnModuleDestroy {
         rows._sum.estimatedCostVnd ?? new Prisma.Decimal(0)
       ).toString(),
       estimatedPerRequestVnd: String(
-        this.config.getOrThrow<number>('AI_STYLIST_ESTIMATE_VND'),
+        this.config.getOrThrow<number>(prefix + '_ESTIMATE_VND'),
       ),
       resetsAt: new Date(today().getTime() + 86400000).toISOString(),
       costIsEstimate: true,

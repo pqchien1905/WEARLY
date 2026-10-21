@@ -430,3 +430,10 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   mutation. Worker remains disabled until durable quota/idempotent jobs are ready.
 - Backend jobs/uploads/deletion, remote photo/history UI, browser acceptance,
   independent milestone review and business migration remain pending.
+- Backend jobs/uploads/deletion now implemented: reserved quotas, transactional
+  job/outbox, stable upload/job keys, one durable provider claim, private authenticated
+  image bytes, deadline recovery and deletion/publication locking. Legacy pending
+  jobs cannot issue paid calls. Queued SKU is rechecked before Gemini.
+- Final193/193 E2E with Redis/MinIO,77unit,lint/build PASS; existing worker assertions
+  now enforce one attempt and private byte access. TestDB26 only; business25 unchanged.
+  Remote photo/history UI, Chrome, independent review and final migration remain.

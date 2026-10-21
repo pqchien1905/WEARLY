@@ -576,6 +576,8 @@ model ImageAsset {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   jobs AIJob[]
+  requestKey String? @db.Uuid
+  @@unique([userId, requestKey])
   @@index([userId, expiresAt])
   @@index([purgedAt, expiresAt])
   @@index([purgedAt, purgeRetryAt])
@@ -596,10 +598,14 @@ model AIJob {
   updatedAt DateTime @updatedAt
   result TryOnResult?
   outbox OutboxEvent?
+  usageId String? @unique @db.Uuid
+  usage AiUsage? @relation(fields: [usageId], references: [id], onDelete: Restrict)
+  garmentRef String?
   @@index([userId, createdAt])
   @@index([status, createdAt])
 }
 enum AiUsageStatus {
+  RESERVED
   PROCESSING
   COMPLETED
   FAILED
@@ -622,6 +628,7 @@ model AiUsage {
   expiresAt DateTime
   finishedAt DateTime?
   createdAt DateTime @default(now())
+  job AIJob?
   @@unique([userId, kind, requestKey])
   @@index([createdAt, kind])
   @@index([status, deadlineAt])

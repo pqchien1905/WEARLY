@@ -129,7 +129,7 @@ storageDescribe('Private uploads with real PostgreSQL and S3', () => {
     );
     expect(await db.imageAsset.count({ where: { userId } })).toBe(0);
   });
-  it('stores sanitized bytes privately, returns an expiring owned URL and hides object keys', async () => {
+  it('stores sanitized bytes privately, serves authenticated content and hides object keys', async () => {
     const created = await upload().expect(201);
     const id = created.body.id;
     ownedIds.push(id);
@@ -155,8 +155,23 @@ storageDescribe('Private uploads with real PostgreSQL and S3', () => {
       .get('/api/v1/uploads/images/' + id)
       .auth(token, { type: 'bearer' })
       .expect(200);
-    expect(new URL(read.body.url).searchParams.get('X-Amz-Expires')).toBe('60');
-    expect((await fetch(read.body.url)).status).toBe(200);
+    expect(read.body.url).toBeUndefined();
+    expect(read.body.contentPath).toBe('uploads/images/' + id + '/content');
+    const content = await request(app.getHttpServer())
+      .get('/api/v1/' + read.body.contentPath)
+      .auth(token, { type: 'bearer' })
+      .expect(200);
+    expect(content.headers['cache-control']).toContain('no-store');
+    expect(
+      (await sharp(content.body as Buffer).metadata()).exif,
+    ).toBeUndefined();
+    await request(app.getHttpServer())
+      .get('/api/v1/' + read.body.contentPath)
+      .expect(401);
+    await request(app.getHttpServer())
+      .get('/api/v1/' + read.body.contentPath)
+      .auth(otherToken, { type: 'bearer' })
+      .expect(404);
     await request(app.getHttpServer())
       .get('/api/v1/uploads/images/' + id)
       .auth(otherToken, { type: 'bearer' })

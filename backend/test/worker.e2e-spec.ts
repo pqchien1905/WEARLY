@@ -17,6 +17,8 @@ import { AI_QUEUE } from '../src/queues/ai.queue';
 import { validateEnv } from '../src/config/env.validation';
 import { AiService } from '../src/modules/ai/ai.service';
 import { ImageLifecycleService } from '../src/modules/uploads/image-lifecycle.service';
+import { AiUsageService } from '../src/modules/ai/ai-usage.service';
+import { GarmentReader } from '../src/integrations/ai-providers/garment-reader.service';
 
 // PostgreSQL and Redis are real. Only paid AI and object storage are test doubles.
 const redisDescribe = process.env.TEST_REDIS_HOST ? describe : describe.skip;
@@ -30,6 +32,7 @@ redisDescribe('AI worker with PostgreSQL and Redis', () => {
   const namespace = 'wearly-test-' + randomUUID();
   const jobs: string[] = [];
   const provider = {
+    model: 'fixture-model',
     enabled: false,
     calls: 0,
     async generate(_input: TryOnInput): Promise<TryOnOutput> {
@@ -38,9 +41,18 @@ redisDescribe('AI worker with PostgreSQL and Redis', () => {
     },
   };
   const storage = {
-    signedRead: async (key: string) => 'https://storage.example.test/' + key,
+    readImage: jest.fn(async (_key: string) => Buffer.from([1])),
     putResult: jest.fn(async () => undefined),
     deleteObjects: jest.fn(async (_keys: string[]) => undefined),
+  };
+  const garments = {
+    resolve: async () => 'assets/images/shirt.jpg',
+    read: async () => ({
+      bytes: Buffer.from([1]),
+      contentType: 'image/png',
+      width: 64,
+      height: 64,
+    }),
   };
   beforeAll(async () => {
     if (
@@ -83,11 +95,22 @@ redisDescribe('AI worker with PostgreSQL and Redis', () => {
     }
     module = await Test.createTestingModule({ imports: [WorkerModule] })
       .overrideProvider(ConfigService)
-      .useValue(new ConfigService(validateEnv(process.env)))
+      .useValue(
+        new ConfigService(
+          validateEnv({
+            ...process.env,
+            AI_TRYON_USER_DAILY_LIMIT: 100,
+            AI_TRYON_GLOBAL_DAILY_LIMIT: 100,
+            AI_GLOBAL_DAILY_ESTIMATE_VND: 1000000,
+          }),
+        ),
+      )
       .overrideProvider(TryOnProvider)
       .useValue(provider)
       .overrideProvider(StorageService)
       .useValue(storage)
+      .overrideProvider(GarmentReader)
+      .useValue(garments)
       .compile();
     await module.init();
     db = module.get(PrismaService);
@@ -125,6 +148,7 @@ redisDescribe('AI worker with PostgreSQL and Redis', () => {
         categoryId: category.id,
         brandId: brand.id,
         tryOnSupported: true,
+        images: { create: { url: 'assets/images/shirt.jpg', alt: 'Fixture' } },
         variants: {
           create: {
             sku: randomUUID(),
@@ -132,6 +156,7 @@ redisDescribe('AI worker with PostgreSQL and Redis', () => {
             color: 'Black',
             colorHex: '#000000',
             price: '1000',
+            inventory: { create: { quantity: 100 } },
           },
         },
       },
@@ -142,6 +167,25 @@ redisDescribe('AI worker with PostgreSQL and Redis', () => {
   afterAll(async () => {
     try {
       if (module) await module.close();
+      if (suiteLock && userId) {
+        await suiteLock.query(
+          'DELETE FROM "TryOnResult" WHERE "jobId" IN (SELECT id FROM "AIJob" WHERE "userId"=$1)',
+          [userId],
+        );
+        await suiteLock.query(
+          'DELETE FROM "OutboxEvent" WHERE "jobId" IN (SELECT id FROM "AIJob" WHERE "userId"=$1)',
+          [userId],
+        );
+        await suiteLock.query('DELETE FROM "AIJob" WHERE "userId"=$1', [
+          userId,
+        ]);
+        await suiteLock.query('DELETE FROM "AiUsage" WHERE "userId"=$1', [
+          userId,
+        ]);
+        await suiteLock.query('DELETE FROM "ImageAsset" WHERE "userId"=$1', [
+          userId,
+        ]);
+      }
       // Delete only this run's known jobs, never FLUSHDB or another queue.
       if (queue) {
         for (const id of jobs) {
@@ -162,7 +206,21 @@ redisDescribe('AI worker with PostgreSQL and Redis', () => {
         mimeType: 'image/png',
         size: 1,
         verifiedAt: new Date(),
+        consentAt: new Date(),
         expiresAt: new Date(Date.now() + 3600000),
+      },
+    });
+    const usage = await db.aiUsage.create({
+      data: {
+        userId,
+        kind: 'TRY_ON',
+        requestKey: randomUUID(),
+        inputHash: 'a'.repeat(64),
+        model: 'fixture-model',
+        estimatedCostVnd: 3000,
+        status: 'RESERVED',
+        deadlineAt: new Date(Date.now() + 300000),
+        expiresAt: image.expiresAt,
       },
     });
     const job = await db.aIJob.create({
@@ -171,6 +229,8 @@ redisDescribe('AI worker with PostgreSQL and Redis', () => {
         variantId,
         imageId: image.id,
         consentAt: new Date(),
+        usageId: usage.id,
+        garmentRef: 'assets/images/shirt.jpg',
         outbox: { create: {} },
       },
     });
@@ -209,8 +269,22 @@ redisDescribe('AI worker with PostgreSQL and Redis', () => {
       (await db.outboxEvent.findUniqueOrThrow({ where: { jobId: job.id } }))
         .publishedAt,
     ).not.toBeNull();
+    // Enabling Gemini must never turn a historical, unreserved job into a paid call.
+    const legacy = await db.aIJob.create({
+      data: { userId, variantId, imageId: job.imageId, consentAt: new Date() },
+    });
+    provider.enabled = true;
+    provider.calls = 0;
+    await processor.process({ data: { id: legacy.id } } as Parameters<
+      AiProcessor['process']
+    >[0]);
+    expect(
+      (await db.aIJob.findUniqueOrThrow({ where: { id: legacy.id } }))
+        .errorCode,
+    ).toBe('AI_REQUEST_LEGACY');
+    expect(provider.calls).toBe(0);
   });
-  it('retries three times and keeps provider secrets out of database and Redis errors', async () => {
+  it('never repeats a paid attempt and keeps provider secrets out of database and Redis errors', async () => {
     provider.enabled = true;
     provider.calls = 0;
     provider.generate = async () => {
@@ -223,8 +297,8 @@ redisDescribe('AI worker with PostgreSQL and Redis', () => {
     await processor.dispatch();
     const { row, queued } = await terminal(job.id);
     expect(row.status).toBe('FAILED');
-    expect(row.attempts).toBe(3);
-    expect(provider.calls).toBe(3);
+    expect(row.attempts).toBe(1);
+    expect(provider.calls).toBe(1);
     expect(row.errorCode).toBe('AI_PROVIDER_ERROR');
     expect(queued.failedReason).toBe('AI_PROVIDER_ERROR');
     expect(JSON.stringify(queued.stacktrace)).not.toContain(
@@ -310,6 +384,7 @@ redisDescribe('AI worker with PostgreSQL and Redis', () => {
         mimeType: 'image/png',
         size: 1,
         verifiedAt: new Date(),
+        consentAt: new Date(),
         expiresAt: new Date(Date.now() + 3600000),
       },
     });
@@ -320,22 +395,24 @@ redisDescribe('AI worker with PostgreSQL and Redis', () => {
       db,
       provider,
       storage as unknown as StorageService,
+      module.get(AiUsageService),
+      garments as unknown as GarmentReader,
     );
     const dto = { imageId: image.id, sku: variant.sku, consent: true };
-    await expect(service.create(randomUUID(), dto)).rejects.toMatchObject({
+    await expect(
+      service.create(randomUUID(), randomUUID(), dto),
+    ).rejects.toMatchObject({
       status: 404,
     });
     expect(await db.aIJob.count({ where: { imageId: image.id } })).toBe(0);
-    const created = await service.create(userId, dto);
+    const created = await service.create(userId, randomUUID(), dto);
     jobs.push(created.id);
     await processor.dispatch();
     expect((await terminal(created.id)).row.status).toBe('COMPLETED');
     await expect(service.get(randomUUID(), created.id)).rejects.toMatchObject({
       status: 404,
     });
-    expect((await service.get(userId, created.id)).resultUrl).toContain(
-      'https://storage.example.test/',
-    );
+    expect((await service.get(userId, created.id)).resultAvailable).toBe(true);
   });
   it('serializes deletion against result storage and purges all deterministic job keys', async () => {
     provider.enabled = true;
@@ -377,8 +454,10 @@ redisDescribe('AI worker with PostgreSQL and Redis', () => {
       db,
       provider,
       storage as unknown as StorageService,
+      module.get(AiUsageService),
+      garments as unknown as GarmentReader,
     );
-    expect((await service.get(userId, job.id)).resultUrl).toBeNull();
+    expect((await service.get(userId, job.id)).resultAvailable).toBe(false);
     expect(await lifecycle.purge(job.imageId)).toBe(true);
     expect(storage.deleteObjects).toHaveBeenCalledWith(
       expect.arrayContaining(['results/' + userId + '/' + job.id]),
@@ -397,6 +476,7 @@ redisDescribe('AI worker with PostgreSQL and Redis', () => {
         mimeType: 'image/png',
         size: 1,
         verifiedAt: new Date(),
+        consentAt: new Date(),
         expiresAt: new Date(Date.now() + 3600000),
       },
     });
@@ -422,12 +502,14 @@ redisDescribe('AI worker with PostgreSQL and Redis', () => {
       db,
       provider,
       storage as unknown as StorageService,
+      module.get(AiUsageService),
+      garments as unknown as GarmentReader,
     );
     const variant = await db.productVariant.findUniqueOrThrow({
       where: { id: variantId },
     });
     await expect(
-      service.create(userId, {
+      service.create(userId, randomUUID(), {
         imageId: image.id,
         sku: variant.sku,
         consent: true,
@@ -443,6 +525,7 @@ redisDescribe('AI worker with PostgreSQL and Redis', () => {
         mimeType: 'image/png',
         size: 1,
         verifiedAt: new Date(),
+        consentAt: new Date(),
         expiresAt: new Date(Date.now() + 3600000),
       },
     });
@@ -459,12 +542,14 @@ redisDescribe('AI worker with PostgreSQL and Redis', () => {
       db,
       provider,
       storage as unknown as StorageService,
+      module.get(AiUsageService),
+      garments as unknown as GarmentReader,
     );
     const variant = await db.productVariant.findUniqueOrThrow({
       where: { id: variantId },
     });
     await expect(
-      service.create(userId, {
+      service.create(userId, randomUUID(), {
         imageId: image.id,
         sku: variant.sku,
         consent: true,
@@ -472,7 +557,7 @@ redisDescribe('AI worker with PostgreSQL and Redis', () => {
     ).rejects.toMatchObject({ status: 429 });
     expect(await db.aIJob.count({ where: { imageId: image.id } })).toBe(20);
   });
-  it('serializes result signing with deletion and prevents new reads after revocation', async () => {
+  it('serializes result bytes with deletion and prevents new reads after revocation', async () => {
     const image = await db.imageAsset.create({
       data: {
         userId,
@@ -480,6 +565,7 @@ redisDescribe('AI worker with PostgreSQL and Redis', () => {
         mimeType: 'image/png',
         size: 1,
         verifiedAt: new Date(),
+        consentAt: new Date(),
         expiresAt: new Date(Date.now() + 3600000),
       },
     });
@@ -506,22 +592,24 @@ redisDescribe('AI worker with PostgreSQL and Redis', () => {
       entered = resolve;
     });
     const sign = jest
-      .spyOn(storage, 'signedRead')
+      .spyOn(storage, 'readImage')
       .mockImplementationOnce(async () => {
         entered();
         await waiting;
-        return 'https://storage.example.test/signed';
+        return Buffer.from([137, 80, 78, 71]);
       });
     const service = new AiService(
       db,
       provider,
       storage as unknown as StorageService,
+      module.get(AiUsageService),
+      garments as unknown as GarmentReader,
     );
     const lifecycle = new ImageLifecycleService(
       db,
       storage as unknown as StorageService,
     );
-    const read = service.get(userId, job.id);
+    const read = service.result(userId, job.id);
     await signing;
     let deleted = false;
     const deletion = lifecycle.deleteOwned(userId, image.id).then(() => {
@@ -535,6 +623,9 @@ redisDescribe('AI worker with PostgreSQL and Redis', () => {
       await Promise.all([read, deletion]);
       sign.mockRestore();
     }
-    expect((await service.get(userId, job.id)).resultUrl).toBeNull();
+    expect((await service.get(userId, job.id)).resultAvailable).toBe(false);
+    await expect(service.result(userId, job.id)).rejects.toMatchObject({
+      status: 404,
+    });
   });
 });

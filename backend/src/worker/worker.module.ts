@@ -3,10 +3,11 @@ import { ConfigModule } from '@nestjs/config';
 import { validateEnv } from '../config/env.validation';
 import { PrismaModule } from '../database/prisma.module';
 import { AiProcessor } from './ai.processor';
-import {
-  DisabledTryOnProvider,
-  TryOnProvider,
-} from '../integrations/ai-providers/try-on.provider';
+import { TryOnProvider } from '../integrations/ai-providers/try-on.provider';
+import { GeminiTryOnProvider } from '../integrations/ai-providers/gemini-tryon.provider';
+import { GEMINI_HTTP } from '../integrations/ai-providers/gemini-transport';
+import { GarmentReader } from '../integrations/ai-providers/garment-reader.service';
+import { AiUsageService } from '../modules/ai/ai-usage.service';
 import { StorageModule } from '../integrations/storage/storage.module';
 import { ImageLifecycleService } from '../modules/uploads/image-lifecycle.service';
 import { RetentionWorker } from './retention.worker';
@@ -30,7 +31,13 @@ import { MailWorker } from './mail.worker';
     RetentionWorker,
     RecoveryWorker,
     MailWorker,
-    { provide: TryOnProvider, useClass: DisabledTryOnProvider },
+    AiUsageService,
+    GarmentReader,
+    {
+      provide: GEMINI_HTTP,
+      useValue: (...args: Parameters<typeof fetch>) => fetch(...args),
+    },
+    { provide: TryOnProvider, useClass: GeminiTryOnProvider },
   ],
 })
 export class WorkerModule {}

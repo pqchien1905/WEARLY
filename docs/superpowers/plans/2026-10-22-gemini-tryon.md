@@ -125,15 +125,15 @@ Job receipt {id,requestKey,status,errorCode,imageId,sku,createdAt,expiresAt,
 estimatedCostVnd,resultAvailable}; list {items}; image metadata existing fields plus
 requestKey; content routes return image bytes. Job create body {imageId,sku,consent}.
 
-- [ ] RED real-PG/Redis/storage tests: owner/auth/consent/config/currentSKU; concurrent
+- [x] RED real-PG/Redis/storage tests: owner/auth/consent/config/currentSKU; concurrent
   same key1job/1usage/1outbox; differentbody409; daily/globalsharedlimits; duplicate
   worker once; crash/stale deadlines; upload lostreply/replay; private byte ownership,
   no signedURLs; deletion while queued/generating/publishing and failedphysicaldelete.
-- [ ] Implement additive schema/testDB migration/generation, transactional quota and
+- [x] Implement additive schema/testDB migration/generation, transactional quota and
   upload bindings, bounded durable worker and owned APIs. Update legacy worker retry
   tests to assert one paid attempt, sanitized errors and explicit terminal status.
-- [ ] Focused then tools/test-backend.ps1 -WithWorker -WithStorage; npm test,lint/build
-  sequentially. Expected all pass without external Gemini. Commit deliverable.
+- [x] Focused then tools/test-backend.ps1 -WithWorker -WithStorage;193E2E/77unit,lint/build
+  sequentially PASS without external Gemini. Commit deliverable.
 
 ## Task 3: remote photo upload, generation and history UI
 
