@@ -280,5 +280,29 @@ redisDescribe(
       expect(result.work?.ai.dayStartedAt).toMatch(/T00:00:00\+00:00$/);
       expect(result.work?.ai.todayEstimatedVnd).toMatch(/^\d+$/);
     });
+    it('observing legacy queue markers never changes the queue', async () => {
+      const key = `${prefix}:wearly-try-on:wait`;
+      await redis.rpush(key, '0:legacy-marker');
+      const before = await redis.lrange(key, 0, -1);
+      const snapshot = (await get(admin).expect(200)).body;
+      expect(await redis.lrange(key, 0, -1)).toEqual(before);
+      expect(snapshot.redis.queues.tryOn.waiting).toBe(1);
+      expect(snapshot.redis.queues.tryOn.oldestWaitingAt).toEqual(
+        expect.any(String),
+      );
+      await redis.lrem(key, 0, '0:legacy-marker');
+      await queue.pause();
+      expect(
+        (await get(admin).expect(200)).body.redis.queues.tryOn.waiting,
+      ).toBe(1);
+      await queue.add(
+        'priority-fixture',
+        {},
+        { priority: 1, jobId: randomUUID() },
+      );
+      expect(
+        (await get(admin).expect(200)).body.redis.queues.tryOn,
+      ).toMatchObject({ waiting: 2, oldestWaitingAt: null });
+    });
   },
 );

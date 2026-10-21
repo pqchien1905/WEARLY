@@ -4,7 +4,6 @@ import { HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
 import { Client } from 'pg';
 import { Socket } from 'node:net';
 import Redis from 'ioredis';
-import { Queue } from 'bullmq';
 import { databaseSchemaReady } from '../../database/schema-readiness';
 import { AI_QUEUE } from '../../queues/ai.queue';
 import { RECOVERY_QUEUE } from '../recovery/recovery.queue';
@@ -204,56 +203,53 @@ export class OperationsProbes {
     }
   }
   async redis(): Promise<RedisProbe> {
-    const client = this.resources.redis(this.config),
-      queues: Queue[] = [];
+    const client = this.resources.redis(this.config);
     client.on('error', () => undefined);
     try {
       return await operationDeadline(async () => {
         await client.connect();
         const prefix = this.config.getOrThrow<string>('AI_QUEUE_PREFIX');
         const counts = async (name: string): Promise<QueueCounts> => {
-          const queue = new Queue(name, {
-            connection: client,
-            prefix,
-            skipMetasUpdate: true,
-          });
-          queue.on('error', () => undefined);
-          queues.push(queue);
-          const values = await queue.getJobCounts(
-            'waiting',
-            'paused',
-            'prioritized',
-            'active',
-            'delayed',
-            'failed',
-          );
-          // Read timestamp only, never BullMQ job payload, return value or stacktrace.
-          // Priority order does not imply insertion age; leave age unknown in that case.
-          const timestamps: number[] = [];
-          if (!values.prioritized) {
-            for (const list of ['wait', 'paused']) {
-              const id = (
-                await client.lrange(`${prefix}:${name}:${list}`, -1, -1)
-              )[0];
-              if (id) {
-                const raw = await client.hget(
-                  `${prefix}:${name}:${id}`,
-                  'timestamp',
-                );
-                const stamp = raw ? Number(raw) : NaN;
-                if (Number.isFinite(stamp) && stamp > 0 && stamp <= Date.now())
-                  timestamps.push(stamp);
-              }
-            }
-          }
+          // BullMQ getJobCounts may RPOP legacy markers. This atomic read must
+          // leave all queue state intact and never load private job payloads.
+          const values = (await client.eval(
+            `
+            local p = KEYS[1]
+            local waiting = 0
+            local oldest = nil
+            for _, state in ipairs({'wait','paused'}) do
+              local count = redis.call('LLEN',p..state)
+              local tail = redis.call('LRANGE',p..state,-2,-1)
+              if #tail > 0 and string.sub(tail[#tail],1,2) == '0:' then count = count - 1 end
+              waiting = waiting + count
+              for i = #tail,1,-1 do
+                if string.sub(tail[i],1,2) ~= '0:' then
+                  local stamp = tonumber(redis.call('HGET',p..tail[i],'timestamp'))
+                  if stamp and (not oldest or stamp < oldest) then oldest = stamp end
+                  break
+                end
+              end
+            end
+            local priority = redis.call('ZCARD',p..'prioritized')
+            if priority > 0 then oldest = nil end
+            return {waiting+priority,redis.call('LLEN',p..'active'),redis.call('ZCARD',p..'delayed'),redis.call('ZCARD',p..'failed'),oldest or false}
+          `,
+            1,
+            `${prefix}:${name}:`,
+          )) as [number, number, number, number, number | null];
+          const oldest = values[4];
           return {
-            waiting: values.waiting + values.paused + values.prioritized,
-            active: values.active,
-            delayed: values.delayed,
-            failed: values.failed,
-            oldestWaitingAt: timestamps.length
-              ? new Date(Math.min(...timestamps)).toISOString()
-              : null,
+            waiting: values[0],
+            active: values[1],
+            delayed: values[2],
+            failed: values[3],
+            oldestWaitingAt:
+              oldest !== null &&
+              Number.isFinite(oldest) &&
+              oldest > 0 &&
+              oldest <= Date.now()
+                ? new Date(oldest).toISOString()
+                : null,
           };
         };
         const [tryOn, recovery, raw] = await Promise.all([
@@ -267,7 +263,6 @@ export class OperationsProbes {
       });
     } finally {
       client.disconnect();
-      for (const queue of queues) void queue.close().catch(() => undefined);
     }
   }
   private worker(raw: string | null): WorkerState {

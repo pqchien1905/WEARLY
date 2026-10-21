@@ -482,3 +482,7 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
 - Remote operations UI, owned native process lifecycle, CI/operator guide and
   independent review remain. Native backup/restore is a subsequent required
   milestone, followed by identity/policies/SEO, configured providers and integration.
+- During UI integration, inspected BullMQ's count helper and found it removes
+  legacy markers. Replaced it with atomic read-only Redis aggregation. Real
+  regression RED->GREEN covers preserved markers plus paused/priority counts;
+ 200/200 full E2E,83unit,lint/build PASS. Oldest priority age stays explicitly unknown.
