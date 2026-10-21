@@ -50,6 +50,27 @@ class CheckoutDraft {
   final int discount;
 }
 
+class OrderEvent {
+  const OrderEvent({
+    required this.status,
+    required this.note,
+    required this.createdAt,
+  });
+  final String status, note;
+  final DateTime createdAt;
+}
+
+class Shipment {
+  const Shipment({
+    required this.carrier,
+    required this.trackingCode,
+    required this.status,
+    required this.events,
+  });
+  final String carrier, trackingCode, status;
+  final List<OrderEvent> events;
+}
+
 class Order {
   const Order({
     required this.id,
@@ -62,6 +83,8 @@ class Order {
     this.paymentStatus = 'PENDING',
     this.discount = 0,
     this.couponCode,
+    this.shipment,
+    this.history = const [],
   });
   final String id, status, paymentProvider, paymentStatus;
   final List<CartItem> items;
@@ -70,6 +93,8 @@ class Order {
   final int discount;
   final String? couponCode;
   final DateTime createdAt;
+  final Shipment? shipment;
+  final List<OrderEvent> history;
   int get subtotal => items.fold(0, (sum, i) => sum + i.total);
   int get total => subtotal + shipping - discount;
   Order withStatus(String value) => Order(
@@ -83,6 +108,8 @@ class Order {
     paymentStatus: paymentStatus,
     discount: discount,
     couponCode: couponCode,
+    shipment: shipment,
+    history: history,
   );
 }
 

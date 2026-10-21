@@ -1,0 +1,34 @@
+ALTER TYPE "OrderStatus" ADD VALUE 'RETURNED';
+ALTER TYPE "AdminAuditAction" ADD VALUE 'SHIPMENT_UPDATED';
+CREATE TYPE "ShipmentStatus" AS ENUM ('IN_TRANSIT','OUT_FOR_DELIVERY','DELIVERY_FAILED','DELIVERED','RETURNED');
+CREATE TABLE "OrderEvent" (
+  "id" UUID NOT NULL PRIMARY KEY,
+  "orderId" UUID NOT NULL REFERENCES "Order"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  "status" "OrderStatus" NOT NULL,
+  "version" INTEGER NOT NULL CHECK ("version" >= 0),
+  "actorId" UUID NOT NULL,
+  "note" VARCHAR(300) NOT NULL DEFAULT '',
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE ("orderId", "version")
+);
+CREATE TABLE "Shipment" (
+  "id" UUID NOT NULL PRIMARY KEY,
+  "orderId" UUID NOT NULL UNIQUE REFERENCES "Order"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  "carrier" VARCHAR(30) NOT NULL DEFAULT 'local_simulator',
+  "trackingCode" VARCHAR(50) NOT NULL UNIQUE,
+  "status" "ShipmentStatus" NOT NULL DEFAULT 'IN_TRANSIT',
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL
+);
+CREATE TABLE "ShipmentEvent" (
+  "id" UUID NOT NULL PRIMARY KEY,
+  "shipmentId" UUID NOT NULL REFERENCES "Shipment"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  "eventKey" UUID NOT NULL,
+  "status" "ShipmentStatus" NOT NULL,
+  "orderVersion" INTEGER NOT NULL CHECK ("orderVersion" >= 0),
+  "actorId" UUID NOT NULL,
+  "note" VARCHAR(300) NOT NULL DEFAULT '',
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE ("shipmentId", "eventKey"),
+  UNIQUE ("shipmentId", "orderVersion")
+);

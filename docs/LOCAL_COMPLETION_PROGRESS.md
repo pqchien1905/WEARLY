@@ -9,7 +9,8 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
 - [x] Shipping snapshot, COD settlement, useful business reports.
 - [x] VNPay sandbox local implementation and signed-fixture acceptance.
 - [x] Transactional promotions and customer/admin UI.
-- [ ] Shipment tracking, cancellations/returns/refunds.
+- [x] Persistent local shipment tracking, failed delivery/retry and carrier return.
+- [ ] Authorized cancellation, customer returns and refunds.
 - [ ] Local email/support, staff roles/audit detail, persistent safe sessions.
 - [ ] Gemini Stylist and private asynchronous try-on with frontend integration.
 - [ ] Local tooling/CI/monitoring/recovery and store content/SEO.
@@ -175,3 +176,36 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
 - Backup `before-promotions-1792600245978.dump` verified; business migrations16->18
   applied. All30 original tables retain exact original-column fingerprints/counts;
   CouponRedemption is empty. Operator guide: `docs/PROMOTIONS.md`.
+
+## Shipment tracking — 21 October 2026
+
+- Added one local-simulator shipment per newly dispatched order, immutable
+  tracking code, ordered event history and customer-visible notes. Order history
+  records new checkout/confirmation/dispatch/delivery/cancellation/return actions.
+  Public responses omit staff identifiers; admin retains them.
+- Failed delivery can retry or return. Physical return restores all order stock
+  exactly once; unpaid COD is cancelled, paid amounts remain paid for explicit
+  refund handling. Shipped coupon use remains consumed. Delivery never collects COD.
+- Ruling: no invented legacy history or tracking backfill. Cost: legacy shipped
+  orders without tracking need a separately designed adoption flow for simulated
+  failed returns; current local business data contains no such orders.
+- RED7 real-PG API cases -> GREEN; four new UI tests cover parsing, UTC+7/history,
+  simulator disclosure, return confirmation and conflict reload. Existing remote
+  checkout regression exposed the removed cancellation panel; restored, GREEN.
+- Review's one important finding: uppercase UUID idempotency keys compare
+  differently after PostgreSQL normalization. Concurrent uppercase return RED409
+  -> GREEN201/201 after normalizing keys; one stock movement/event. No deferred minors.
+- Chrome passed failure/retry/return plus a delivered-unpaid COD order, customer
+  code/history/notes, reload/login and375/1440px. Screenshots visually inspected.
+- Final123/123 E2E,26/26unit,337 Flutter pass/2opt-in skips; lint/build/analyze clean.
+  Backup `before-shipments-1792600965308.dump`, business migration18->19; all31
+  original tables fingerprint-verified and preserved; no shipment fabricated.
+  Ready/catalog/content200. Setup/operation: `docs/SHIPMENTS_LOCAL.md`.
+
+## Refund research checkpoint
+
+- Official VNPay querydr/refund docs rechecked21October2026. Refund response00 is
+  request success; transaction05/06 remain processing,09 rejected. Only verified
+  final success may count as refunded. Preserve durable request identity; ambiguous
+  network outcomes must not blindly resend a monetary request. Reference:
+  https://sandbox.vnpayment.vn/apis/docs/truy-van-hoan-tien/querydr%26refund.html

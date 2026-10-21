@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'order_tracking.dart';
 import '../checkout/payment_panel.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -149,6 +150,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                                   (s) => !store.remote || s != 'Đang đóng gói',
                                 ),
                                 'Đã hủy',
+                                if (store.remote) 'Đã hoàn về kho',
                               ]
                               .map(
                                 (s) => DropdownMenuItem(
@@ -414,7 +416,10 @@ class _OrderDetail extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 28),
-        OrderProgress(status: order.status, remote: remote),
+        if (remote)
+          OrderTracking(order: order)
+        else
+          OrderProgress(status: order.status),
         if (remote) PaymentPanel(key: ValueKey(order.id), order: order),
         if (remote &&
             order.status == 'Chờ xác nhận' &&

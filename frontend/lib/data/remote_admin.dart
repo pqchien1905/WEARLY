@@ -156,4 +156,20 @@ class AdminRepository {
       'expectedVersion': version,
     },
   );
+  Future<AdminRecord> shipmentEvent(
+    String id, {
+    required String status,
+    required String note,
+    required String eventKey,
+    required int version,
+  }) => _call(
+    'POST',
+    'admin/orders/${Uri.encodeComponent(id)}/shipment-events',
+    body: {
+      'status': status,
+      'note': note,
+      'eventKey': eventKey,
+      'expectedVersion': version,
+    },
+  );
 }

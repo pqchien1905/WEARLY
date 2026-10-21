@@ -42,6 +42,58 @@ CartItem commerceItem(Object? value, {bool cart = false}) {
   );
 }
 
+const orderStatusNames = {
+  'PENDING': 'Chờ xác nhận',
+  'CONFIRMED': 'Đã xác nhận',
+  'SHIPPED': 'Đang giao',
+  'DELIVERED': 'Đã giao',
+  'CANCELLED': 'Đã hủy',
+  'RETURNED': 'Đã hoàn về kho',
+};
+const shipmentStatusNames = {
+  'IN_TRANSIT': 'Đang vận chuyển',
+  'OUT_FOR_DELIVERY': 'Đang giao đến khách',
+  'DELIVERY_FAILED': 'Giao thất bại',
+  'DELIVERED': 'Đã giao',
+  'RETURNED': 'Đã hoàn về kho',
+};
+List<OrderEvent> commerceEvents(Object? value, Map<String, String> states) {
+  if (value is! List) throw invalidCommerce;
+  return List.unmodifiable(
+    value.map((entry) {
+      final e = commerceMap(entry),
+          date = DateTime.tryParse(entry['createdAt']?.toString() ?? '');
+      if (!states.containsKey(e['status']) ||
+          e['note'] is! String ||
+          date == null) {
+        throw invalidCommerce;
+      }
+      return OrderEvent(status: e['status'], note: e['note'], createdAt: date);
+    }),
+  );
+}
+
+Shipment? commerceShipment(Object? value) {
+  if (value == null) return null;
+  final s = commerceMap(value);
+  if (s['carrier'] != 'local_simulator' ||
+      s['trackingCode'] is! String ||
+      !RegExp(r'^LOCAL-[0-9A-F-]{36}$').hasMatch(s['trackingCode']) ||
+      !shipmentStatusNames.containsKey(s['status'])) {
+    throw invalidCommerce;
+  }
+  final events = commerceEvents(s['events'], shipmentStatusNames);
+  if (events.isEmpty || events.last.status != s['status']) {
+    throw invalidCommerce;
+  }
+  return Shipment(
+    carrier: s['carrier'],
+    trackingCode: s['trackingCode'],
+    status: s['status'],
+    events: events,
+  );
+}
+
 Order commerceOrder(Object? value, {required String email}) {
   final data = commerceMap(value);
   final address = commerceMap(data['addressSnapshot']);
@@ -61,6 +113,7 @@ Order commerceOrder(Object? value, {required String email}) {
     'SHIPPED' => 'Đang giao',
     'DELIVERED' => 'Đã giao',
     'CANCELLED' => 'Đã hủy',
+    'RETURNED' => 'Đã hoàn về kho',
     _ => throw invalidCommerce,
   };
   final paymentStatus = switch (payment['status']) {
@@ -89,6 +142,8 @@ Order commerceOrder(Object? value, {required String email}) {
     discount: discount,
     couponCode: couponCode,
     createdAt: createdAt,
+    shipment: commerceShipment(data['shipment']),
+    history: commerceEvents(data['history'] ?? [], orderStatusNames),
     shipping: vnd(data['shipping']),
     items: List<CartItem>.unmodifiable(
       (data['items'] as List).map((item) => commerceItem(item)),

@@ -34,6 +34,7 @@ const style = process.argv.includes('--style');
 const recovery = process.argv.includes('--recovery');
 const payments = process.argv.includes('--payments');
 const promotions = process.argv.includes('--promotions');
+const shipments = process.argv.includes('--shipments');
 const promotionCode = 'BROWSER' + fixture.replaceAll('-', '').slice(-12).toUpperCase();
 if (admin) {
   process.env.S3_BUCKET = test.TEST_S3_BUCKET || normal.S3_BUCKET + '-test';
@@ -133,6 +134,34 @@ async function main() {
       if (await db.passwordResetToken.count({ where: { userId: account.user.id, consumedAt: null } }) !== 0)
         throw new Error('Unconsumed reset token remained');
       console.log('PASS recovery database: token consumed and original session revoked.');
+    } else if (shipments) {
+      const password = 'Browser-only-Password-2026';
+      const post = async (endpoint, body, token, headers = {}) => {
+        const response = await fetch(url + '/' + endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}), ...headers }, body: JSON.stringify(body) });
+        if (!response.ok) throw Error('Shipment fixture failed: ' + endpoint + ' ' + response.status);
+        return response.json();
+      };
+      const email = 'admin-' + fixture + '@example.com', customerEmail = 'browser-' + fixture + '@example.com';
+      const staff = await post('auth/register', { name: 'Shipment admin', email, password });
+      await db.user.update({ where: { id: staff.user.id }, data: { role: 'ADMIN' } });
+      const customer = await post('auth/register', { name: 'Shipment customer', email: customerEmail, password });
+      const address = await post('users/me/addresses', { recipient: 'Khách kiểm thử', phone: '0901234567', address: '12 Nguyễn Huệ, TP.HCM', label: 'Nhà' }, customer.accessToken);
+      const orders = [];
+      for (let i = 0; i < 2; i++) {
+        await post('cart/items', { sku: fixture, quantity: 1 }, customer.accessToken);
+        orders.push(await post('orders', { addressId: address.id, expectedSubtotal: '490000', shippingMethod: 'standard' }, customer.accessToken, { 'Idempotency-Key': randomUUID() }));
+      }
+      await flutter(['build', 'web', '--release', '--dart-define=USE_REMOTE_API=true', '--dart-define=API_BASE_URL=' + url]);
+      await require('./verify-shipment-browser.cjs')({ root, email, customerEmail, password, returnedId: orders[0].id, deliveredId: orders[1].id });
+      for (const [index, expected] of [[0, 'RETURNED'], [1, 'DELIVERED']]) {
+        const row = await db.order.findUniqueOrThrow({ where: { id: orders[index].id }, include: { shipment: { include: { events: true } }, payment: true, history: true } });
+        if (row.status !== expected || row.shipment?.status !== expected || row.shipment.carrier !== 'local_simulator') throw Error('Persisted shipment mismatch');
+        if (row.payment.status !== (index === 0 ? 'CANCELLED' : 'PENDING')) throw Error('Shipment incorrectly altered payment');
+        if (row.shipment.events.length !== (index === 0 ? 6 : 2)) throw Error('Shipment event history mismatch');
+      }
+      const inventory = await db.inventory.findFirstOrThrow({ where: { variant: { productId: product.id } } });
+      if (inventory.quantity !== 9) throw Error('Returned stock was not restored exactly once');
+      console.log('PASS persisted shipment events, return stock compensation, delivered COD unpaid; no external carrier call.');
     } else if (admin) {
       if (await db.storeContent.count() !== 0) throw new Error('Admin content verification requires no pre-existing content; refusing to overwrite it.');
       const password = 'Browser-only-Password-2026';

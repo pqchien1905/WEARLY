@@ -18,6 +18,7 @@ const _actions = {
   'INVENTORY_ADJUSTED': 'Điều chỉnh tồn kho',
   'ORDER_STATUS_CHANGED': 'Chuyển trạng thái đơn hàng',
   'COD_SETTLED': 'Đối soát tiền thu COD',
+  'SHIPMENT_UPDATED': 'Cập nhật vận chuyển',
   'PROMOTION_CREATED': 'Tạo mã khuyến mãi',
   'PROMOTION_UPDATED': 'Cập nhật mã khuyến mãi',
   'CONTENT_DRAFT_SAVED': 'Lưu bản nháp nội dung',

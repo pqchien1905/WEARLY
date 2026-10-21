@@ -16,6 +16,14 @@ enum OrderStatus {
   SHIPPED
   DELIVERED
   CANCELLED
+  RETURNED
+}
+enum ShipmentStatus {
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERY_FAILED
+  DELIVERED
+  RETURNED
 }
 enum PaymentStatus {
   PENDING
@@ -51,6 +59,7 @@ enum AdminAuditAction {
   COD_SETTLED
   PROMOTION_CREATED
   PROMOTION_UPDATED
+  SHIPMENT_UPDATED
 }
 // Historical identifiers intentionally survive changes to the referenced entities.
 // Do not copy request bodies or credentials into activity history.
@@ -312,10 +321,47 @@ model Order {
   items OrderItem[]
   payment Payment?
   redemption CouponRedemption?
+  shipment Shipment?
+  history OrderEvent[]
   movements InventoryMovement[]
   @@unique([userId, idempotencyKey])
   @@index([userId, createdAt])
   @@index([status, createdAt])
+}
+model OrderEvent {
+  id String @id @default(uuid()) @db.Uuid
+  orderId String @db.Uuid
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status OrderStatus
+  version Int
+  actorId String @db.Uuid
+  note String @default("") @db.VarChar(300)
+  createdAt DateTime @default(now())
+  @@unique([orderId, version])
+}
+model Shipment {
+  id String @id @default(uuid()) @db.Uuid
+  orderId String @unique @db.Uuid
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  carrier String @default("local_simulator") @db.VarChar(30)
+  trackingCode String @unique @db.VarChar(50)
+  status ShipmentStatus @default(IN_TRANSIT)
+  events ShipmentEvent[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+model ShipmentEvent {
+  id String @id @default(uuid()) @db.Uuid
+  shipmentId String @db.Uuid
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  eventKey String @db.Uuid
+  status ShipmentStatus
+  orderVersion Int
+  actorId String @db.Uuid
+  note String @default("") @db.VarChar(300)
+  createdAt DateTime @default(now())
+  @@unique([shipmentId, eventKey])
+  @@unique([shipmentId, orderVersion])
 }
 model OrderItem {
   id String @id @default(uuid()) @db.Uuid

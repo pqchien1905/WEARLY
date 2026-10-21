@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../account/order_tracking.dart';
+import 'shipment_actions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/design/tokens.dart';
@@ -545,6 +547,7 @@ class RemoteAdminOrder extends ConsumerWidget {
                       ),
                   ],
                   if (next != null &&
+                      order.shipment?.status != 'DELIVERY_FAILED' &&
                       (payment['provider'] != 'vnpay' ||
                           payment['status'] == 'PAID')) ...[
                     const SizedBox(height: 20),
@@ -574,9 +577,11 @@ class RemoteAdminOrder extends ConsumerWidget {
                       },
                     ),
                   ],
+                  ShipmentActions(data: data, order: order),
                 ],
               ),
             ),
+            AdminCard(child: OrderTracking(order: order)),
             for (final item in order.items)
               AdminCard(
                 child: Column(

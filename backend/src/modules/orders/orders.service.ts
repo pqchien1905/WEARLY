@@ -13,7 +13,7 @@ import { CreateOrderDto } from './dto/order.dto';
 import { PageDto } from '../products/dto/query-products.dto';
 import { VnpayProvider } from '../../integrations/payments/vnpay.provider';
 import { PromotionsService } from '../promotions/promotions.service';
-const include = { items: true, payment: true };
+import { orderInclude as include } from './order-includes';
 @Injectable()
 export class OrdersService {
   constructor(
@@ -142,6 +142,7 @@ export class OrdersService {
           shipping,
           shippingMethod: dto.shippingMethod,
           total,
+          history: { create: { status: 'PENDING', version: 0, actorId: userId } },
           items: {
             create: cart.items.map((i) => ({
               variantId: i.variantId,
@@ -278,6 +279,7 @@ export class OrdersService {
         where: { orderId: id, releasedAt: null },
         data: { releasedAt: new Date() },
       });
+      await tx.orderEvent.create({ data: { orderId: id, status: 'CANCELLED', version: order.version + 1, actorId: userId } });
       return tx.order.findUniqueOrThrow({ where: { id }, include });
     });
   }

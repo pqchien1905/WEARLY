@@ -6,6 +6,8 @@ import { fail } from '../../common/errors';
 import { PageDto } from '../products/dto/query-products.dto';
 import { publicUser } from '../auth/auth.service';
 import { recordAdminActivity } from './audit';
+import { adminOrderInclude } from '../orders/order-includes';
+import { recordFulfillment } from '../shipments/shipment-transitions';
 import {
   AdjustInventoryDto,
   CreateProductDto,
@@ -20,16 +22,6 @@ const adminProductInclude = {
   brand: true,
   images: { orderBy: { position: 'asc' as const } },
   variants: { orderBy: { sku: 'asc' as const }, include: { inventory: true } },
-};
-const adminOrderInclude = {
-  items: true,
-  payment: {
-    include: {
-      settlement: true,
-      attempts: { orderBy: { createdAt: 'desc' as const } },
-    },
-  },
-  user: { select: { email: true, name: true } },
 };
 @Injectable()
 export class AdminService {
@@ -276,6 +268,7 @@ export class AdminService {
           'ORDER_STATE_CONFLICT',
           'Order changed or transition is invalid',
         );
+      await recordFulfillment(tx, id, dto.status, dto.expectedVersion + 1, actorId);
       await recordAdminActivity(tx, actorId, 'ORDER_STATUS_CHANGED', id);
       // Delivery is not proof of payment: payment stays PENDING until a separate
       // settlement is explicitly recorded.
