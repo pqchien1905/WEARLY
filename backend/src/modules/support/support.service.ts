@@ -152,11 +152,14 @@ export class SupportService {
         subject: 'WEARLY — Trả lời yêu cầu ' + id.slice(0, 8),
         body: `Xin chào ${ticket.name},\n\n${dto.message}\n\nMã yêu cầu: ${id}\nThư được lưu trong hộp thư local của hệ thống.`,
       });
-      await tx.supportTicket.update({
+      const updated = await tx.supportTicket.update({
         where: { id },
         data: { status: 'ANSWERED', version: { increment: 1 } },
       });
-      await recordAdminActivity(tx, actorId, 'SUPPORT_REPLIED', reply.id);
+      await recordAdminActivity(tx, actorId, 'SUPPORT_REPLIED', reply.id, {
+        before: ticket,
+        after: updated,
+      });
       return receipt(reply);
     });
   }
@@ -173,7 +176,10 @@ export class SupportService {
         where: { id },
         data: { status: dto.status, version: { increment: 1 } },
       });
-      await recordAdminActivity(tx, actorId, 'SUPPORT_STATUS_CHANGED', id);
+      await recordAdminActivity(tx, actorId, 'SUPPORT_STATUS_CHANGED', id, {
+        before: ticket,
+        after: row,
+      });
       return { id, status: row.status, version: row.version };
     });
   }

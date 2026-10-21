@@ -309,3 +309,9 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   opt in, so enabled recovery in local.env cannot break test-specific origins.
 - UI permission gates, safe detailed audit, Chrome, review and business migration
   remain pending. Persistent browser sessions are a separate next milestone.
+- Task2 safe audit now implemented: explicit per-action before/after scalar fields,
+  exact Decimal/date serialization and no personal messages/addresses/credentials.
+  Captured in the mutation transaction for catalog, inventory, commerce, promotions,
+  content, support and staff. Taxonomy/image events retain action/target only, and
+  older rows remain empty rather than inventing history. RED3 API assertions and
+  missing sanitizer -> GREEN10 focused/3unit; final163 E2E/46unit, lint/build clean.

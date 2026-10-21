@@ -225,7 +225,10 @@ export class ReturnsService {
         where: { id },
         data: { version: { increment: 1 } },
       });
-      await recordAdminActivity(tx, actorId, 'RETURN_DECIDED', id);
+      await recordAdminActivity(tx, actorId, 'RETURN_DECIDED', id, {
+        before: request,
+        after: saved,
+      });
       await queueOrderMail(
         tx,
         id,
@@ -314,7 +317,10 @@ export class ReturnsService {
             note: 'Đã nhận lại toàn bộ hàng khách trả',
           },
         });
-      await recordAdminActivity(tx, actorId, 'RETURN_RECEIVED', id);
+      await recordAdminActivity(tx, actorId, 'RETURN_RECEIVED', id, {
+        before: request,
+        after: saved,
+      });
       await queueOrderMail(
         tx,
         id,
@@ -349,7 +355,10 @@ export class ReturnsService {
           'Only current pre-dispatch orders can be cancelled',
         );
       await cancelOrder(tx, order, actorId, dto.reason);
-      await recordAdminActivity(tx, actorId, 'ORDER_CANCELLED', id);
+      await recordAdminActivity(tx, actorId, 'ORDER_CANCELLED', id, {
+        before: order,
+        after: { status: 'CANCELLED', version: order.version + 1 },
+      });
       return tx.order.findUniqueOrThrow({
         where: { id },
         include: adminOrderInclude,

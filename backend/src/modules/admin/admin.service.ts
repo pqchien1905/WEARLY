@@ -193,7 +193,9 @@ export class AdminService {
         },
         include: adminProductInclude,
       });
-      await recordAdminActivity(tx, actorId, 'PRODUCT_CREATED', product.id);
+      await recordAdminActivity(tx, actorId, 'PRODUCT_CREATED', product.id, {
+        after: product,
+      });
       return product;
     });
   }
@@ -203,6 +205,7 @@ export class AdminService {
     // The transaction rolls back both metadata and gallery if any write fails.
     return transaction(this.db, async (tx) => {
       await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${id}::uuid FOR UPDATE`;
+      const before = await tx.product.findUniqueOrThrow({ where: { id } });
       await validateCatalogReferences(tx, id, images ?? []);
       if (images !== undefined)
         await tx.productImage.deleteMany({ where: { productId: id } });
@@ -222,7 +225,10 @@ export class AdminService {
         },
         include: adminProductInclude,
       });
-      await recordAdminActivity(tx, actorId, 'PRODUCT_UPDATED', id);
+      await recordAdminActivity(tx, actorId, 'PRODUCT_UPDATED', id, {
+        before,
+        after: product,
+      });
       return product;
     });
   }
@@ -231,14 +237,22 @@ export class AdminService {
       const sku = await tx.productVariant.create({
         data: { ...dto, inventory: { create: { quantity: 0 } } },
       });
-      await recordAdminActivity(tx, actorId, 'SKU_CREATED', sku.id);
+      await recordAdminActivity(tx, actorId, 'SKU_CREATED', sku.id, {
+        after: sku,
+      });
       return sku;
     });
   }
   updateSku(actorId: string, id: string, dto: UpdateSkuDto) {
     return transaction(this.db, async (tx) => {
+      const before = await tx.productVariant.findUniqueOrThrow({
+        where: { id },
+      });
       const sku = await tx.productVariant.update({ where: { id }, data: dto });
-      await recordAdminActivity(tx, actorId, 'SKU_UPDATED', id);
+      await recordAdminActivity(tx, actorId, 'SKU_UPDATED', id, {
+        before,
+        after: sku,
+      });
       return sku;
     });
   }
@@ -267,13 +281,18 @@ export class AdminService {
           reason: 'ADMIN: ' + dto.reason,
         },
       });
-      await recordAdminActivity(tx, actorId, 'INVENTORY_ADJUSTED', id);
-      return tx.inventory.findUniqueOrThrow({ where: { id } });
+      const after = await tx.inventory.findUniqueOrThrow({ where: { id } });
+      await recordAdminActivity(tx, actorId, 'INVENTORY_ADJUSTED', id, {
+        before: inv,
+        after,
+      });
+      return after;
     });
   }
   status(actorId: string, id: string, dto: OrderStatusDto) {
     return transaction(this.db, async (tx) => {
       await tx.$queryRaw`SELECT id FROM "Order" WHERE id = ${id}::uuid FOR UPDATE`;
+      const before = await tx.order.findUnique({ where: { id } });
       const payment = await tx.payment.findUnique({ where: { orderId: id } });
       if (
         payment?.provider === 'vnpay' &&
@@ -306,7 +325,10 @@ export class AdminService {
         dto.expectedVersion + 1,
         actorId,
       );
-      await recordAdminActivity(tx, actorId, 'ORDER_STATUS_CHANGED', id);
+      await recordAdminActivity(tx, actorId, 'ORDER_STATUS_CHANGED', id, {
+        before,
+        after: { status: dto.status, version: dto.expectedVersion + 1 },
+      });
       // Delivery is not proof of payment: payment stays PENDING until a separate
       // settlement is explicitly recorded.
       return tx.order.findUniqueOrThrow({
@@ -373,7 +395,10 @@ export class AdminService {
           },
         },
       });
-      await recordAdminActivity(tx, actorId, 'COD_SETTLED', id);
+      await recordAdminActivity(tx, actorId, 'COD_SETTLED', id, {
+        before: payment,
+        after: { status: 'PAID', amount: payment.amount },
+      });
       await queueOrderMail(
         tx,
         id,

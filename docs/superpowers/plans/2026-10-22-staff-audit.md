@@ -96,11 +96,11 @@ return status/version/amount; refund status/provider/amount/primary; support
 status/version; staff role/active/staffVersion. Taxonomy names and image content
 are intentionally omitted; their action/target still identify the change.
 
-- [ ] Write unit sanitizer rejection tests and real API before/after assertions for
+- [x] Write unit sanitizer rejection tests and real API before/after assertions for
   product, inventory, order, support and staff; rollback assertions remain covered.
-- [ ] Run tests. Expected RED missing details or sanitizer. Implement explicit
+- [x] Run tests. Expected RED missing details or sanitizer. Implement explicit
   snapshots at mutation sites, excluding notes/messages/addresses and external IDs.
-- [ ] Run full backend E2E/unit, lint/build sequentially. Expected all PASS; commit.
+- [x] Run full backend E2E/unit, lint/build sequentially. Expected all PASS; commit.
 
 ## Task 3: permission-aware admin UI and local acceptance
 

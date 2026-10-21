@@ -98,7 +98,10 @@ export class ShipmentsService {
             data: { status: 'CANCELLED' },
           });
       }
-      await recordAdminActivity(tx, actorId, 'SHIPMENT_UPDATED', id);
+      await recordAdminActivity(tx, actorId, 'SHIPMENT_UPDATED', id, {
+        before: { status: shipment.status, version: order.version },
+        after: { status: dto.status, version },
+      });
       if (terminal)
         await queueOrderStatus(
           tx,

@@ -63,6 +63,7 @@ export class ContentService {
   async save(actorId: string, dto: SaveContentDto) {
     try {
       return await transaction(this.db, async (tx) => {
+        const before = await tx.storeContent.findUnique({ where: { key } });
         let row: StoreContent;
         if (dto.expectedVersion === 0) {
           row = await tx.storeContent.create({
@@ -80,7 +81,10 @@ export class ContentService {
           if (!changed.count) conflict();
           row = await tx.storeContent.findUniqueOrThrow({ where: { key } });
         }
-        await recordAdminActivity(tx, actorId, 'CONTENT_DRAFT_SAVED', row.id);
+        await recordAdminActivity(tx, actorId, 'CONTENT_DRAFT_SAVED', row.id, {
+          before,
+          after: row,
+        });
         return privateContent(row);
       });
     } catch (error) {
@@ -113,7 +117,10 @@ export class ContentService {
         },
       });
       if (!changed.count) conflict();
-      await recordAdminActivity(tx, actorId, 'CONTENT_PUBLISHED', row.id);
+      await recordAdminActivity(tx, actorId, 'CONTENT_PUBLISHED', row.id, {
+        before: row,
+        after: { version: row.version + 1, publishedVersion: row.version + 1 },
+      });
       return privateContent(
         await tx.storeContent.findUniqueOrThrow({ where: { key } }),
       );

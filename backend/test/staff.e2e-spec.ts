@@ -296,6 +296,161 @@ describe('Staff authorization and atomic administration', () => {
       await db.adminAuditEvent.count({ where: { targetId: person.user.id } }),
     ).toBe(1);
   });
+  it('records catalog and inventory before/after values without descriptions or reasons', async () => {
+    const suffix = randomUUID();
+    const category = await db.category.create({
+        data: { name: suffix, slug: suffix },
+      }),
+      brand = await db.brand.create({ data: { name: suffix, slug: suffix } });
+    const product = await db.product.create({
+      data: {
+        name: 'Private name',
+        description: 'Private draft content',
+        slug: suffix,
+        material: 'Cotton',
+        style: '',
+        categoryId: category.id,
+        brandId: brand.id,
+      },
+    });
+    await request(app.getHttpServer())
+      .patch('/api/v1/admin/products/' + product.id)
+      .auth(admin.accessToken, { type: 'bearer' })
+      .send({ active: false })
+      .expect(200);
+    expect(
+      (
+        await db.adminAuditEvent.findFirstOrThrow({
+          where: { targetId: product.id },
+        })
+      ).details,
+    ).toEqual({
+      before: {
+        active: true,
+        tryOnSupported: false,
+        categoryId: category.id,
+        brandId: brand.id,
+      },
+      after: {
+        active: false,
+        tryOnSupported: false,
+        categoryId: category.id,
+        brandId: brand.id,
+      },
+    });
+    const sku = await db.productVariant.create({
+      data: {
+        productId: product.id,
+        sku: suffix,
+        size: 'S',
+        color: 'White',
+        colorHex: '#FFFFFF',
+        price: '100000',
+        inventory: { create: { quantity: 5 } },
+      },
+      include: { inventory: true },
+    });
+    await request(app.getHttpServer())
+      .post('/api/v1/admin/inventory/' + sku.inventory!.id + '/adjust')
+      .auth(admin.accessToken, { type: 'bearer' })
+      .send({
+        delta: -2,
+        expectedVersion: 0,
+        reason: 'Private reason excluded',
+      })
+      .expect(201);
+    expect(
+      (
+        await db.adminAuditEvent.findFirstOrThrow({
+          where: { targetId: sku.inventory!.id },
+        })
+      ).details,
+    ).toEqual({
+      before: { quantity: 5, version: 0 },
+      after: { quantity: 3, version: 1 },
+    });
+  });
+  it('records order transitions without customer address snapshots', async () => {
+    const order = await db.order.create({
+      data: {
+        userId: customer.user.id,
+        idempotencyKey: randomUUID(),
+        requestHash: 'fixture',
+        addressSnapshot: { name: 'Private recipient' },
+        subtotal: '100000',
+        shipping: '30000',
+        total: '130000',
+        payment: { create: { provider: 'cod', amount: '130000' } },
+      },
+    });
+    await request(app.getHttpServer())
+      .patch('/api/v1/admin/orders/' + order.id + '/status')
+      .auth(admin.accessToken, { type: 'bearer' })
+      .send({ status: 'CONFIRMED', expectedVersion: 0 })
+      .expect(200);
+    expect(
+      (
+        await db.adminAuditEvent.findFirstOrThrow({
+          where: { targetId: order.id },
+        })
+      ).details,
+    ).toEqual({
+      before: { status: 'PENDING', version: 0 },
+      after: { status: 'CONFIRMED', version: 1 },
+    });
+  });
+  it('records support state changes without the message or recipient', async () => {
+    const ticket = (
+      await request(app.getHttpServer())
+        .post('/api/v1/support')
+        .send({
+          requestKey: randomUUID(),
+          name: 'Private name',
+          email: 'private@example.test',
+          message: 'Private customer message',
+        })
+        .expect(201)
+    ).body;
+    const reply = (
+      await request(app.getHttpServer())
+        .post('/api/v1/admin/support/' + ticket.id + '/replies')
+        .auth(admin.accessToken, { type: 'bearer' })
+        .send({
+          requestKey: randomUUID(),
+          expectedVersion: 0,
+          message: 'Private staff reply',
+        })
+        .expect(201)
+    ).body;
+    expect(
+      (
+        await db.adminAuditEvent.findFirstOrThrow({
+          where: { targetId: reply.id },
+        })
+      ).details,
+    ).toEqual({
+      before: { status: 'OPEN', version: 0 },
+      after: { status: 'ANSWERED', version: 1 },
+    });
+    await request(app.getHttpServer())
+      .patch('/api/v1/admin/support/' + ticket.id)
+      .auth(admin.accessToken, { type: 'bearer' })
+      .send({ expectedVersion: 1, status: 'CLOSED' })
+      .expect(200);
+    expect(
+      (
+        await db.adminAuditEvent.findFirstOrThrow({
+          where: { targetId: ticket.id },
+        })
+      ).details,
+    ).toEqual({
+      before: { status: 'ANSWERED', version: 1 },
+      after: { status: 'CLOSED', version: 2 },
+    });
+    expect(
+      JSON.stringify((await get('admin/audit').expect(200)).body),
+    ).not.toContain('Private');
+  });
   it('cannot concurrently remove the last active administrators', async () => {
     await change(admin.user.id, 'ADMIN', 0, false).expect(409);
     const second = await register();

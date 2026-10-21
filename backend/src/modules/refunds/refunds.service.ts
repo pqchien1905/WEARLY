@@ -187,7 +187,9 @@ export class RefundsService {
           where: { id },
           data: { version: { increment: 1 } },
         });
-        await recordAdminActivity(tx, actorId, 'REFUND_CREATED', row.id);
+        await recordAdminActivity(tx, actorId, 'REFUND_CREATED', row.id, {
+          after: { ...row, provider: p.provider },
+        });
         if (row.status === 'SUCCEEDED')
           await queueOrderMail(
             tx,
@@ -350,7 +352,14 @@ export class RefundsService {
         where: { id },
         data: { version: { increment: 1 } },
       });
-      await recordAdminActivity(tx, actorId, 'REFUND_UPDATED', row.id);
+      await recordAdminActivity(tx, actorId, 'REFUND_UPDATED', row.id, {
+        before: { ...row, provider: order.payment!.provider },
+        after: {
+          ...row,
+          provider: order.payment!.provider,
+          status: event.status,
+        },
+      });
       if (event.status === 'SUCCEEDED')
         await queueOrderMail(
           tx,

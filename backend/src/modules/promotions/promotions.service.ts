@@ -49,7 +49,9 @@ export class PromotionsService {
       };
       this.validate(data);
       const coupon = await tx.coupon.create({ data });
-      await recordAdminActivity(tx, actorId, 'PROMOTION_CREATED', coupon.id);
+      await recordAdminActivity(tx, actorId, 'PROMOTION_CREATED', coupon.id, {
+        after: coupon,
+      });
       return coupon;
     });
   }
@@ -86,7 +88,10 @@ export class PromotionsService {
         where: { id },
         data: { ...data, version: { increment: 1 } },
       });
-      await recordAdminActivity(tx, actorId, 'PROMOTION_UPDATED', id);
+      await recordAdminActivity(tx, actorId, 'PROMOTION_UPDATED', id, {
+        before: existing,
+        after: updated,
+      });
       return updated;
     });
   }

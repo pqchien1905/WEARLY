@@ -3,6 +3,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { transaction, lockUser } from '../../common/transaction';
 import { fail } from '../../common/errors';
 import { StaffQueryDto, UpdateStaffDto } from './staff.dto';
+import { recordAdminActivity } from './audit';
 const select = {
   id: true,
   name: true,
@@ -75,24 +76,9 @@ export class StaffService {
         where: { userId: id, revokedAt: null },
         data: { revokedAt: new Date() },
       });
-      await tx.adminAuditEvent.create({
-        data: {
-          actorId,
-          action: 'STAFF_UPDATED',
-          targetId: id,
-          details: {
-            before: {
-              role: current.role,
-              active: current.active,
-              staffVersion: current.staffVersion,
-            },
-            after: {
-              role: updated.role,
-              active: updated.active,
-              staffVersion: updated.staffVersion,
-            },
-          },
-        },
+      await recordAdminActivity(tx, actorId, 'STAFF_UPDATED', id, {
+        before: current,
+        after: updated,
       });
       return updated;
     });
