@@ -8,6 +8,7 @@ import 'package:nep_storefront/app/account_state.dart';
 import 'package:nep_storefront/app/api_providers.dart';
 import 'package:nep_storefront/app/app.dart';
 import 'package:nep_storefront/core/network/api_client.dart';
+import 'package:nep_storefront/core/network/browser_auth_recovery_store.dart';
 import 'package:nep_storefront/data/remote_account.dart';
 import 'remote_session_test.dart' show jsonResponse;
 import 'separate_sessions_test.dart' show loginJson;
@@ -20,11 +21,13 @@ void main() {
     Future<http.Response> Function(http.Request) handler, {
     String scope = 'customer',
     Duration timeout = const Duration(seconds: 15),
+    BrowserAuthRecoveryStore? recovery,
   }) {
     final api = ApiClient(
       baseUrl: 'http://localhost/api/v1',
       browserScope: scope,
       timeout: timeout,
+      browserRecovery: recovery,
       client: MockClient(handler),
     );
     addTearDown(api.close);
@@ -263,6 +266,88 @@ void main() {
     expect(container.read(accountProvider), isNull);
     expect(api.tokens.accessToken, isNull);
   });
+
+  for (final transportFailure in [false, true]) {
+    test('abandoned login cleanup remains retryable after '
+        '${transportFailure ? "transport" : "HTTP"} failure', () async {
+      final response = Completer<http.Response>();
+      final cleanup = Completer<void>();
+      var failed = true, refreshes = 0;
+      final api = client((r) async {
+        if (r.url.path.endsWith('/login')) return response.future;
+        if (r.url.path.endsWith('/logout')) {
+          if (!cleanup.isCompleted) cleanup.complete();
+          if (failed && transportFailure) throw http.ClientException('offline');
+          return jsonResponse({}, failed ? 503 : 200);
+        }
+        refreshes++;
+        return failed ? jsonResponse(browserJson()) : jsonResponse({}, 401);
+      }, timeout: const Duration(milliseconds: 25));
+      final repo = RemoteAccountRepository(api);
+      await expectLater(
+        repo.signIn(
+          name: '',
+          email: 'customer@example.com',
+          password: 'valid-password',
+        ),
+        throwsA(isA<ApiException>().having((e) => e.code, 'code', 'TIMEOUT')),
+      );
+      response.complete(jsonResponse(browserJson()));
+      await cleanup.future;
+      await expectLater(repo.restore(), throwsA(isA<ApiException>()));
+      expect(refreshes, 0, reason: 'An abandoned cookie must not be restored');
+      failed = false;
+      expect(await repo.restore(), isNull);
+      expect(refreshes, 1);
+      expect(api.tokens.accessToken, isNull);
+    });
+  }
+
+  testWidgets(
+    'reload blocks abandoned-session restore and offers cleanup retry',
+    (tester) async {
+      final recovery = MemoryBrowserAuthRecoveryStore()
+        ..mark('unfinished-login');
+      var failed = true, refreshes = 0, cleanups = 0;
+      final customer = client((r) async {
+        if (r.url.path.endsWith('/logout')) {
+          cleanups++;
+          return jsonResponse({}, failed ? 503 : 200);
+        }
+        if (r.url.path.endsWith('/refresh')) refreshes++;
+        return jsonResponse({}, 401);
+      }, recovery: recovery);
+      final staff = client((_) async => jsonResponse({}, 401), scope: 'admin');
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            browserSessionsEnabledProvider.overrideWithValue(true),
+            remoteApiProvider.overrideWithValue(true),
+            apiClientProvider.overrideWithValue(customer),
+            sessionTokensProvider.overrideWithValue(customer.tokens),
+            adminApiClientProvider.overrideWithValue(staff),
+            adminSessionTokensProvider.overrideWithValue(staff.tokens),
+          ],
+          child: NepApp(router: createRouter(initialLocation: '/account')),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(cleanups, greaterThan(0));
+      final attemptsBeforeRetry = cleanups;
+      expect(refreshes, 0);
+      expect(recovery.read(), 'unfinished-login');
+      expect(find.text('Chưa khôi phục được phiên đăng nhập'), findsOneWidget);
+      failed = false;
+      await tester.tap(find.widgetWithText(FilledButton, 'Thử khôi phục lại'));
+      await tester.pumpAndSettle();
+      expect(cleanups, attemptsBeforeRetry + 1);
+      expect(refreshes, 1);
+      expect(recovery.read(), isNull);
+      expect(find.text('Đăng nhập để tiếp tục'), findsOneWidget);
+      expect(customer.tokens.accessToken, isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'startup waits for both identities before mounting a private route',

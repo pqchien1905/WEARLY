@@ -43,6 +43,10 @@ Flutter web restores both identities before protected screens mount.
 - Browser startup waits for both restore attempts. 401 means signed out; network
   failure offers retry, preserving cookies. Failed logout remains visibly retryable.
   Nonweb/demo behavior and all existing API clients remain compatible.
+- Review ruling: persist a non-secret login-attempt marker before sending browser
+  credentials; clear only on confirmed acceptance or successful revocation. Failed
+  abandoned-login cleanup blocks restore/new login, across reload, with retry UI.
+  This is not a persistent credential; unavailable browser storage fails closed.
 - Same hostname for local frontend/API (localhost or127.0.0.1, never mixed).
   Business data only additive migration after verified backup and final review.
 
@@ -103,7 +107,7 @@ and LOCAL_COMPLETION_PROGRESS.md.
 - [x] Chrome actual cookies: customer/admin independent login, reload and second tab,
   denied CSRF, no secret in document.cookie/storage, expiry/renewal, logout per scope,
   revocation,375/1440. Update existing staff reload acceptance to persistent login.
-- [ ] One independent review then one tested fix pass. Verified business backup,
+- [x] One independent review then one tested fix pass. Verified business backup,
   migration and original-column fingerprints, compiled read-only smoke. Commit
   guide/ledger and remove only this plan's scratch. Goal remains ACTIVE for AI,
   operations/SEO/providers and final integration.

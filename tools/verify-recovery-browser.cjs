@@ -17,6 +17,7 @@ module.exports = async function verify({ root, email, password, nextPassword, ge
   });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(4183, '127.0.0.1', resolve); });
   let browser, page;
+  let stage = 'start';
   const errors = [], requests = [];
   try {
     browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
@@ -48,7 +49,9 @@ module.exports = async function verify({ root, email, password, nextPassword, ge
     await field('Email', email); await button('Gửi liên kết khôi phục');
     await page.getByText(/Đã tiếp nhận yêu cầu/).waitFor();
     await page.screenshot({ path: path.join(output, 'request-desktop.png') });
+    stage = 'receive-local-link';
     const link = await getLink();
+    stage = 'open-reset-form';
     await page.goto(link); await semantics();
     await page.getByRole('textbox', { name: 'Mật khẩu mới', exact: true }).waitFor();
     assert.equal(new URL(page.url()).hash, '#/reset-password', 'Reset URL was not scrubbed');
@@ -56,12 +59,15 @@ module.exports = async function verify({ root, email, password, nextPassword, ge
     await page.setViewportSize({ width: 375, height: 812 }); await page.waitForTimeout(400);
     await field('Mật khẩu mới', nextPassword); await field('Nhập lại mật khẩu mới', nextPassword);
     await page.screenshot({ path: path.join(output, 'reset-mobile.png') });
+    stage = 'submit-reset';
     await button('Đặt lại mật khẩu');
     await page.getByText('Mật khẩu đã được thay đổi', { exact: true }).waitFor();
+    stage = 'login-new-password';
     await button('Đăng nhập'); await field('Email', email); await field('Mật khẩu', nextPassword); await button('Đăng nhập');
     await page.waitForURL('**/#/account');
     const old = await fetch(url + '/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
     assert.equal(old.status, 401, 'Old password remained valid');
+    stage = 'reject-used-link';
     await page.goto(link); await semantics();
     await field('Mật khẩu mới', nextPassword); await field('Nhập lại mật khẩu mới', nextPassword); await button('Đặt lại mật khẩu');
     await page.getByText('Liên kết không còn hiệu lực', { exact: true }).waitFor();
@@ -73,7 +79,7 @@ module.exports = async function verify({ root, email, password, nextPassword, ge
     console.log('PASS Chrome recovery: actual SMTP link, clean URL, 375px form, new login, old password/session rejection, one-use link and reload.');
   } catch {
     // Never persist a URL, mail body, password field contents or raw token on failure.
-    throw new Error('Recovery browser verification failed; inspect sanitized request evidence.');
+    throw new Error('Recovery browser verification failed at '+stage+'; inspect sanitized request evidence.');
   } finally {
     fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify({ errors, requests }, null, 2));
     await browser?.close(); await new Promise(resolve => server.close(resolve));

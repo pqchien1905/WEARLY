@@ -3,8 +3,12 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'package:uuid/uuid.dart';
 import 'session_tokens.dart';
 import 'platform_http_client.dart';
+import 'browser_auth_recovery_store.dart';
+import 'browser_auth_recovery_native.dart'
+    if (dart.library.js_interop) 'browser_auth_recovery_web.dart';
 
 class ApiException implements Exception {
   const ApiException(this.code, this.message, {this.status, this.details});
@@ -25,12 +29,18 @@ class ApiClient {
     required String baseUrl,
     http.Client? client,
     SessionTokens? tokens,
+    BrowserAuthRecoveryStore? browserRecovery,
     this.browserScope,
     this.timeout = const Duration(seconds: 15),
   }) : _base = Uri.parse(baseUrl.endsWith('/') ? baseUrl : '$baseUrl/'),
        _client =
            client ?? platformHttpClient(credentials: browserScope != null),
        tokens = tokens ?? SessionTokens() {
+    _browserRecovery =
+        browserRecovery ??
+        browserAuthRecoveryStore(
+          'wearly.auth-recovery.v1:${Uri.encodeComponent(_base.toString())}:$browserScope',
+        );
     if (!['http', 'https'].contains(_base.scheme) ||
         _base.host.isEmpty ||
         _base.userInfo.isNotEmpty ||
@@ -46,6 +56,7 @@ class ApiClient {
   final SessionTokens tokens;
   final Duration timeout;
   final String? browserScope;
+  late final BrowserAuthRecoveryStore _browserRecovery;
   Future<void> _browserRequests = Future<void>.value();
   Future<void>? _refreshing;
   int? _refreshGeneration;
@@ -55,7 +66,8 @@ class ApiClient {
 
   /// Cookie mutations are ordered through actual network completion, including
   /// after a caller timeout. Discarded successful logins are revoked before the
-  /// next queued login/logout can run, preventing late cookie resurrection.
+  /// next queued login/logout can run. Failed revocation remains marked across
+  /// reload and must succeed before restoration or another login can proceed.
   Future<Object?> browserAuth(
     String action, {
     Map<String, Object?>? body,
@@ -80,18 +92,82 @@ class ApiClient {
       return http.Response.fromStream(await _client.send(request));
     }
 
+    const cleanupRequired = ApiException(
+      'SESSION_CLEANUP_REQUIRED',
+      'Chưa hủy được phiên đăng nhập chưa xác nhận. Hãy thử lại để hoàn tất trước khi tiếp tục.',
+    );
+    String? pending() {
+      try {
+        return _browserRecovery.read();
+      } catch (_) {
+        throw const ApiException(
+          'SESSION_STORAGE_UNAVAILABLE',
+          'Cần cho phép lưu dữ liệu của trang để đăng nhập an toàn. Hãy kiểm tra cài đặt trình duyệt và thử lại.',
+        );
+      }
+    }
+
+    Future<void> revoke(String attempt) async {
+      try {
+        _decode(await send('logout'));
+        _browserRecovery.clear(attempt);
+      } catch (_) {
+        // Do not report a failed cleanup's 401 as a successful signed-out state.
+        throw cleanupRequired;
+      }
+    }
+
     final transport = _browserRequests.then((_) async {
       if (expired && action != 'logout') {
         throw TimeoutException('Queued authentication expired');
       }
       if (isCurrent != null && !isCurrent()) throw sessionChanged;
+      final unresolved = pending();
+      if (unresolved != null && action != 'logout') {
+        await revoke(unresolved);
+        if (pending() != null) throw cleanupRequired;
+        if (expired) throw TimeoutException('Authentication cleanup timed out');
+        if (isCurrent != null && !isCurrent()) throw sessionChanged;
+      }
+      final signingIn = action == 'login' || action == 'register';
+      final attempt = signingIn ? const Uuid().v4() : null;
+      if (attempt != null) {
+        try {
+          _browserRecovery.mark(attempt);
+        } catch (_) {
+          throw cleanupRequired; // Never issue a cookie without its reload guard.
+        }
+      }
       final response = await send(action);
-      if ((action == 'login' || action == 'register') &&
+      if (attempt != null &&
           response.statusCode >= 200 &&
           response.statusCode < 300 &&
           (expired || (isCurrent != null && !isCurrent()))) {
-        await send('logout');
+        _browserRecovery.mark(attempt);
+        await revoke(attempt);
         throw sessionChanged;
+      }
+      if (attempt != null) {
+        if (response.statusCode >= 400 && response.statusCode < 500) {
+          // These rejected requests issue no cookie. Preserve normal validation.
+          _browserRecovery.clear(attempt);
+        }
+        final data = _decode(response, login: action == 'login');
+        if (data is! Map ||
+            data['accessToken'] is! String ||
+            data['user'] is! Map ||
+            ![
+              'id',
+              'name',
+              'email',
+              'role',
+            ].every((key) => data['user'][key] is String)) {
+          throw cleanupRequired;
+        }
+        _browserRecovery.clear(attempt);
+      } else if (action == 'logout' && unresolved != null) {
+        _decode(response);
+        _browserRecovery.clear(unresolved);
       }
       return response;
     });
@@ -109,9 +185,11 @@ class ApiClient {
       );
       return _decode(response, login: action == 'login');
     } on TimeoutException {
-      throw const ApiException(
+      throw ApiException(
         'TIMEOUT',
-        'Kết nối quá thời gian chờ. Hãy thử lại.',
+        action == 'login' || action == 'register'
+            ? 'Chưa xác nhận được đăng nhập. Hãy thử lại để đóng phiên chưa xác nhận trước khi tiếp tục.'
+            : 'Kết nối quá thời gian chờ. Hãy thử lại.',
       );
     } on http.ClientException {
       throw const ApiException(

@@ -12,7 +12,7 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
 - [x] Persistent local shipment tracking, failed delivery/retry and carrier return.
 - [x] Authorized cancellation, customer returns and refunds.
 - [x] Local email inbox, order notifications and persistent customer support.
-- [ ] Staff roles/audit detail and persistent safe sessions.
+- [x] Staff roles/audit detail and persistent safe sessions.
 - [ ] Gemini Stylist and private asynchronous try-on with frontend integration.
 - [ ] Local tooling/CI/monitoring/recovery and store content/SEO.
 - [ ] Customer/admin/browser acceptance and configured provider verification.
@@ -360,3 +360,24 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   Chrome --staff also PASS after automatic restoration. Updated prior browser
   scenarios' reload and expected anonymous-probe assertions; syntax checks PASS.
   Shopping/recovery regressions in progress; independent review and migration next.
+- Final independent review4bc7c24..cc66478: one important abandoned-login cleanup
+  failure, no critical/minor. HTTP and transport regressions reproduced RED (the
+  abandoned account was restored), then GREEN with checked cleanup responses and
+  a durable non-secret attempt marker. Restore/new login waits for confirmed
+  revocation; reload failure has a retry button. Full382 Flutter+2skips, analyze
+  clean; backend unchanged since171 E2E/46unit/lint/build PASS.
+- Final Chrome --sessions PASS includes real delayed Set-Cookie, injected503
+  cleanup, reload blocked from renewal, then confirmed cleanup retry/new login.
+  Shopping, staff and actual SMTP recovery regressions also PASS. Recovery's first
+  run failed before reset POST; added secret-free stage diagnostics and rerun
+  passed without product changes. Cause remains unestablished; retained diagnostics.
+- Ruling: localStorage holds only an opaque login-attempt marker, scoped by API
+  and customer/admin; never account details or credentials. Cost: browser site
+  storage must be enabled; deliberate simultaneous cross-tab auth may still need
+  re-login. Stable-cookie theft lifetime and recovery-entry behavior remain as
+  recorded above. Production proxy/TLS and native keychain remain outside scope.
+- Verified backup before-browser-sessions-1792611189537.dump; business23->24.
+  All40 original tables preserve counts/original-column fingerprints; no existing
+  session converted. Compiled readiness/catalog/content200 and private401.
+  Guide: docs/BROWSER_SESSIONS_LOCAL.md. Full A-Z goal remains ACTIVE for Gemini,
+  local operations/CI/recovery/SEO, configured providers and final integration.

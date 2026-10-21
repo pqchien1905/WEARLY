@@ -68,6 +68,39 @@ module.exports=async function verify({root,url,email,otherEmail,adminEmail,passw
     await page.reload();await semantics();await page.getByRole('button',{name:'Đăng nhập quản trị',exact:true}).waitFor();
     assert.equal((await context.cookies()).filter(c=>c.name.startsWith('wearly_')).length,0);
     assert.deepEqual(errors,[]);assert(!requests.some(r=>r.status>=500));
+    // Actual Set-Cookie arrives after the UI timeout; compensating logout fails.
+    // The non-secret recovery marker must survive reload and block restoration.
+    await route('/login?next=%2Faccount');
+    let rejectedCleanups=0;
+    await page.route('**/auth/browser/customer/logout',async interception=>{
+      rejectedCleanups++;await interception.fulfill({status:503,contentType:'application/json',body:'{}'});
+    });
+    await page.route('**/auth/browser/customer/login',async interception=>{
+      const response=await interception.fetch();await page.waitForTimeout(16000);
+      await interception.fulfill({response});
+    });
+    await fill('Email',email);await fill('Mật khẩu',password);
+    const failedCleanup=page.waitForResponse(r=>r.url().endsWith('/auth/browser/customer/logout')&&r.status()===503);
+    await button('Đăng nhập');
+    await page.getByText('Chưa xác nhận được đăng nhập. Hãy thử lại để đóng phiên chưa xác nhận trước khi tiếp tục.',{exact:true}).waitFor();
+    await failedCleanup;
+    assert((await context.cookies()).some(c=>c.name==='wearly_customer_session'));
+    assert.equal(await page.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('wearly.auth-recovery.v1:')).length),1);
+    const recoveryMarker=requests.length;
+    await page.reload();await semantics();
+    await page.getByText('Chưa khôi phục được phiên đăng nhập',{exact:true}).waitFor();
+    assert(!requests.slice(recoveryMarker).some(r=>r.path.endsWith('/auth/browser/customer/refresh')));
+    assert(rejectedCleanups>=2);
+    await page.unroute('**/auth/browser/customer/logout');await page.unroute('**/auth/browser/customer/login');
+    await page.getByRole('button',{name:'Thử khôi phục lại',exact:true}).click();
+    await page.getByRole('button',{name:'Đăng nhập',exact:true}).last().waitFor();
+    assert(!(await context.cookies()).some(c=>c.name==='wearly_customer_session'));
+    assert.equal(await page.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('wearly.auth-recovery.v1:')).length),0);
+    await login(email);await page.getByText('Chào Khách thử phiên.',{exact:true}).waitFor();
+    await button('Đăng xuất');
+    assert.deepEqual(errors,[]);
+    assert.equal(requests.filter(r=>r.status>=500).length,rejectedCleanups);
+    console.log('PASS Chrome abandoned login: late cookie, failed cleanup, durable reload gate and confirmed cleanup retry.');
     console.log('PASS Chrome sessions: HttpOnly scoped cookies, reload/tabs, bounded parallel renewal, expired access recovery, CSRF, account-change isolation, scoped logout, role revocation and375/1440.');
   } catch(error){if(page){fs.writeFileSync(path.join(output,'failure-aria.txt'),await page.locator('body').ariaSnapshot());await page.screenshot({path:path.join(output,'failure.png')});}throw error;}
   finally{fs.writeFileSync(path.join(output,'result.json'),JSON.stringify({errors,requests},null,2));await browser?.close();await new Promise(r=>server.close(r));}

@@ -35,6 +35,13 @@ mới; màn hình yêu cầu đăng nhập lại. Các yêu cầu đăng nhập/
 Đăng nhập/đăng xuất đồng thời ở nhiều tab có thể cần đăng nhập lại. Nếu mạng lỗi
 khi khôi phục hoặc đăng xuất, giao diện cho thử lại và không báo thành công giả.
 
+Trước khi gửi đăng nhập, web lưu một mã lần thử không bí mật trong localStorage
+(khóa bắt đầu bằng `wearly.auth-recovery.v1:`, riêng theo API và phạm vi). Mã này
+không chứa tài khoản, mật khẩu hay token, và bị xóa khi đăng nhập được xác nhận.
+Nếu đăng nhập bị bỏ dở và hủy phiên thất bại, mã còn lại qua lần tải trang. Web
+phải hủy phiên thành công trước khi khôi phục hoặc đăng nhập lại; màn hình lỗi
+có nút thử lại. Trình duyệt cần cho phép lưu dữ liệu trang để dùng đăng nhập web.
+
 Mở ứng dụng bằng link đặt lại mật khẩu sẽ bắt đầu với giao diện chưa đăng nhập,
 xóa token khỏi URL ngay và bỏ qua khôi phục phiên trong cửa sổ đó. Sau khi đặt lại,
 đăng nhập bằng mật khẩu mới. Các lần tải trang thông thường vẫn khôi phục hai phiên.
@@ -43,6 +50,8 @@ Kiểm chứng: `node tools/test-frontend-api.cjs --sessions` tạo tài khoản
 database `_test`, kiểm tra cookie thật bằng Chrome, nhiều tab, token hết hạn, CSRF,
 đổi tài khoản, đăng xuất và thu hồi quyền. Không ghi giá trị cookie/token vào ảnh
 hay báo cáo. Các kịch bản trình duyệt cũ đã đổi kỳ vọng reload sang khôi phục phiên.
+Kịch bản cũng gây trễ đăng nhập thật, trả lỗi hủy phiên, tải lại trang và thử hủy
+lại để kiểm chứng không tự khôi phục phiên đã bỏ dở.
 
 Tham chiếu thiết kế: [OWASP Session Management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html),
 [OWASP CSRF](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html),
