@@ -282,7 +282,7 @@ class _RemoteSupportDetailState extends ConsumerState<RemoteSupportDetail> {
                     ],
                   ),
                 ),
-              if (ticket['status'] == 'CLOSED')
+              if (ticket['status'] == 'CLOSED' && !pending)
                 const Text('Mở lại yêu cầu để gửi câu trả lời mới.')
               else
                 Form(

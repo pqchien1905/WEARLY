@@ -28,6 +28,7 @@ Set these non-secret options in `backend/.env`, alongside existing secrets:
 
 ```dotenv
 LOCAL_MAIL_ENABLED=true
+LOCAL_MAIL_TIMEOUT_MS=30000
 PASSWORD_RECOVERY_ENABLED=true
 SMTP_HOST=127.0.0.1
 SMTP_PORT=1025
@@ -36,10 +37,10 @@ SMTP_ALLOW_INSECURE_LOCAL=true
 SMTP_USER=
 SMTP_PASSWORD=
 SMTP_FROM=store@example.test
-PASSWORD_RESET_WEB_URL=http://localhost:5173/#/reset-password
+PASSWORD_RESET_WEB_URL="http://localhost:5173/#/reset-password"
 ```
 
-Use the actual frontend origin in `PASSWORD_RESET_WEB_URL` and include that origin
+Keep the URL quoted so dotenv preserves its `#` fragment. Use the actual frontend origin in `PASSWORD_RESET_WEB_URL` and include that origin
 in `CORS_ORIGINS`. Start both API and worker after applying the migration and
 building the backend. Native commands from the repository root:
 
@@ -60,9 +61,13 @@ revocation flow; it uses the same inbox, with a separate recovery queue.
 - A retry with the same UUID and content returns the original receipt. Changed
   content under the same key conflicts. The browser keeps uncertain submissions
   frozen across page-component remounts within the current browser session.
+  A rate-limited retry retains that key and content until its outcome is known.
 - Administrators read requests, reply, close and reopen. Replies check the displayed
   version. A closed request must reopen before another reply. Reply, mail outbox,
   status/version and audit are committed together.
+  An uncertain reply can still be checked after another administrator closes the
+  request; the original reply is returned if committed, otherwise the interface
+  offers reopening after the server rejects it as closed.
 - Order placement, fulfillment, cancellation, carrier return, customer-return
   decision/receipt, explicit COD collection, verified VNPay collection and confirmed
   refunds create immutable mail snapshots in their business transaction.
@@ -70,6 +75,9 @@ revocation flow; it uses the same inbox, with a separate recovery queue.
   a refund. Unverified VNPay/refund outcomes do not send success notifications.
 - The worker polls every5seconds, claims up to10rows with a120-second lease, and
   stops after5attempts. Retry delay starts at10seconds and caps at300seconds.
+  Each SMTP delivery has an absolute30-second deadline (configurable100–60000ms),
+  even while the peer keeps responding. Deadline or worker shutdown destroys the
+  owned TCP connection and leaves an unsuccessful delivery available for retry.
   Raw SMTP error details and reset tokens are not written into mail status/audit.
 - Stable Message-ID and Mailpit duplicate-ID suppression reduce duplicate inbox
   entries. SMTP is **at least once** across crashes; a lost SMTP acknowledgement can

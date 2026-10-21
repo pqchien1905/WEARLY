@@ -3,13 +3,14 @@ import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { INestApplication } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { AddressInfo } from 'node:net';
+import { AddressInfo, createServer, Socket } from 'node:net';
 import { SMTPServer } from 'smtp-server';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/database/prisma.service';
 import { MailService } from '../src/modules/mail/mail.service';
 import { enqueueMail } from '../src/modules/mail/outbox';
 import { validateEnv } from '../src/config/env.validation';
+import { MailWorker } from '../src/worker/mail.worker';
 describe('Transactional local mail with real PostgreSQL and SMTP', () => {
   let app: INestApplication,
     db: PrismaService,
@@ -227,4 +228,80 @@ describe('Transactional local mail with real PostgreSQL and SMTP', () => {
       });
     }
   });
+  for (const shutdown of [false, true]) {
+    it(`bounds slow-progress SMTP and destroys its socket; shutdown=${shutdown}`, async () => {
+      const sockets = new Set<Socket>();
+      let progressed = false;
+      const slow = createServer((socket) => {
+        sockets.add(socket);
+        socket.write('220 fixture\r\n');
+        let timer: NodeJS.Timeout | undefined;
+        socket.on('data', () => {
+          if (timer) return;
+          progressed = true;
+          socket.write('250-fixture\r\n');
+          timer = setInterval(() => socket.write('250-still working\r\n'), 25);
+        });
+        socket.on('error', () => {});
+        socket.on('close', () => {
+          if (timer) clearInterval(timer);
+          sockets.delete(socket);
+        });
+      });
+      await new Promise<void>((r) => slow.listen(0, '127.0.0.1', r));
+      const service = new MailService(
+        db,
+        new ConfigService({
+          LOCAL_MAIL_ENABLED: 'true',
+          LOCAL_MAIL_TIMEOUT_MS: 300,
+          SMTP_HOST: '127.0.0.1',
+          SMTP_PORT: (slow.address() as AddressInfo).port,
+          SMTP_SECURE: 'false',
+          SMTP_ALLOW_INSECURE_LOCAL: 'true',
+          SMTP_FROM: 'fixture@example.test',
+        }),
+      );
+      const row = await create(),
+        worker = new MailWorker(service);
+      let active: Promise<void> | undefined;
+      try {
+        if (shutdown) worker.onModuleInit();
+        else active = service.processBatch();
+        for (let i = 0; i < 50 && !progressed; i++)
+          await new Promise((r) => setTimeout(r, 20));
+        expect(progressed).toBe(true);
+        if (shutdown) active = worker.onModuleDestroy();
+        let timeout: NodeJS.Timeout | undefined;
+        const completed = await Promise.race([
+          active!.then(() => true),
+          new Promise<boolean>((r) => {
+            timeout = setTimeout(() => r(false), 1200);
+          }),
+        ]);
+        if (timeout) clearTimeout(timeout);
+        if (!completed) {
+          for (const socket of sockets) socket.destroy();
+          await active;
+        }
+        expect(completed).toBe(true);
+        for (let i = 0; i < 25 && sockets.size; i++)
+          await new Promise((r) => setTimeout(r, 20));
+        expect(sockets.size).toBe(0);
+        expect(
+          await db.mailOutbox.findUniqueOrThrow({ where: { id: row.id } }),
+        ).toMatchObject({
+          status: 'PENDING',
+          attempts: 1,
+          lastError: 'MAIL_DELIVERY_FAILED',
+        });
+      } finally {
+        for (const socket of sockets) socket.destroy();
+        await active;
+        await worker.onModuleDestroy();
+        service.onModuleDestroy();
+        await new Promise<void>((r) => slow.close(() => r()));
+        await db.mailOutbox.deleteMany({ where: { id: row.id } });
+      }
+    });
+  }
 });

@@ -18,6 +18,112 @@ http.Response response(Object data, [int status = 200]) => http.Response(
 );
 const receipt = {'id': 'ticket-1', 'createdAt': '2026-10-22T00:00:00.000Z'};
 void main() {
+  test('throttled retry retains a possibly committed contact key', () async {
+    final writes = <Map<String, dynamic>>[];
+    final api = ApiClient(
+      baseUrl: 'http://localhost/api/v1',
+      client: MockClient((r) async {
+        writes.add(jsonDecode(r.body));
+        return writes.length == 1
+            ? response({}, 503)
+            : writes.length == 2
+            ? response({}, 429)
+            : response(receipt, 201);
+      }),
+    );
+    addTearDown(api.close);
+    final repo = RemoteSupportRepository(api);
+    for (var i = 0; i < 2; i++) {
+      await expectLater(
+        repo.create(
+          name: 'An',
+          email: 'an@example.test',
+          message: 'Please help with size',
+        ),
+        throwsA(isA<ApiException>()),
+      );
+    }
+    expect(repo.pendingContact, isNotNull);
+    await repo.create(
+      name: 'An',
+      email: 'an@example.test',
+      message: 'Please help with size',
+    );
+    expect(writes[2], writes[0]);
+  });
+  for (final committed in [true, false]) {
+    testWidgets(
+      'pending reply can reconcile after close, committed=$committed',
+      (tester) async {
+        var posts = 0, closed = false;
+        final writes = <Map<String, dynamic>>[];
+        final ticket = {
+          'id': 'ticket-1',
+          'name': 'An',
+          'email': 'an@example.test',
+          'message': 'Please help choose a size.',
+          'status': 'CLOSED',
+          'version': 2,
+          'replies': <Object>[],
+        };
+        final api = ApiClient(
+          baseUrl: 'http://localhost/api/v1',
+          client: MockClient((r) async {
+            if (r.method == 'POST') {
+              writes.add(jsonDecode(r.body));
+              posts++;
+              return posts == 1
+                  ? response({}, 503)
+                  : committed
+                  ? response(receipt, 201)
+                  : response({
+                      'code': 'SUPPORT_CLOSED',
+                      'message': 'Reopen first',
+                    }, 409);
+            }
+            closed = true;
+            return response(ticket);
+          }),
+        );
+        addTearDown(api.close);
+        final repo = RemoteSupportRepository(api, admin: true);
+        await expectLater(
+          repo.reply('ticket-1', version: 0, message: 'Original pending reply'),
+          throwsA(isA<ApiException>()),
+        );
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [adminSupportRepositoryProvider.overrideWithValue(repo)],
+            child: const MaterialApp(
+              home: Scaffold(
+                body: SingleChildScrollView(
+                  child: RemoteSupportDetail(id: 'ticket-1'),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(closed, true);
+        final retry = find.text('Gửi lại cùng trả lời');
+        expect(retry, findsOneWidget);
+        await tester.ensureVisible(retry);
+        await tester.tap(retry);
+        await tester.pumpAndSettle();
+        expect(writes[1], writes[0]);
+        expect(repo.pendingReply('ticket-1'), isNull);
+        if (!committed) {
+          await tester.ensureVisible(find.text('Tải lại yêu cầu'));
+          await tester.tap(find.text('Tải lại yêu cầu'));
+          await tester.pumpAndSettle();
+        }
+        final reopen = tester.widget<OutlinedButton>(
+          find.widgetWithText(OutlinedButton, 'Mở lại yêu cầu'),
+        );
+        expect(reopen.onPressed, isNotNull);
+      },
+    );
+  }
   test(
     'public contact keeps the original key and payload after uncertain response',
     () async {

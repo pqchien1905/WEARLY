@@ -93,7 +93,7 @@ class RemoteSupportRepository {
       lastReceipt = result;
       return result;
     } on ApiException catch (e) {
-      if ([400, 401, 403, 404, 409, 422, 429].contains(e.status)) {
+      if ([400, 401, 403, 404, 409, 422].contains(e.status)) {
         _pendingContact = null;
       }
       rethrow;
@@ -157,7 +157,7 @@ class RemoteSupportRepository {
       _pendingReplies.remove(id);
       return receipt;
     } on ApiException catch (e) {
-      if ([400, 401, 403, 404, 409, 422, 429].contains(e.status)) {
+      if ([400, 401, 403, 404, 409, 422].contains(e.status)) {
         _pendingReplies.remove(id);
       }
       rethrow;

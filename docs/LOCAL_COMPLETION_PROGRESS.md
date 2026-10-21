@@ -10,8 +10,9 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
 - [x] VNPay sandbox local implementation and signed-fixture acceptance.
 - [x] Transactional promotions and customer/admin UI.
 - [x] Persistent local shipment tracking, failed delivery/retry and carrier return.
-- [ ] Authorized cancellation, customer returns and refunds.
-- [ ] Local email/support, staff roles/audit detail, persistent safe sessions.
+- [x] Authorized cancellation, customer returns and refunds.
+- [x] Local email inbox, order notifications and persistent customer support.
+- [ ] Staff roles/audit detail and persistent safe sessions.
 - [ ] Gemini Stylist and private asynchronous try-on with frontend integration.
 - [ ] Local tooling/CI/monitoring/recovery and store content/SEO.
 - [ ] Customer/admin/browser acceptance and configured provider verification.
@@ -256,3 +257,39 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
 - Remaining full scope: local inbox/order mail/support, staff roles/audit/session
   renewal, Gemini Stylist/try-on, local operations/CI/monitoring/recovery and store
   metadata/SEO, provider acceptance and final worktree integration. Goal ACTIVE.
+
+## Local inbox and customer support — 22 October 2026
+
+- Pinned/checksummed native Mailpit with loopback SMTP/HTTP, persistent private
+  SQLite, no relay/forwarding and sanitized inherited settings. Captures local
+  recovery, transactional order/payment/return/refund notices and support replies.
+- Durable guest receipt, UUID/payload replay, private admin replies and versioned
+  close/reopen. Transactional immutable mail outbox, lease ownership, five bounded
+  attempts, safe error codes, status UI, responsive contact/admin screens.
+- Independent review found three important defects; all reproduced RED and fixed:
+  throttled retries retain uncertain keys; pending replies remain reconcilable after
+  closure; slowly progressing SMTP cannot outlive an absolute deadline and worker
+  shutdown destroys the owned socket. No deferred minor findings or re-review.
+- Final153/153 real E2E,43/43unit,357 Flutter pass/2 opt-in skips; lint/build/analyze
+  clean. Final Chrome support verifies guest receipt, admin reply, actual native
+  inbox/order mail and mobile/desktop/reload. Recovery Chrome verified actual
+  inbox link, URL scrub, one-use token and old-password/session invalidation.
+- Backup before-mail-support-1792607229836.dump verified; business migrations21->22.
+  All37 original tables retain exact original-column fingerprints/counts;
+  SupportTicket remains empty. Compiled ready/catalog/content200, protected401.
+- Worktree private environment enables local inbox/recovery. Initial config smoke
+  caught dotenv stripping an unquoted hash fragment; corrected and smoke passed.
+  Recovery and VNPay example URLs now quote fragments. Root environment remains
+  under the user's control until final integration; no provider secret printed.
+- Ruling: reviewer exclusions for earlier commerce, wider audit and configured
+  providers remain assigned to their milestones, not waived requirements. Business
+  migration was completed after review. Cost if wrong: later acceptance can reveal
+  cross-milestone work and the overall goal must remain active.
+- Ruling: immutable implementation checkpoint7956c29 preceded the single review;
+  verified review fixes follow in a separate commit. Cost: two commits per milestone.
+- Ruling: automatic approval review blocked the combined Mailpit stop/restart
+  persistence check with "blocked by policy". No bypass attempted; persistence is
+  configured, but restart acceptance remains unverified. Cost: crash/restart
+  persistence is not claimed as proven. Guide: docs/MAIL_SUPPORT_LOCAL.md.
+- Full A-Z goal remains ACTIVE: staff permissions/audit, persistent sessions, Gemini,
+  operations/CI/recovery/SEO, configured providers and final integration remain.

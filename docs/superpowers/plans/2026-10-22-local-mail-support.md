@@ -96,7 +96,7 @@ tools browser --support acceptance.
   version conflict and mail pending/failure visibility; implement with existing UI.
 - [x] Chrome guest submission -> admin reply -> local inbox message, order status
   notification, mobile/desktop/reload. Full Flutter/analyze GREEN.
-- [ ] Independent review once, important fixes RED->GREEN; backup/migrate/fingerprint/
+- [x] Independent review once, important fixes RED->GREEN; backup/migrate/fingerprint/
   compiled smoke, local configuration guide and durable ledger; commit.
 
 Official references: https://mailpit.axllent.org/docs/install/ ;

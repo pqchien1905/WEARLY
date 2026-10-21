@@ -30,6 +30,7 @@ export class MailWorker implements OnModuleInit, OnModuleDestroy {
   }
   async onModuleDestroy() {
     if (this.timer) clearInterval(this.timer);
+    this.mail.stop();
     await this.active;
   }
 }

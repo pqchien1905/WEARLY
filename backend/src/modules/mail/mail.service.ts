@@ -1,13 +1,13 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
-import * as nodemailer from 'nodemailer';
 import { MailOutbox } from '../../generated/prisma/client';
 import { PrismaService } from '../../database/prisma.service';
-import { mailTransportOptions } from './mail-transport';
+import { sendLocalMail } from './send-local-mail';
 @Injectable()
 export class MailService implements OnModuleDestroy {
-  private transport?: nodemailer.Transporter;
+  private readonly sends = new Set<AbortController>();
+  private stopping = false;
   constructor(
     private readonly db: PrismaService,
     private readonly config: ConfigService,
@@ -16,7 +16,7 @@ export class MailService implements OnModuleDestroy {
     return this.config.get<string>('LOCAL_MAIL_ENABLED') === 'true';
   }
   async claim(): Promise<MailOutbox[]> {
-    if (!this.enabled()) return [];
+    if (!this.enabled() || this.stopping) return [];
     const token = randomUUID();
     return this.db.$transaction(async (tx) => {
       await tx.$executeRaw`UPDATE "MailOutbox" SET "status"='FAILED',"lastError"='MAIL_LEASE_EXHAUSTED',"leaseToken"=NULL,"leaseUntil"=NULL,"updatedAt"=CURRENT_TIMESTAMP
@@ -46,23 +46,28 @@ export class MailService implements OnModuleDestroy {
   async processBatch() {
     const rows = await this.claim();
     if (!rows.length) return;
-    this.transport ??= nodemailer.createTransport(
-      mailTransportOptions(this.config),
-    );
     const results = await Promise.allSettled(
       rows.map(async (row) => {
         let success = false;
+        const controller = new AbortController();
+        this.sends.add(controller);
+        if (this.stopping) controller.abort();
         try {
-          await this.transport!.sendMail({
-            from: this.config.getOrThrow<string>('SMTP_FROM'),
-            to: row.recipient,
-            subject: row.subject,
-            text: row.body,
-            messageId: `<${row.id}@wearly.local>`,
-          });
+          await sendLocalMail(
+            this.config,
+            {
+              to: row.recipient,
+              subject: row.subject,
+              text: row.body,
+              messageId: `<${row.id}@wearly.local>`,
+            },
+            controller.signal,
+          );
           success = true;
         } catch {
           /* Store only the fixed error code, never SMTP responses or PII. */
+        } finally {
+          this.sends.delete(controller);
         }
         await this.settle(row, success);
       }),
@@ -97,6 +102,10 @@ export class MailService implements OnModuleDestroy {
     };
   }
   onModuleDestroy() {
-    this.transport?.close();
+    this.stop();
+  }
+  stop() {
+    this.stopping = true;
+    for (const controller of this.sends) controller.abort();
   }
 }

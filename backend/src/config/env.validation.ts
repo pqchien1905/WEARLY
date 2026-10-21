@@ -70,6 +70,12 @@ const schema = z
     VNPAY_WEB_RETURN_URL: z.string().default(''),
     PASSWORD_RECOVERY_ENABLED: z.enum(['true', 'false']).default('false'),
     LOCAL_MAIL_ENABLED: z.enum(['true', 'false']).default('false'),
+    LOCAL_MAIL_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(100)
+      .max(60000)
+      .default(30000),
     SMTP_HOST: z.string().default(''),
     SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
     SMTP_SECURE: z.enum(['true', 'false']).default('false'),
@@ -92,6 +98,7 @@ const schema = z
       fail('SMTP_HOST');
     if (c.SMTP_ALLOW_INSECURE_LOCAL !== 'true')
       fail('SMTP_ALLOW_INSECURE_LOCAL');
+    if (c.SMTP_SECURE !== 'false') fail('SMTP_SECURE');
     if (!z.email().safeParse(c.SMTP_FROM).success) fail('SMTP_FROM');
     if (Boolean(c.SMTP_USER) !== Boolean(c.SMTP_PASSWORD)) fail('SMTP_USER');
   })

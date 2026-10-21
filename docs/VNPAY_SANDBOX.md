@@ -10,7 +10,7 @@ VNPAY_ENABLED=true
 VNPAY_TMN_CODE=YOURCODE
 VNPAY_HASH_SECRET=your-sandbox-hash-secret
 VNPAY_RETURN_URL=http://localhost:3000/api/v1/payments/vnpay/return
-VNPAY_WEB_RETURN_URL=http://localhost:5173/#/payments/return
+VNPAY_WEB_RETURN_URL="http://localhost:5173/#/payments/return"
 ```
 
 TmnCode must contain exactly eight letters/digits. Use the actual API and browser

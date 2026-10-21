@@ -18,7 +18,7 @@ SMTP_USER=
 SMTP_PASSWORD=
 SMTP_FROM=store@example.com
 SMTP_ALLOW_INSECURE_LOCAL=false
-PASSWORD_RESET_WEB_URL=https://store.example.com/#/reset-password
+PASSWORD_RESET_WEB_URL="https://store.example.com/#/reset-password"
 ```
 
 Thay bằng thông số của dịch vụ thực tế qua môi trường/secret store, không
