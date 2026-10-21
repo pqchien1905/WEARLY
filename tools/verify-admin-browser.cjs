@@ -1,3 +1,4 @@
+const {isAnonymousRestore}=require('./browser-session-assertions.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
@@ -64,7 +65,7 @@ module.exports = async function verify({ root, fixture, email, customerEmail, pa
     await page.getByText('Một góc nhìn toàn cảnh.', { exact: true }).waitFor();
     await page.screenshot({ path: path.join(output, 'dashboard-desktop.png'), fullPage: true });
     console.log('Chrome admin: authenticated dashboard.');
-    assert(!requests.some(r => r.path.endsWith('/auth/login') || r.path.endsWith('/cart') || r.path.includes('/users/me')), 'Admin login must not initialize shopper data');
+    assert(!requests.some(r => r.path.endsWith('/auth/browser/customer/login') || r.path.endsWith('/cart') || r.path.includes('/users/me')), 'Admin login must not initialize shopper data');
     for (const [kind, label, initial, renamed] of [
       ['categories', 'danh mục', 'BST mới kiểm thử', 'BST thu đông kiểm thử'],
       ['brands', 'thương hiệu', 'Studio mới kiểm thử', 'Studio thu đông kiểm thử'],
@@ -145,7 +146,6 @@ module.exports = async function verify({ root, fixture, email, customerEmail, pa
     await button('Lưu thông tin sản phẩm');
     await page.waitForTimeout(500);
     await page.reload(); await semantics();
-    await login(email);
     await page.getByText('Đang bán · Tồn kho: 8', { exact: true }).waitFor();
     assert((await page.locator('body').ariaSnapshot()).includes('700.000'));
     console.log('Chrome admin: product, gallery, SKU price and stock persisted across reload/login.');
@@ -238,8 +238,8 @@ module.exports = async function verify({ root, fixture, email, customerEmail, pa
     console.log('Chrome admin: independent shopper/staff identities, both logout directions and safe return paths.');
     assert.deepEqual(errors, []);
     assert(requests.some(r => r.path.endsWith('/status') && r.status === 200));
-    assert.equal(requests.filter(r => r.path.endsWith('/auth/admin/login') && r.status === 403).length, 1);
-    assert(!requests.some(r => r.status >= 400 && !(r.path.endsWith('/auth/admin/login') && r.status === 403)), 'Unexpected API failure');
+    assert.equal(requests.filter(r => r.path.endsWith('/auth/browser/admin/login') && r.status === 403).length, 1);
+    assert(!requests.some(r => r.status >= 400 && !isAnonymousRestore(r) && !(r.path.endsWith('/auth/browser/admin/login') && r.status === 403)), 'Unexpected API failure');
     console.log('PASS Chrome admin: CRUD, stock, order lifecycle, responsive separate login UI, isolated logout and customer gate.');
   } catch (error) {
     if (page) { fs.writeFileSync(path.join(output, 'failure-aria.txt'), await page.locator('body').ariaSnapshot()); await page.screenshot({ path: path.join(output, 'failure.png'), fullPage: true }); }

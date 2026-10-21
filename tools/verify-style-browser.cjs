@@ -1,3 +1,4 @@
+const {isAnonymousRestore}=require('./browser-session-assertions.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
@@ -65,7 +66,7 @@ module.exports = async function verify({ root, email, otherEmail, password, chan
     await choose('Size thường chọn', 'L'); await choose('Phong cách yêu thích', 'Thanh lịch'); await choose('Màu ưu tiên', 'Đen'); await choose('Ngân sách mỗi outfit', '2.500.000 ₫'); await save();
     assert.equal(await page.getByRole('button', { name: 'Lưu & mở Stylist', exact: true }).count(), 0);
     await frame(); await page.screenshot({ path: path.join(output, 'style-desktop.png') });
-    await page.reload(); await semantics(); await button('Đăng nhập'); await login(email);
+    await page.reload(); await semantics();
     await selected('Size thường chọn', 'L'); await selected('Ngân sách mỗi outfit', '2.500.000 ₫');
     await page.setViewportSize({ width: 375, height: 812 }); await page.waitForTimeout(400);
     await choose('Size thường chọn', 'S'); await save();
@@ -79,7 +80,7 @@ module.exports = async function verify({ root, email, otherEmail, password, chan
     await route('/account'); await button('Đăng xuất'); await route('/account/style'); await button('Đăng nhập'); await login(otherEmail);
     await selected('Size thường chọn', 'M'); await selected('Ngân sách mỗi outfit', '1.500.000 ₫');
     assert.equal(requests.filter(r => r.status === 409).length, 1);
-    assert(!requests.some(r => r.status >= 400 && r.status !== 409), 'Unexpected API failure'); assert.deepEqual(errors, []);
+    assert(!requests.some(r => r.status >= 400 && !isAnonymousRestore(r) && r.status !== 409), 'Unexpected API failure'); assert.deepEqual(errors, []);
     console.log('PASS Chrome style: saved choices, reload/login persistence, mobile second save, stale-form rejection/reload, isolated defaults, no demo/AI action.');
   } catch (error) {
     if (page) { fs.writeFileSync(path.join(output, 'failure-aria.txt'), await page.locator('body').ariaSnapshot()); await page.screenshot({ path: path.join(output, 'failure.png') }); }

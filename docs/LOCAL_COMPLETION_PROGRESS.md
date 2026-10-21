@@ -354,3 +354,9 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   gating and retryable network failures.11 new tests; full379 Flutter+2skips and
   analyzer clean. Recovery entry skips restoration to scrub link immediately;
   existing reset regression RED->GREEN. Chrome/review/business acceptance pending.
+- Chrome --sessions PASS verifies actual scoped cookies, reload, second tab, fixed
+  lifetime/parallel renewal, expired JWT recovery, CSRF, cross-account retry denial,
+  independent logout and role revocation at375/1440; screenshots inspected.
+  Chrome --staff also PASS after automatic restoration. Updated prior browser
+  scenarios' reload and expected anonymous-probe assertions; syntax checks PASS.
+  Shopping/recovery regressions in progress; independent review and migration next.

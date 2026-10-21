@@ -139,11 +139,6 @@ module.exports = async function verify({ root, fixture, payments=false, promotio
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.screenshot({ path: path.join(output, 'order-desktop.png'), fullPage: true });
     await page.reload(); await semantics();
-    await page.getByText('Đăng nhập để tiếp tục', { exact: true }).waitFor();
-    await button('Đăng nhập');
-    await fill('Email', email);
-    await fill('Mật khẩu', 'Browser-only-Password-2026');
-    await button('Đăng nhập');
     await page.getByText(payments?'Đã thanh toán':'Đơn đã hủy', { exact: true }).waitFor();
     if(payments) {
       const returned=await page.context().newPage();

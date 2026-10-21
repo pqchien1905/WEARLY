@@ -1,3 +1,4 @@
+const {isAnonymousRestore}=require('./browser-session-assertions.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
@@ -73,10 +74,10 @@ module.exports = async function verify({ root, email, customerEmail, password, o
     await page.getByText('Đã nhận hàng khách trả', { exact: true }).waitFor();
     if(refunds){await button('Cập nhật hoàn tiền');await page.getByText('Đã hoàn tiền',{exact:true}).waitFor();}
     await reveal(page.getByText('Đã nhận hàng khách trả', { exact: true })); await page.screenshot({ path: path.join(output, 'received-customer-desktop.png') });
-    await page.reload(); await semantics(); await button('Đăng nhập'); await login(customerEmail, false);
+    await page.reload(); await semantics();
     await page.getByText('Đã nhận hàng khách trả', { exact: true }).waitFor();
     if(refunds){await page.getByText('Đã hoàn tiền',{exact:true}).waitFor();await reveal(page.getByText('Đã hoàn tiền',{exact:true}));await page.screenshot({path:path.join(output,'refunded-customer-desktop.png')});}
-    assert.deepEqual(errors, []); assert(!requests.some(r => r.status >= 400), 'Unexpected API error');
+    assert.deepEqual(errors, []); assert(!requests.some(r => r.status >= 400 && !isAnonymousRestore(r)), 'Unexpected API error');
     console.log('PASS Chrome returns: discounted partial request, approve, receive, paid cancellation, customer persistence, desktop/mobile.');
   } catch (error) {
     if (page) { fs.writeFileSync(path.join(output, 'failure-aria.txt'), await page.locator('body').ariaSnapshot()); await page.screenshot({ path: path.join(output, 'failure.png') }); }

@@ -100,7 +100,7 @@ Files: tools/test-frontend-api.cjs --sessions,tools/verify-sessions-browser.cjs;
 affected existing browser endpoint/reload expectations; docs/BROWSER_SESSIONS_LOCAL.md
 and LOCAL_COMPLETION_PROGRESS.md.
 
-- [ ] Chrome actual cookies: customer/admin independent login, reload and second tab,
+- [x] Chrome actual cookies: customer/admin independent login, reload and second tab,
   denied CSRF, no secret in document.cookie/storage, expiry/renewal, logout per scope,
   revocation,375/1440. Update existing staff reload acceptance to persistent login.
 - [ ] One independent review then one tested fix pass. Verified business backup,

@@ -20,7 +20,7 @@ module.exports=async function verify({root,url,email,warehouseEmail,supportEmail
     async function reveal(node){await node.waitFor({state:'attached'});for(let i=0;i<36;i++){const box=await node.boundingBox(),vp=page.viewportSize();if(box&&box.y>=80&&box.y+box.height<=vp.height-35)return;await page.mouse.move(vp.width*.75,vp.height*.7);await page.mouse.wheel(0,box&&box.y<80?-280:280);await page.waitForTimeout(100);}throw Error('Cannot reveal staff control');}
     async function button(name){const node=page.getByRole('button',{name,exact:true}).first();await reveal(node);await node.click();await page.mouse.move(10,100);await page.waitForTimeout(300);}
     async function fill(name,value){const n=page.getByRole('textbox',{name,exact:true});await reveal(n);await n.click();await n.fill(value);await page.waitForTimeout(100);}
-    async function login(who){await fill('Email',who);await fill('Mật khẩu',password);const response=page.waitForResponse(r=>r.url().endsWith('/auth/admin/login'));await button('Đăng nhập quản trị');const r=await response;assert.equal(r.status(),201);return (await r.json()).accessToken;}
+    async function login(who){await fill('Email',who);await fill('Mật khẩu',password);const response=page.waitForResponse(r=>r.url().endsWith('/auth/browser/admin/login'));await button('Đăng nhập quản trị');const r=await response;assert.equal(r.status(),201);return (await r.json()).accessToken;}
     async function grant(who,role){await fill('Email tài khoản',who);const loaded=page.waitForResponse(r=>new URL(r.url()).pathname.endsWith('/admin/staff')&&r.request().method()==='GET');await button('Tìm tài khoản');assert.equal((await loaded).status(),200);await button('Đổi quyền');await page.getByRole('button',{name:/^Vai trò /}).click();await page.getByRole('menuitem',{name:role,exact:true}).click();const saved=page.waitForResponse(r=>r.url().includes('/admin/staff/')&&r.request().method()==='PATCH');await button('Lưu thay đổi');assert.equal((await saved).status(),200);}
     async function denied(path,token,method='GET'){const r=await fetch(url+'/'+path,{method,headers:{Authorization:'Bearer '+token,...(method==='GET'?{}:{'Content-Type':'application/json'})},...(method==='GET'?{}:{body:'{}'})});assert.equal(r.status,403);}
     await page.goto('http://127.0.0.1:4183/#/admin/staff');await semantics();await login(email);
@@ -42,8 +42,9 @@ module.exports=async function verify({root,url,email,warehouseEmail,supportEmail
     await page.getByText('Đã lưu trả lời; thư đang được xử lý.',{exact:true}).waitFor();
     await denied('admin/staff',supportToken);
     await page.screenshot({path:path.join(output,'support-mobile.png')});
-    await page.setViewportSize({width:1440,height:1000});await page.reload();await semantics();
-    const persisted=page.waitForResponse(r=>r.url().endsWith('/admin/support/'+ticketId)&&r.request().method()==='GET');await login(supportEmail);
+    await page.setViewportSize({width:1440,height:1000});
+    const persisted=page.waitForResponse(r=>r.url().endsWith('/admin/support/'+ticketId)&&r.request().method()==='GET');
+    await page.reload();await semantics();
     assert.equal((await(await persisted).json()).replies.length,1);
     await page.screenshot({path:path.join(output,'support-reload-desktop.png')});
     await demote();await button('Tải lại yêu cầu');await page.getByRole('button',{name:'Đăng nhập quản trị',exact:true}).waitFor();

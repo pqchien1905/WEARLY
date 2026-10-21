@@ -40,6 +40,7 @@ const returns = process.argv.includes('--returns');
 const refunds = process.argv.includes('--refunds');
 const support = process.argv.includes('--support');
 const staffMode = process.argv.includes('--staff');
+const sessions = process.argv.includes('--sessions');
 const mailpit = process.argv.includes('--mailpit');
 const promotionCode = 'BROWSER' + fixture.replaceAll('-', '').slice(-12).toUpperCase();
 if (admin) {
@@ -166,6 +167,26 @@ async function main() {
       if (await db.passwordResetToken.count({ where: { userId: account.user.id, consumedAt: null } }) !== 0)
         throw new Error('Unconsumed reset token remained');
       console.log('PASS recovery database: token consumed and original session revoked.');
+    } else if(sessions) {
+      const email=fixture+'@example.com',otherEmail='browser-'+fixture+'@example.com',adminEmail='admin-'+fixture+'@example.com',password='Browser-only-Password-2026';
+      const accounts={};
+      for(const [who,name,role] of [[email,'Khách thử phiên','CUSTOMER'],[otherEmail,'Khách thứ hai','CUSTOMER'],[adminEmail,'Quản trị thử phiên','ADMIN']]) {
+        const response=await fetch(url+'/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email:who,password})});
+        if(response.status!==201)throw Error('Session fixture registration failed');
+        accounts[who]=await response.json();await db.user.update({where:{id:accounts[who].user.id},data:{role}});
+      }
+      await flutter(['build','web','--release','--dart-define=USE_REMOTE_API=true','--dart-define=API_BASE_URL='+url]);
+      await require('./verify-sessions-browser.cjs')({root,url,email,otherEmail,adminEmail,password,
+        expiredAccess:async token=>{
+          const {JwtService}=requireBackend('@nestjs/jwt'),jwt=app.get(JwtService),claims=jwt.decode(token);
+          if(claims.sub!==accounts[email].user.id)throw Error('Unexpected fixture identity');
+          return jwt.signAsync({sub:claims.sub,sid:claims.sid,typ:'access'},{secret:process.env.JWT_ACCESS_SECRET,expiresIn:-1,algorithm:'HS256',issuer:'wearly',audience:'wearly-api'});
+        },
+        revokeStaff:async()=>{
+          await db.user.update({where:{id:accounts[otherEmail].user.id},data:{role:'ADMIN'}});
+          const response=await fetch(url+'/admin/staff/'+accounts[adminEmail].user.id,{method:'PATCH',headers:{'Content-Type':'application/json',Authorization:'Bearer '+accounts[otherEmail].accessToken},body:JSON.stringify({expectedVersion:0,role:'SUPPORT',active:true})});
+          if(response.status!==200)throw Error('Session staff revocation fixture failed');
+        }});
     } else if(staffMode) {
       const email='admin-'+fixture+'@example.com',warehouseEmail='browser-'+fixture+'@example.com',supportEmail=fixture+'@example.com',password='Browser-only-Password-2026';
       const accounts={};

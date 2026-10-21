@@ -108,7 +108,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                     text: remote
                         ? forgot
                               ? 'Nhập email tài khoản. Nếu tài khoản hợp lệ, bạn sẽ nhận được liên kết dùng một lần, có hiệu lực 15 phút.'
-                              : 'Đăng nhập để lưu giỏ hàng, địa chỉ và đơn hàng. Sau khi tải lại trang, hãy đăng nhập lại.'
+                              : 'Đăng nhập để lưu giỏ hàng, địa chỉ và đơn hàng. Phiên đăng nhập được khôi phục khi bạn tải lại trang.'
                         : 'Tài khoản mô phỏng. Không xác thực danh tính; không dùng mật khẩu thật. Dữ liệu chỉ trong phiên này.',
                   ),
                   const SizedBox(height: 28),

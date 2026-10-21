@@ -1,3 +1,4 @@
+const {isAnonymousRestore}=require('./browser-session-assertions.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
@@ -64,11 +65,11 @@ module.exports = async function verify({ root, email, customerEmail, password, r
     await page.getByText('Đã nhận đủ hàng về kho', { exact: true }).first().waitFor();
     await reveal(page.getByText('Mô phỏng vận chuyển local', { exact: true }));
     await page.screenshot({ path: path.join(output, 'returned-customer-desktop.png') });
-    await page.reload(); await semantics(); await button('Đăng nhập'); await login(customerEmail, false);
+    await page.reload(); await semantics();
     await page.getByText('Hiện tại: Đã hoàn về kho', { exact: true }).waitFor();
     await page.setViewportSize({ width: 375, height: 812 }); await page.waitForTimeout(300);
     await reveal(page.getByText(code, { exact: true })); await page.screenshot({ path: path.join(output, 'returned-customer-mobile.png') });
-    assert.deepEqual(errors, []); assert(!requests.some(r => r.status >= 400), 'Unexpected API error');
+    assert.deepEqual(errors, []); assert(!requests.some(r => r.status >= 400 && !isAnonymousRestore(r)), 'Unexpected API error');
     console.log('PASS Chrome shipment: persistent customer/admin history, simulator label, code, notes, reload/login, 375/1440px.');
   } catch (error) {
     if (page) { fs.writeFileSync(path.join(output, 'failure-aria.txt'), await page.locator('body').ariaSnapshot()); await page.screenshot({ path: path.join(output, 'failure.png') }); }
