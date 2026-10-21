@@ -599,6 +599,34 @@ model AIJob {
   @@index([userId, createdAt])
   @@index([status, createdAt])
 }
+enum AiUsageStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+  UNKNOWN
+}
+model AiUsage {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  kind String @db.VarChar(20)
+  requestKey String @db.Uuid
+  inputHash String @db.VarChar(64)
+  status AiUsageStatus @default(PROCESSING)
+  model String @db.VarChar(80)
+  estimatedCostVnd Decimal @db.Decimal(14, 0)
+  inputTokens Int?
+  outputTokens Int?
+  errorCode String? @db.VarChar(60)
+  receipt Json?
+  deadlineAt DateTime
+  expiresAt DateTime
+  finishedAt DateTime?
+  createdAt DateTime @default(now())
+  @@unique([userId, kind, requestKey])
+  @@index([createdAt, kind])
+  @@index([status, deadlineAt])
+  @@index([expiresAt])
+}
 model TryOnResult {
   id String @id @default(uuid()) @db.Uuid
   jobId String @unique @db.Uuid

@@ -63,6 +63,39 @@ const schema = z
     S3_SECRET_ACCESS_KEY: z.string().default(''),
     AI_PROVIDER_URL: z.string().default(''),
     AI_PROVIDER_API_KEY: z.string().default(''),
+    GEMINI_API_KEY: z
+      .string()
+      .trim()
+      .refine((s) => !s || /^[a-zA-Z0-9_-]{20,200}$/.test(s))
+      .default(''),
+    GEMINI_STYLIST_MODEL: z
+      .string()
+      .regex(/^gemini-[a-z0-9.-]{1,70}$/)
+      .default('gemini-3.5-flash-lite'),
+    AI_STYLIST_USER_DAILY_LIMIT: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(1000)
+      .default(20),
+    AI_STYLIST_GLOBAL_DAILY_LIMIT: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(10000)
+      .default(200),
+    AI_STYLIST_ESTIMATE_VND: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(1000000)
+      .default(500),
+    AI_GLOBAL_DAILY_ESTIMATE_VND: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(100000000)
+      .default(100000),
     VNPAY_ENABLED: z.enum(['true', 'false']).default('false'),
     VNPAY_TMN_CODE: z.string().default(''),
     VNPAY_HASH_SECRET: z.string().default(''),

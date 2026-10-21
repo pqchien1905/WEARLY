@@ -67,16 +67,16 @@ Routes GET /ai/status; POST /ai/stylist/requests; GET /ai/stylist/requests/:key.
 Receipt {id,requestKey,status,errorCode,createdAt,estimatedCostVnd,model,result?};
 result {message,picks:[{sku,price,product}],total,currency:'VND'}.
 
-- [ ] RED unit: fixed URL/header/store:false/schema, valid completed response/usage,
+- [x] RED unit: fixed URL/header/store:false/schema, valid completed response/usage,
   invalid JSON/schema/status/redirect, >1MiB, delayed body timeout, sanitized errors.
   RED real-PG/API: no-key status503/no reservation; auth/consent/key validation;
   grounded selection; malicious SKU/price/budget; catalog mutation while pending;
   parallel same-key calls once, changed-input409, limits under concurrency, owned
   receipt, lost reply recovery, expired processing UNKNOWN without provider retry.
   Run focused Jest; Expected FAIL missing adapter/routes.
-- [ ] Implement additive schema, testDB migrate/generate, adapter/quota/service/routes.
+- [x] Implement additive schema, testDB migrate/generate, adapter/quota/service/routes.
   Status response contains only configuration/model/usage, never key/raw errors.
-- [ ] Focused/full E2E + unit, lint/build sequentially; Expected PASS. Commit.
+- [x] Focused/full E2E + unit, lint/build sequentially; Expected PASS. Commit.
 
 ## Task 2: remote Stylist UI
 

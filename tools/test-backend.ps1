@@ -1,7 +1,7 @@
 param([switch]$WithWorker, [switch]$WithStorage)
 $ErrorActionPreference = 'Stop'
 $previousEnvironment = @{}
-foreach ($name in @('PATH','DATABASE_URL','TEST_DATABASE_URL','NODE_ENV','TEST_REDIS_HOST','TEST_REDIS_PORT','TEST_S3_ENDPOINT','TEST_S3_BUCKET','PASSWORD_RECOVERY_ENABLED','LOCAL_MAIL_ENABLED','VNPAY_ENABLED')) {
+foreach ($name in @('PATH','DATABASE_URL','TEST_DATABASE_URL','NODE_ENV','TEST_REDIS_HOST','TEST_REDIS_PORT','TEST_S3_ENDPOINT','TEST_S3_BUCKET','PASSWORD_RECOVERY_ENABLED','LOCAL_MAIL_ENABLED','VNPAY_ENABLED','GEMINI_API_KEY')) {
   $previousEnvironment[$name] = [Environment]::GetEnvironmentVariable($name,'Process')
 }
 $workspace = Split-Path -Parent $PSScriptRoot
@@ -25,6 +25,9 @@ try {
   $env:PASSWORD_RECOVERY_ENABLED = 'false'
   $env:LOCAL_MAIL_ENABLED = 'false'
   $env:VNPAY_ENABLED = 'false'
+  # Windows removes empty environment values. Whitespace survives dotenv loading
+  # and is normalized to an unconfigured key by validateEnv.
+  $env:GEMINI_API_KEY = ' '
   if ($WithWorker) {
     if (!$env:TEST_REDIS_HOST) { $env:TEST_REDIS_HOST = '127.0.0.1' }
     if (!$env:TEST_REDIS_PORT) { $env:TEST_REDIS_PORT = '6379' }

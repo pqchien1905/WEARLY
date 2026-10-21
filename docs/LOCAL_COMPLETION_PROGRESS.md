@@ -381,3 +381,18 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   session converted. Compiled readiness/catalog/content200 and private401.
   Guide: docs/BROWSER_SESSIONS_LOCAL.md. Full A-Z goal remains ACTIVE for Gemini,
   local operations/CI/recovery/SEO, configured providers and final integration.
+
+## Gemini Stylist — in progress, 22 October 2026
+
+- Backend stateless official Gemini adapter, strict grounded output/current stock
+  and prices, per-user/global daily quota and estimated budget, durable idempotent
+  receipt and unknown-outcome recovery. No automatic paid retries; no key means
+  unconfigured. Prompt input hashed only; response receipt expires24h.
+- RED missing adapter/schema -> GREEN7 transport/10 real-PG API tests, including
+  concurrency, changed catalog, total budget, expired/private receipts and limits.
+  Full181 E2E with real Redis/MinIO,53unit, lint/build PASS. TestDB migration25 only;
+  business24 unchanged. Frontend, Chrome, independent review and migration pending.
+- Ruling: historical usage rows retain quota accounting without account cascade;
+  response receipt is erased after24h. Cost estimates are configurable operator
+  allowances, never claimed as Google's bill or customer charges. Live Gemini
+  verification still awaits configured key; private image try-on is next milestone.
