@@ -35,6 +35,8 @@ thông tin tới Google Gemini rồi bấm “Nhờ Gemini gợi ý”.
 Backend chỉ gửi tối đa40 SKU đang hoạt động/còn hàng. Kết quả tối đa4 sản phẩm,
 mỗi sản phẩm một SKU. Giá, size, màu, tồn kho và tổng ngân sách được đối chiếu
 lại tại backend; model không được tự cung cấp giá hay tạo SKU ngoài danh sách.
+Chỉ danh sách SKU hợp lệ được lấy từ phản hồi Gemini; lời mô tả hiển thị do
+backend tạo từ kết quả đã xác thực. Lời tự do của model không được lưu/hiển thị.
 Gợi ý không giữ chỗ tồn kho và chưa bao gồm phí vận chuyển. Mở trang sản phẩm để
 chọn mua theo tình trạng hiện tại.
 
@@ -48,14 +50,16 @@ Yêu cầu đã được tiếp nhận tính vào hạn mức, kể cả lỗi/k
 khóa hoặc không có sản phẩm phù hợp chưa được tính lượt. Mỗi lần gọi Google có
 giới hạn20giây, bao gồm đọc phản hồi; không tự gọi lại dịch vụ khi lỗi.
 
-Trang giữ mã đang theo dõi trong bộ nhớ. Tải lại trang không tự tạo lượt mới;
-nút tạo yêu cầu mới là hành động chủ động. Phiên đăng nhập vẫn được khôi phục
-theo hướng dẫn `BROWSER_SESSIONS_LOCAL.md`.
+Khi quay lại từ trang sản phẩm hoặc tải lại trang, Stylist tự đọc yêu cầu gần
+nhất còn hạn của tài khoản bằng GET, kể cả khi phản hồi trước đó bị mất. Không
+gọi Gemini thêm và không lưu nội dung nhập vào trình duyệt. Nếu chưa đọc được
+yêu cầu cũ, cần bấm “Tải lại gợi ý gần nhất” trước khi tạo lượt mới. Phiên đăng
+nhập được khôi phục theo hướng dẫn `BROWSER_SESSIONS_LOCAL.md`.
 
 ## Dữ liệu và kiểm chứng
 
-Nội dung yêu cầu chỉ được lưu dưới dạng hash để kiểm tra gửi trùng. Phản hồi AI
-và SKU đã chọn được lưu tối đa24giờ; sau đó bị xóa khi đọc hoặc trong đợt dọn dẹp
+Nội dung yêu cầu chỉ được lưu dưới dạng hash để kiểm tra gửi trùng. SKU đã chọn,
+giá và điều kiện kiểm tra size/màu/ngân sách được lưu tối đa24giờ; sau đó bị xóa khi đọc hoặc trong đợt dọn dẹp
 mỗi5phút. Nhật ký tối thiểu về model, trạng thái, token đã dùng, hash và ước tính
 chi phí được giữ để tính hạn mức. API đọc kết quả chỉ cho chính chủ, không cache.
 

@@ -20,12 +20,13 @@ Interactions REST adapter, durable usage/idempotency receipt and remote Stylist 
 - Authenticate + consent:true + UUIDv4 Idempotency-Key. Prompt1..1000 chars,
   size1..20, style/color0..80, integer budget1..20millionVND. Query at most40 active
   in-stock variants matching size/color and budget, catalog text treated as data.
-  Model returns message<=1500 chars and1..4 unique SKUs. Server rejects invented
+  Model returns1..4 unique SKUs; all extra fields/prose are discarded. Display text
+  is server-controlled and derived from validated picks. Server rejects invented
   SKUs, duplicate products, total over budget, or changed stock/price/activation.
   Response includes chosen SKU/price, current catalog product and exact VND total.
 - AiUsage stores user/kind/key/hash/status/model/estimatedCostVnd/token counts/
   deadline/result receipt; never stores raw prompt or input images. Only owner
-  can read receipt. Completed stylist text/picks expire after24h and are erased
+  can read receipt. Completed stylist picks/constraints expire after24h and are erased
   on read/periodic cleanup; minimal usage remains for quota accounting.
 - Global transaction lock serializes reservations; unique user/kind/key prevents
   duplicate calls. Default daily UTC limits:20 Stylist/user,200 global;2 active/user,
@@ -37,6 +38,13 @@ Interactions REST adapter, durable usage/idempotency receipt and remote Stylist 
  409. Lost response can GET by request key; stale processing becomes UNKNOWN and
   never auto-resubmits. Terminal failure/new request requires explicit user action.
   Frontend POST may time out at15s; read same key to recover result, no second call.
+- Review ruling: GET /ai/stylist/requests/latest returns the current owner's most
+  recent unexpired receipt. Page entry/reload recovers using GET, blocks new requests
+  on uncertain recovery, and never persists prompts or automatically POSTs again.
+  Cost: it restores the latest request only; this is not an all-request history.
+- Review ruling: one database clock_timestamp captured after the reservation lock
+  determines quota day, createdAt and deadlines, avoiding transaction-start midnight
+  drift. Cost: one additional bounded local query per reservation.
 - Missing key reports configured:false and503 before reservation. No fake AI output.
   Provider live acceptance waits for user's backend/.env key; all other work proceeds.
 
@@ -102,10 +110,15 @@ docs/GEMINI_LOCAL.md;docs/LOCAL_COMPLETION_PROGRESS.md.
   grounded result/price, retry after lost response without duplicate invocation,
   quota/error/new request, private receipt denial,375/1440. Explicitly label test
   adapter evidence; no live-provider success claimed. Expected PASS.
-- [ ] One independent review then one RED->GREEN fix pass; final suites as needed.
+- [x] One independent review then one RED->GREEN fix pass; final182 E2E/54unit,
+  395Flutter+2skips, lint/build/analyze and Chrome --stylist PASS.
   Verified business backup+migration+original-column fingerprints and read-only
   compiled smoke. Expected preserved data and200 public/401 private. Commit.
   Preserve A-Z goal ACTIVE for try-on, operations/SEO/providers and integration.
+
+Final backup before-gemini-stylist-1792613302837.dump; business24->25, all40 original
+table counts/column fingerprints preserved. Exactly one independent review and one
+tested fix pass; see progress ledger for findings and tradeoffs. No live AI call.
 
 Official references checked22Oct2026:
 - https://ai.google.dev/api/interactions-api-v1

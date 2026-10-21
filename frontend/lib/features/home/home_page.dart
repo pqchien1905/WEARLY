@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/providers.dart';
+import '../../app/api_providers.dart';
 import '../../core/design/tokens.dart';
 import '../../core/widgets/primitives.dart';
 import '../../core/widgets/product_card.dart';
@@ -248,8 +249,10 @@ class HomePage extends ConsumerWidget {
                           onPressed: () => context.go('/ai-stylist'),
                         ),
                         const SizedBox(height: 16),
-                        const Text(
-                          'Trải nghiệm mô phỏng – chưa kết nối AI',
+                        Text(
+                          ref.watch(remoteApiProvider)
+                              ? 'Xem trạng thái dịch vụ và nhận gợi ý trong AI Stylist.'
+                              : 'Trải nghiệm mô phỏng – chưa kết nối AI',
                           style: T.small,
                         ),
                       ],

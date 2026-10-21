@@ -58,10 +58,17 @@ Map<String, Object?> stylistReceipt({
       : null,
 };
 void main() {
-  ApiClient client(Future<http.Response> Function(http.Request) handler) {
+  ApiClient client(
+    Future<http.Response> Function(http.Request) handler, {
+    Future<http.Response> Function()? latest,
+  }) {
     final api = ApiClient(
       baseUrl: 'http://localhost/api/v1',
-      client: MockClient(handler),
+      client: MockClient(
+        (r) => r.url.path.endsWith('/requests/latest')
+            ? (latest?.call() ?? Future.value(jsonResponse({'receipt': null})))
+            : handler(r),
+      ),
     );
     api.tokens.set(accessToken: 'access', userId: 'customer');
     addTearDown(api.close);
@@ -185,6 +192,73 @@ void main() {
       expect(find.text('Gemini chưa được cấu hình'), findsOneWidget);
       expect(writes, 0);
       expect(find.text('Kịch bản kiểm thử demo'), findsNothing);
+    },
+  );
+  testWidgets(
+    'reopening after a lost reply restores the owned latest result using GET only',
+    (t) async {
+      var accepted = false, writes = 0, latestReads = 0;
+      final api = client(
+        (r) async {
+          if (r.method == 'POST') {
+            writes++;
+            accepted = true;
+            throw http.ClientException('lost after acceptance');
+          }
+          return jsonResponse(stylistStatus());
+        },
+        latest: () async {
+          latestReads++;
+          return jsonResponse({'receipt': accepted ? stylistReceipt() : null});
+        },
+      );
+      await mount(t, api);
+      await fill(t);
+      await tap(t, 'Nhờ Gemini gợi ý');
+      await t.pumpWidget(const SizedBox());
+      await mount(t, api);
+      expect(find.text('Tổng trang phục: 490.000 ₫'), findsOneWidget);
+      expect(writes, 1);
+      expect(latestReads, 2);
+      expect(
+        t
+            .widget<TextField>(
+              find.widgetWithText(TextField, 'Bạn muốn phối đồ cho dịp nào?'),
+            )
+            .controller!
+            .text,
+        isEmpty,
+      );
+    },
+  );
+  testWidgets(
+    'failed latest lookup blocks new paid requests until recovery succeeds',
+    (t) async {
+      var reads = 0, writes = 0;
+      await mount(
+        t,
+        client(
+          (r) async {
+            if (r.method == 'POST') writes++;
+            return jsonResponse(stylistStatus());
+          },
+          latest: () async {
+            if (++reads == 1) throw http.ClientException('offline');
+            return jsonResponse({'receipt': stylistReceipt()});
+          },
+        ),
+      );
+      expect(
+        t
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Nhờ Gemini gợi ý'),
+            )
+            .onPressed,
+        isNull,
+      );
+      await tap(t, 'Tải lại gợi ý gần nhất');
+      expect(find.text('Tổng trang phục: 490.000 ₫'), findsOneWidget);
+      expect(writes, 0);
     },
   );
   testWidgets(

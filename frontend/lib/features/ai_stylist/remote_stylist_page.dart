@@ -26,17 +26,21 @@ class _RemoteStylistPageState extends ConsumerState<RemoteStylistPage> {
   int budget = 1500000, polls = 0;
   String size = 'M';
   bool consent = false, busy = false, loadingStatus = true;
+  bool loadingRecovery = true;
+  String? recoveryError;
   String? error, statusError, key;
   StylistRequest? submitted;
   StylistAvailability? availability;
   StylistReceipt? receipt;
   Timer? timer;
   bool get unresolved => key != null && (receipt == null || receipt!.pending);
-  bool get locked => busy || unresolved;
+  bool get locked =>
+      busy || unresolved || loadingRecovery || recoveryError != null;
   @override
   void initState() {
     super.initState();
     unawaited(loadStatus());
+    unawaited(loadLatest());
   }
 
   @override
@@ -65,6 +69,23 @@ class _RemoteStylistPageState extends ConsumerState<RemoteStylistPage> {
           statusError = stylistError(e);
         });
       }
+    }
+  }
+
+  Future<void> loadLatest() async {
+    setState(() => loadingRecovery = true);
+    try {
+      final value = await repo.latest();
+      if (!mounted) return;
+      setState(() {
+        recoveryError = null;
+        key = value?.requestKey;
+      });
+      if (value != null) accept(value);
+    } catch (e) {
+      if (mounted) setState(() => recoveryError = stylistError(e));
+    } finally {
+      if (mounted) setState(() => loadingRecovery = false);
     }
   }
 
@@ -410,6 +431,21 @@ class _RemoteStylistPageState extends ConsumerState<RemoteStylistPage> {
           const Text('Gợi ý từ Gemini, đối chiếu với sản phẩm của cửa hàng.'),
           const SizedBox(height: 24),
           if (loadingStatus) const LinearProgressIndicator(),
+          if (loadingRecovery)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 16),
+              child: Text('Đang lấy lại gợi ý gần nhất của bạn…'),
+            ),
+          if (recoveryError != null)
+            StatePanel(
+              title: 'Chưa lấy lại được gợi ý gần nhất',
+              message:
+                  'Kiểm tra yêu cầu đã gửi trước khi tạo lượt mới. ${recoveryError!}',
+              action: AppButton(
+                'Tải lại gợi ý gần nhất',
+                onPressed: loadingRecovery ? null : loadLatest,
+              ),
+            ),
           if (statusError != null)
             StatePanel(
               title: 'Chưa kiểm tra được dịch vụ',

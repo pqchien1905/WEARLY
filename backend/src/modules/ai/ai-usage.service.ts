@@ -9,8 +9,8 @@ import { isUUID } from 'class-validator';
 import { PrismaService } from '../../database/prisma.service';
 import { AiUsageStatus, Prisma } from '../../generated/prisma/client';
 import { fail } from '../../common/errors';
-const today = () => {
-  const date = new Date();
+const today = (now = new Date()) => {
+  const date = new Date(now);
   date.setUTCHours(0, 0, 0, 0);
   return date;
 };
@@ -58,6 +58,10 @@ export class AiUsageService implements OnModuleInit, OnModuleDestroy {
     return this.db.$transaction(
       async (tx) => {
         await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('ai:usage:reservation', 0))::text`;
+        // CURRENT_TIMESTAMP is the transaction start, potentially the previous
+        // UTC day after waiting for the lock. Use one post-lock wall-clock value.
+        const [{ now }] = await tx.$queryRaw<Array<{ now: Date }>>`
+          SELECT clock_timestamp() AS now`;
         const prior = await tx.aiUsage.findUnique({
           where: { userId_kind_requestKey: { userId, kind, requestKey: key } },
         });
@@ -70,8 +74,7 @@ export class AiUsageService implements OnModuleInit, OnModuleDestroy {
             );
           return { row: prior, isNew: false };
         }
-        const day = today(),
-          now = new Date();
+        const day = today(now);
         const userUsed = await tx.aiUsage.count({
           where: { userId, kind, createdAt: { gte: day } },
         });
@@ -116,8 +119,9 @@ export class AiUsageService implements OnModuleInit, OnModuleDestroy {
             inputHash: hash,
             model,
             estimatedCostVnd: estimate,
-            deadlineAt: new Date(Date.now() + 30000),
-            expiresAt: new Date(Date.now() + 86400000),
+            createdAt: now,
+            deadlineAt: new Date(now.getTime() + 30000),
+            expiresAt: new Date(now.getTime() + 86400000),
           },
         });
         return { row, isNew: true };

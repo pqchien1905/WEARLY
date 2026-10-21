@@ -9,14 +9,11 @@ import { fail } from '../../common/errors';
 import { catalogInclude, productJson } from '../products/products.service';
 import { AiUsageService } from './ai-usage.service';
 import { StylistDto } from './dto/stylist.dto';
-const responseSchema = z
-  .object({
-    message: z.string().trim().min(1).max(1500),
-    skus: z.array(z.string().min(1).max(150)).min(1).max(4),
-  })
-  .strict();
+// Discard every provider field except validated selections, including prose.
+const responseSchema = z.object({
+  skus: z.array(z.string().min(1).max(150)).min(1).max(4),
+});
 const receiptSchema = z.object({
-  message: z.string(),
   picks: z.array(z.object({ sku: z.string(), price: z.string() })),
   budget: z.number(),
   size: z.string(),
@@ -130,7 +127,6 @@ export class StylistService {
       )
         throw new Error('INVALID_PROVIDER_OUTPUT');
       const receipt = {
-        message: parsed.data.message,
         picks: selected.map((v) => ({
           sku: v!.sku,
           price: v!.price.toString(),
@@ -167,6 +163,14 @@ export class StylistService {
   async get(userId: string, key: string) {
     return this.present(await this.usage.ownedByKey(userId, 'STYLIST', key));
   }
+  async latest(userId: string) {
+    await this.usage.cleanup();
+    const row = await this.db.aiUsage.findFirst({
+      where: { userId, kind: 'STYLIST', expiresAt: { gt: new Date() } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+    return { receipt: row ? await this.present(row) : null };
+  }
   private async resolve(receipt: z.infer<typeof receiptSchema>) {
     const rows = await this.db.productVariant.findMany({
       where: {
@@ -198,7 +202,7 @@ export class StylistService {
     );
     if (total.gt(receipt.budget)) throw new Error('AI_CATALOG_CHANGED');
     return {
-      message: receipt.message,
+      message: `Đã chọn ${picks.length} sản phẩm còn hàng, phù hợp với size và ngân sách của bạn.`,
       picks,
       total: total.toString(),
       currency: 'VND',

@@ -382,7 +382,7 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   Guide: docs/BROWSER_SESSIONS_LOCAL.md. Full A-Z goal remains ACTIVE for Gemini,
   local operations/CI/recovery/SEO, configured providers and final integration.
 
-## Gemini Stylist — in progress, 22 October 2026
+## Gemini Stylist — completed locally, 22 October 2026
 
 - Backend stateless official Gemini adapter, strict grounded output/current stock
   and prices, per-user/global daily quota and estimated budget, durable idempotent
@@ -405,3 +405,18 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   recovery without another call, rate-limit/quota and disabled configuration.
   Screenshots inspected; exactly3calls/3usage rows,2results/1failure. Guide:
   docs/GEMINI_LOCAL.md. Independent review and business migration pending.
+- Final independent review8997b62..3051c81:3important findings and1minor accepted.
+  RED->GREEN: arbitrary provider prose/prompt echoes are discarded; output text is
+  generated from validated picks; authenticated latest receipt GET restores after
+  product navigation/reload; post-lock database clock sets quota day and createdAt.
+  Remote homepage no longer labels the connected feature as a simulation.
+- Final182/182 E2E with Redis/MinIO,54/54unit,395Flutter+2 opt-in skips, lint/build
+  and analyzer PASS. Chrome --stylist PASS includes product navigation/back and
+  reload after an accepted request loses its reply; still exactly3provider calls
+  and3usage rows. Desktop/mobile screenshots inspected; fixture transport only.
+- Verified backup before-gemini-stylist-1792613302837.dump; business24->25, all40
+  original tables preserve counts and original-column fingerprints; AiUsage empty.
+  Compiled readiness/products/content200 and private admin/uploads401 PASS.
+  Live Gemini acceptance still requires configured key and observed provider reply.
+  Private image try-on, local operations/SEO/provider acceptance/final integration
+  remain required; full A-Z goal ACTIVE.

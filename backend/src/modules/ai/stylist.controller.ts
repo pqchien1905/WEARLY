@@ -32,6 +32,11 @@ export class StylistController {
     return this.service.create(u.id, key, dto);
   }
   @Header('Cache-Control', 'private, no-store')
+  @Get('stylist/requests/latest')
+  latest(@CurrentUser() u: Identity) {
+    return this.service.latest(u.id);
+  }
+  @Header('Cache-Control', 'private, no-store')
   @Get('stylist/requests/:key')
   get(
     @CurrentUser() u: Identity,

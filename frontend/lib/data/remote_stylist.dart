@@ -101,6 +101,14 @@ class RemoteStylistRepository {
   Future<StylistReceipt> get(String key) async => _receipt(
     await api.get('ai/stylist/requests/${Uri.encodeComponent(key)}'),
   );
+  Future<StylistReceipt?> latest() async {
+    final response = await api.get('ai/stylist/requests/latest');
+    if (response is! Map || !response.containsKey('receipt')) {
+      throw invalidStylistResponse;
+    }
+    return response['receipt'] == null ? null : _receipt(response['receipt']);
+  }
+
   StylistReceipt _receipt(Object? response) {
     try {
       final data = response as Map;
