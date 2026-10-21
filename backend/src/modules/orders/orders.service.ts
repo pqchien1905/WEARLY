@@ -11,10 +11,14 @@ import { fail } from '../../common/errors';
 import { cartInclude } from '../cart/cart.service';
 import { CreateOrderDto } from './dto/order.dto';
 import { PageDto } from '../products/dto/query-products.dto';
+import { VnpayProvider } from '../../integrations/payments/vnpay.provider';
 const include = { items: true, payment: true };
 @Injectable()
 export class OrdersService {
-  constructor(private readonly db: PrismaService) {}
+  constructor(
+    private readonly db: PrismaService,
+    private readonly gateway: VnpayProvider,
+  ) {}
   create(userId: string, key: string | undefined, dto: CreateOrderDto) {
     if (!key || !/^[a-zA-Z0-9_-]{8,128}$/.test(key))
       throw new BadRequestException(
@@ -27,6 +31,7 @@ export class OrdersService {
           shippingMethod: dto.shippingMethod,
           expectedSubtotal: dto.expectedSubtotal,
           cartVersion: dto.cartVersion ?? null,
+          ...(dto.paymentMethod === 'vnpay' ? { paymentMethod: 'vnpay' } : {}),
         }),
       )
       .digest('hex');
@@ -45,6 +50,7 @@ export class OrdersService {
           );
         return previous;
       }
+      if (dto.paymentMethod === 'vnpay') this.gateway.assertAvailable();
       const address = await tx.address.findFirst({
         where: { id: dto.addressId, userId },
       });
@@ -65,6 +71,16 @@ export class OrdersService {
       if (!subtotal.eq(dto.expectedSubtotal))
         fail(409, 'PRICE_CHANGED', 'Prices changed; refresh your cart');
       const shipping = shippingFee(subtotal, dto.shippingMethod);
+      if (
+        dto.paymentMethod === 'vnpay' &&
+        (subtotal.plus(shipping).gt('9999999999') ||
+          subtotal.plus(shipping).lte(0))
+      )
+        fail(
+          400,
+          'PAYMENT_AMOUNT_UNSUPPORTED',
+          'VNPay amount is outside the supported range',
+        );
       if (subtotal.plus(shipping).gt('99999999999999')) {
         fail(
           400,
@@ -119,7 +135,10 @@ export class OrdersService {
             })),
           },
           payment: {
-            create: { provider: 'cod', amount: subtotal.plus(shipping) },
+            create: {
+              provider: dto.paymentMethod,
+              amount: subtotal.plus(shipping),
+            },
           },
         },
         include,
@@ -165,6 +184,7 @@ export class OrdersService {
   cancel(userId: string, id: string) {
     return transaction(this.db, async (tx) => {
       await lockUser(tx, userId);
+      await tx.$queryRaw`SELECT id FROM "Order" WHERE id = ${id}::uuid AND "userId" = ${userId}::uuid FOR UPDATE`;
       const order = await tx.order.findFirst({
         where: { id, userId },
         include,
@@ -177,6 +197,24 @@ export class OrdersService {
           'ORDER_STATE_CONFLICT',
           'Only pending orders can be cancelled',
         );
+      if (order.payment?.provider === 'vnpay') {
+        if (['PAID', 'REFUNDED'].includes(order.payment.status))
+          fail(
+            409,
+            'PAYMENT_REFUND_REQUIRED',
+            'Paid orders require a refund workflow',
+          );
+        if (
+          await tx.paymentAttempt.count({
+            where: { paymentId: order.payment.id, status: 'PENDING' },
+          })
+        )
+          fail(
+            409,
+            'PAYMENT_RECONCILIATION_REQUIRED',
+            'Verify pending payment before cancelling',
+          );
+      }
       const changed = await tx.order.updateMany({
         where: { id, userId, status: 'PENDING', version: order.version },
         data: { status: 'CANCELLED', version: { increment: 1 } },

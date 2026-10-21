@@ -336,6 +336,23 @@ model Payment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   settlement PaymentSettlement?
+  attempts PaymentAttempt[]
+}
+model PaymentAttempt {
+  id String @id @default(uuid()) @db.Uuid
+  reference String @unique @db.VarChar(32)
+  paymentId String @db.Uuid
+  payment Payment @relation(fields: [paymentId], references: [id])
+  amount Decimal @db.Decimal(14, 0)
+  status PaymentStatus @default(PENDING)
+  ipAddress String @db.VarChar(45)
+  transactionNo String? @unique @db.VarChar(15)
+  reviewRequired Boolean @default(false)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  lastQueryAt DateTime?
+  updatedAt DateTime @updatedAt
+  @@index([paymentId, createdAt])
 }
 model PaymentSettlement {
   id String @id @default(uuid()) @db.Uuid

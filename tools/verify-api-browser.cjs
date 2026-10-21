@@ -3,10 +3,10 @@ const path = require('node:path');
 const http = require('node:http');
 const assert = require('node:assert/strict');
 
-module.exports = async function verify({ root, fixture }) {
+module.exports = async function verify({ root, fixture, payments=false, markFixturePaid }) {
   const { chromium } = require(path.join(root, '.tools/browser/node_modules/playwright'));
   const web = path.join(root, 'frontend/build/web');
-  const output = path.join(root, '.tools/api-shopping-verification');
+  const output = path.join(root, payments ? '.tools/api-payment-verification' : '.tools/api-shopping-verification');
   fs.mkdirSync(output, { recursive: true });
   const mime = { '.html': 'text/html', '.js': 'application/javascript', '.json': 'application/json', '.wasm': 'application/wasm', '.jpg': 'image/jpeg', '.png': 'image/png', '.ttf': 'font/ttf' };
   const server = http.createServer((req, res) => {
@@ -19,7 +19,9 @@ module.exports = async function verify({ root, fixture }) {
   const errors = [], requests = [];
   try {
     browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
-    page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const browserContext = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    page = await browserContext.newPage();
+    if(payments) await page.context().route('https://sandbox.vnpayment.vn/**',route=>route.fulfill({status:200,contentType:'text/html',body:'<h1>LOCAL BROWSER TEST FIXTURE</h1>'}));
     page.setDefaultTimeout(18000);
     page.on('pageerror', e => errors.push(e.message));
     page.on('console', m => { if (/EXCEPTION CAUGHT|Another exception|subtype|TypeError/.test(m.text())) errors.push(m.text()); });
@@ -84,15 +86,30 @@ module.exports = async function verify({ root, fixture }) {
     await button('Tiến hành đặt hàng');
     await page.getByText('Chọn địa chỉ đã lưu', { exact: true }).click();
     await page.getByRole('menuitem', { name: 'Nhà — Nguyễn Trình Duyệt', exact: true }).click();
-    const confirm = page.getByRole('checkbox', { name: 'Tôi xác nhận thông tin nhận hàng và đặt đơn COD.', exact: true });
+    if(payments) {
+      const method=page.getByRole('button',{name:'Phương thức thanh toán COD',exact:true}); await reveal(method); await method.click();
+      await page.getByRole('menuitem',{name:'VNPay sandbox',exact:true}).click();
+    }
+    const confirm = page.getByRole('checkbox', { name: 'Tôi xác nhận thông tin nhận hàng và phương thức thanh toán.', exact: true });
     await reveal(confirm); await confirm.click();
-    await button('Đặt hàng COD');
+    await button(payments ? 'Đặt hàng với VNPay sandbox':'Đặt hàng COD');
     await page.getByText('Đã tiếp nhận đơn hàng', { exact: true }).waitFor();
-    console.log('Chrome: COD order persisted.');
-    assert((await page.locator('body').ariaSnapshot()).includes('Chưa thu tiền'));
+    console.log('Chrome: '+(payments?'VNPay sandbox':'COD')+' order persisted.');
+    assert((await page.locator('body').ariaSnapshot()).includes(payments?'Chờ thanh toán':'Chưa thu tiền'));
+    if(payments) {
+      await button('Chuẩn bị thanh toán');
+      const nextPage=page.context().waitForEvent('page');
+      await button('Mở VNPay sandbox (tab mới)');
+      const popup=await nextPage; await popup.waitForLoadState();
+      const url=new URL(popup.url()); assert.equal(url.hostname,'sandbox.vnpayment.vn'); assert.equal(url.searchParams.get('vnp_Amount'),'52000000');
+      await popup.close(); markFixturePaid();
+      await button('Kiểm tra kết quả');
+      await page.getByText('Đã thanh toán',{exact:true}).waitFor();
+      console.log('Chrome: signed local query fixture verified and payment displayed.');
+    }
     await button('Xem chi tiết đơn');
-    await button('Hủy đơn hàng'); await button('Xác nhận hủy');
-    await page.getByText('Đơn đã hủy', { exact: true }).waitFor();
+    if(!payments) {await button('Hủy đơn hàng'); await button('Xác nhận hủy');}
+    await page.getByText(payments?'Đã thanh toán':'Đơn đã hủy', { exact: true }).waitFor();
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.screenshot({ path: path.join(output, 'order-desktop.png'), fullPage: true });
     await page.reload(); await semantics();
@@ -101,7 +118,14 @@ module.exports = async function verify({ root, fixture }) {
     await fill('Email', email);
     await fill('Mật khẩu', 'Browser-only-Password-2026');
     await button('Đăng nhập');
-    await page.getByText('Đơn đã hủy', { exact: true }).waitFor();
+    await page.getByText(payments?'Đã thanh toán':'Đơn đã hủy', { exact: true }).waitFor();
+    if(payments) {
+      const returned=await page.context().newPage();
+      await returned.goto('http://127.0.0.1:4183/#/payments/return');
+      await returned.waitForTimeout(700); await returned.evaluate(()=>document.querySelector('flt-semantics-placeholder')?.click());
+      await returned.getByText('Đã quay lại từ VNPay sandbox',{exact:true}).waitFor();
+      assert(!(await returned.locator('body').ariaSnapshot()).includes('Đã thanh toán')); await returned.close();
+    }
     await route('/faq');
     await page.mouse.move(700, 600); await page.mouse.wheel(0, 835);
     for (const width of [600, 1440, 375, 1440]) { await page.setViewportSize({ width, height: 900 }); await page.waitForTimeout(250); }
@@ -109,7 +133,7 @@ module.exports = async function verify({ root, fixture }) {
     assert((await page.locator('body').ariaSnapshot()).includes('Mở bảng size ở trang sản phẩm'));
     assert.deepEqual(errors, []);
     assert(requests.some(r => r.path.endsWith('/orders') && r.status === 201));
-    console.log('PASS Chrome real API: register, address, cart, COD, cancel, reload/login restores order, 375/1440px and F12 resize.');
+    console.log('PASS Chrome real API: register, address, cart, '+(payments?'VNPay sandbox with signed LOCAL fixtures':'COD, cancel')+', reload/login restores order, 375/1440px and F12 resize.');
   } catch (error) {
     if (page) {
       fs.writeFileSync(path.join(output, 'failure-aria.txt'), await page.locator('body').ariaSnapshot());

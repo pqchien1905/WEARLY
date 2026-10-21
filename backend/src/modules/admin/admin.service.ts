@@ -23,7 +23,12 @@ const adminProductInclude = {
 };
 const adminOrderInclude = {
   items: true,
-  payment: { include: { settlement: true } },
+  payment: {
+    include: {
+      settlement: true,
+      attempts: { orderBy: { createdAt: 'desc' as const } },
+    },
+  },
   user: { select: { email: true, name: true } },
 };
 @Injectable()
@@ -45,16 +50,37 @@ export class AdminService {
     );
   }
   async summary() {
-    const [products, inventory, orders, pendingOrders, customers, paid, awaiting] =
-      await this.db.$transaction([
+    const [
+      products,
+      inventory,
+      orders,
+      pendingOrders,
+      customers,
+      paid,
+      awaiting,
+    ] = await this.db.$transaction(
+      [
         this.db.product.count(),
         this.db.inventory.aggregate({ _sum: { quantity: true } }),
         this.db.order.count(),
         this.db.order.count({ where: { status: 'PENDING' } }),
         this.db.user.count({ where: { role: 'CUSTOMER' } }),
-        this.db.payment.aggregate({ where: { status: 'PAID' }, _sum: { amount: true }, _count: true }),
-        this.db.payment.aggregate({ where: { provider: 'cod', status: 'PENDING', order: { status: 'DELIVERED' } }, _sum: { amount: true } }),
-      ], { isolationLevel: 'RepeatableRead' });
+        this.db.payment.aggregate({
+          where: { status: 'PAID' },
+          _sum: { amount: true },
+          _count: true,
+        }),
+        this.db.payment.aggregate({
+          where: {
+            provider: 'cod',
+            status: 'PENDING',
+            order: { status: 'DELIVERED' },
+          },
+          _sum: { amount: true },
+        }),
+      ],
+      { isolationLevel: 'RepeatableRead' },
+    );
     return {
       products,
       inventoryUnits: inventory._sum.quantity ?? 0,
@@ -227,6 +253,14 @@ export class AdminService {
   }
   status(actorId: string, id: string, dto: OrderStatusDto) {
     return transaction(this.db, async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Order" WHERE id = ${id}::uuid FOR UPDATE`;
+      const payment = await tx.payment.findUnique({ where: { orderId: id } });
+      if (payment?.provider === 'vnpay' && payment.status !== 'PAID')
+        fail(
+          409,
+          'PAYMENT_REQUIRED',
+          'VNPay must be verified before fulfilling the order',
+        );
       const from = {
         CONFIRMED: 'PENDING',
         SHIPPED: 'CONFIRMED',
@@ -254,27 +288,66 @@ export class AdminService {
   settleCod(actorId: string, id: string, dto: SettleCodDto) {
     return transaction(this.db, async (tx) => {
       await tx.$queryRaw`SELECT id FROM "Order" WHERE id = ${id}::uuid FOR UPDATE`;
-      const order = await tx.order.findUnique({ where: { id }, include: adminOrderInclude });
+      const order = await tx.order.findUnique({
+        where: { id },
+        include: adminOrderInclude,
+      });
       if (!order) throw new NotFoundException();
       const payment = order.payment;
       const existing = payment?.settlement;
       // A lost response may be retried with the original version. Never collect twice.
       if (existing) {
-        if (!existing.amount.eq(dto.amount) || existing.reference !== dto.reference)
-          fail(409, 'SETTLEMENT_CONFLICT', 'A different settlement was already recorded');
+        if (
+          !existing.amount.eq(dto.amount) ||
+          existing.reference !== dto.reference
+        )
+          fail(
+            409,
+            'SETTLEMENT_CONFLICT',
+            'A different settlement was already recorded',
+          );
         return order;
       }
-      if (order.status !== 'DELIVERED' || payment?.provider !== 'cod' || payment.status !== 'PENDING')
-        fail(409, 'ORDER_STATE_CONFLICT', 'Only delivered unpaid COD orders can be settled');
+      if (
+        order.status !== 'DELIVERED' ||
+        payment?.provider !== 'cod' ||
+        payment.status !== 'PENDING'
+      )
+        fail(
+          409,
+          'ORDER_STATE_CONFLICT',
+          'Only delivered unpaid COD orders can be settled',
+        );
       if (!payment.amount.eq(dto.amount))
-        fail(409, 'AMOUNT_MISMATCH', 'Collected amount must match the full payment amount');
-      const changed = await tx.order.updateMany({ where: { id, version: dto.expectedVersion }, data: { version: { increment: 1 } } });
-      if (!changed.count) fail(409, 'VERSION_CONFLICT', 'Order changed; reload before settling');
-      await tx.payment.update({ where: { id: payment.id }, data: { status: 'PAID', settlement: {
-        create: { actorId, amount: payment.amount, reference: dto.reference },
-      } } });
+        fail(
+          409,
+          'AMOUNT_MISMATCH',
+          'Collected amount must match the full payment amount',
+        );
+      const changed = await tx.order.updateMany({
+        where: { id, version: dto.expectedVersion },
+        data: { version: { increment: 1 } },
+      });
+      if (!changed.count)
+        fail(409, 'VERSION_CONFLICT', 'Order changed; reload before settling');
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: 'PAID',
+          settlement: {
+            create: {
+              actorId,
+              amount: payment.amount,
+              reference: dto.reference,
+            },
+          },
+        },
+      });
       await recordAdminActivity(tx, actorId, 'COD_SETTLED', id);
-      return tx.order.findUniqueOrThrow({ where: { id }, include: adminOrderInclude });
+      return tx.order.findUniqueOrThrow({
+        where: { id },
+        include: adminOrderInclude,
+      });
     });
   }
 }

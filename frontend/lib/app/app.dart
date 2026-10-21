@@ -20,6 +20,7 @@ import '../features/admin/admin_login_page.dart';
 import 'remote_route_gate.dart';
 import '../features/cart/cart_page.dart';
 import '../features/checkout/checkout_page.dart';
+import '../features/checkout/payment_panel.dart';
 import '../features/ai_stylist/stylist_page.dart';
 import '../features/virtual_tryon/tryon_page.dart';
 import '../features/virtual_tryon/tryon_results.dart';
@@ -172,6 +173,10 @@ GoRouter createRouter({String initialLocation = '/'}) {
             ),
           ),
           appRoute(path: '/', builder: (_, _) => const HomePage()),
+          appRoute(
+            path: '/payments/return',
+            builder: (_, _) => const PaymentReturnPage(),
+          ),
           appRoute(
             path: '/reset-password',
             builder: (_, _) => ResetPasswordPage(

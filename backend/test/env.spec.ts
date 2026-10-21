@@ -6,6 +6,28 @@ const good = {
   CORS_ORIGINS: 'http://localhost:5173',
 };
 describe('configuration', () => {
+  it('requires explicit complete sandbox configuration and an allowed storefront return', () => {
+    expect(validateEnv(good)).toHaveProperty('VNPAY_ENABLED', 'false');
+    expect(() => validateEnv({ ...good, VNPAY_ENABLED: 'true' })).toThrow();
+    const gateway = {
+      ...good,
+      VNPAY_ENABLED: 'true',
+      VNPAY_TMN_CODE: 'TEST0001',
+      VNPAY_HASH_SECRET: 'sandbox-test-secret',
+      VNPAY_RETURN_URL: 'http://localhost:3000/api/v1/payments/vnpay/return',
+      VNPAY_WEB_RETURN_URL: 'http://localhost:5173/#/payments/return',
+    };
+    expect(validateEnv(gateway)).toHaveProperty('VNPAY_ENABLED', 'true');
+    for (const patch of [
+      { VNPAY_TMN_CODE: 'x' },
+      { VNPAY_HASH_SECRET: '' },
+      { VNPAY_RETURN_URL: 'http://external.test/callback' },
+      { VNPAY_WEB_RETURN_URL: 'https://external.test/#/payments/return' },
+      { VNPAY_WEB_RETURN_URL: 'http://localhost:5173/#/shop' },
+    ]) {
+      expect(() => validateEnv({ ...gateway, ...patch })).toThrow();
+    }
+  });
   it('requires secrets and rejects copied placeholders', () => {
     expect(() => validateEnv({})).toThrow();
     expect(() =>

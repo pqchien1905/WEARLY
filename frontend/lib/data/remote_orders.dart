@@ -137,6 +137,7 @@ class RemoteOrderRepository implements OrderRepository {
           'shippingMethod': draft.express ? 'express' : 'standard',
           'expectedSubtotal': cart.subtotal.toString(),
           'cartVersion': cart.version,
+          if (draft.paymentMethod == 'vnpay') 'paymentMethod': 'vnpay',
         },
       );
     }
@@ -164,7 +165,8 @@ class RemoteOrderRepository implements OrderRepository {
     } on ApiException catch (error) {
       // A lost/invalid success response may already have committed. Reuse the
       // original body and key until the server gives a definitive answer.
-      if ([400, 404, 409, 422].contains(error.status)) {
+      if ([400, 404, 409, 422].contains(error.status) ||
+          error.code == 'PAYMENT_UNAVAILABLE') {
         _attempt = null;
         cart.setLocked(false);
       }

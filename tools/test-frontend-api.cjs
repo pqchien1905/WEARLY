@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { createRequire } = require('node:module');
-const { randomUUID } = require('node:crypto');
+const { randomUUID, createHmac } = require('node:crypto');
 const { spawn } = require('node:child_process');
 const root = path.resolve(__dirname, '..');
 const backend = path.join(root, 'backend');
@@ -19,6 +19,7 @@ Object.assign(process.env, normal, { DATABASE_URL: target.href, NODE_ENV: 'test'
   JWT_ACCESS_SECRET: randomUUID() + randomUUID(), JWT_REFRESH_SECRET: randomUUID() + randomUUID(),
   AI_QUEUE_PREFIX: 'flutter-test-' + randomUUID(), CORS_ORIGINS: 'http://127.0.0.1:4183' });
 process.env.PASSWORD_RECOVERY_ENABLED = 'false';
+process.env.VNPAY_ENABLED = 'false';
 process.chdir(backend);
 requireBackend('reflect-metadata');
 const { NestFactory } = requireBackend('@nestjs/core');
@@ -31,6 +32,7 @@ const wishlist = process.argv.includes('--wishlist');
 const reviews = process.argv.includes('--reviews');
 const style = process.argv.includes('--style');
 const recovery = process.argv.includes('--recovery');
+const payments = process.argv.includes('--payments');
 if (admin) {
   process.env.S3_BUCKET = test.TEST_S3_BUCKET || normal.S3_BUCKET + '-test';
   if (!process.env.S3_BUCKET.endsWith('-test') || process.env.S3_BUCKET === normal.S3_BUCKET)
@@ -65,8 +67,21 @@ async function main() {
       PASSWORD_RESET_WEB_URL: 'http://127.0.0.1:4183/#/reset-password',
     });
   }
+  const fixtureSecret = randomUUID()+randomUUID();
+  if(payments) Object.assign(process.env,{ VNPAY_ENABLED:'true',VNPAY_TMN_CODE:'TEST0001',VNPAY_HASH_SECRET:fixtureSecret,
+    VNPAY_RETURN_URL:'http://127.0.0.1:3000/api/v1/payments/vnpay/return',VNPAY_WEB_RETURN_URL:'http://127.0.0.1:4183/#/payments/return' });
+  let fixturePaid = false;
+  const fixtureHttp = async (_url, init) => {
+    const body=JSON.parse(init.body);
+    const fields = ['vnp_ResponseId','vnp_Command','vnp_ResponseCode','vnp_Message','vnp_TmnCode','vnp_TxnRef','vnp_Amount','vnp_BankCode','vnp_PayDate','vnp_TransactionNo','vnp_TransactionType','vnp_TransactionStatus','vnp_OrderInfo','vnp_PromotionCode','vnp_PromotionAmount'];
+    const reply = {vnp_ResponseId:randomUUID().replaceAll('-',''),vnp_Command:'querydr',vnp_ResponseCode:'00',vnp_Message:'Signed local fixture',vnp_TmnCode:'TEST0001',vnp_TxnRef:body.vnp_TxnRef,vnp_Amount:'52000000',vnp_BankCode:'NCB',vnp_PayDate:'20261021120000',vnp_TransactionNo:String(Date.now()),vnp_TransactionType:'01',vnp_TransactionStatus:fixturePaid?'00':'01',vnp_OrderInfo:'Test',vnp_PromotionCode:'',vnp_PromotionAmount:''};
+    reply.vnp_SecureHash=createHmac('sha512',fixtureSecret).update(fields.map(k=>reply[k]).join('|')).digest('hex');
+    return Response.json(reply);
+  };
   const { AppModule } = requireBackend('./dist/app.module');
-  const app = await NestFactory.create(AppModule, { logger: false });
+  const app = payments
+    ? (await requireBackend('@nestjs/testing').Test.createTestingModule({imports:[AppModule]}).overrideProvider('VNPAY_HTTP').useValue(fixtureHttp).compile()).createNestApplication({logger:false})
+    : await NestFactory.create(AppModule, { logger: false });
   const db = app.get(PrismaService);
   let category, brand, product;
   try {
@@ -79,6 +94,7 @@ async function main() {
       images: { create: { url: 'assets/images/shirt.jpg', alt: 'Áo cotton', position: 0 } },
       variants: { create: { sku: fixture, size: 'M', color: 'Trắng', colorHex: '#FFFFFF', price: '490000', inventory: { create: { quantity: 10 } } } } } });
     const url = (await app.getUrl()) + '/api/v1';
+    if(payments) app.get(requireBackend('@nestjs/config').ConfigService).set('VNPAY_RETURN_URL',url+'/payments/vnpay/return');
     if (recovery) {
       const { ConfigService } = requireBackend('@nestjs/config');
       const { RecoveryService } = requireBackend('./dist/modules/recovery/recovery.service');
@@ -204,9 +220,14 @@ async function main() {
       if (saved.length !== 1 || saved[0].productId !== product.id) throw new Error('Wishlist was not persisted for first customer');
       if (await db.wishlistItem.count({ where: { user: { email: fixture + '@example.com' } } }) !== 0) throw new Error('Wishlist crossed customer accounts');
       console.log('PASS database assertions: first customer saved product, second customer empty.');
-    } else if (browser) {
+    } else if (browser || payments) {
       await flutter(['build', 'web', '--release', '--dart-define=USE_REMOTE_API=true', '--dart-define=API_BASE_URL=' + url]);
-      await require('./verify-api-browser.cjs')({ root, url, fixture });
+      await require('./verify-api-browser.cjs')({ root, url, fixture, payments, markFixturePaid:()=>{fixturePaid=true;} });
+      if(payments) {
+        const order=await db.order.findFirstOrThrow({where:{user:{email:'browser-'+fixture+'@example.com'}},include:{payment:{include:{attempts:true}}}});
+        if(order.payment.provider!=='vnpay' || order.payment.status!=='PAID' || order.payment.attempts.length!==1 || order.payment.attempts[0].status!=='PAID')throw Error('VNPay fixture persistence mismatch');
+        console.log('PASS persisted VNPay state from signed LOCAL FIXTURE, not a real provider response.');
+      }
     } else {
       await flutter(['test', 'test/live_shopping_test.dart', '--reporter', 'expanded', '--dart-define=LIVE_SHOPPING_API_URL=' + url, '--dart-define=LIVE_SHOPPING_FIXTURE=' + fixture]);
     }
@@ -232,6 +253,7 @@ async function main() {
         await tx.adminAuditEvent.deleteMany({ where: { actorId: owner.userId } });
         await tx.review.deleteMany({ where: owner });
         await tx.inventoryMovement.deleteMany({ where: { order: owner } });
+        await tx.paymentAttempt.deleteMany({ where: { payment: { order: owner } } });
         await tx.payment.deleteMany({ where: { order: owner } });
         await tx.orderItem.deleteMany({ where: { order: owner } });
         await tx.order.deleteMany({ where: owner });

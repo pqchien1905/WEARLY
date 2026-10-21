@@ -230,10 +230,12 @@ class CartSummary extends StatelessWidget {
     required this.shipping,
     this.action,
     this.remote = false,
+    this.paymentMethod = 'cod',
   });
   final int subtotal, shipping;
   final Widget? action;
   final bool remote;
+  final String paymentMethod;
   @override
   Widget build(BuildContext context) => Container(
     width: double.infinity,
@@ -256,7 +258,9 @@ class CartSummary extends StatelessWidget {
         const SizedBox(height: 12),
         Text(
           remote
-              ? 'Thanh toán COD khi nhận hàng. Tổng tiền được xác nhận khi tạo đơn.'
+              ? (paymentMethod == 'vnpay'
+                    ? 'VNPay sandbox: thanh toán thử nghiệm. Kiểm tra kết quả trong chi tiết đơn hàng.'
+                    : 'Thanh toán COD khi nhận hàng. Tổng tiền được xác nhận khi tạo đơn.')
               : 'Giá và phí vận chuyển mô phỏng, không thu tiền.',
           style: T.small,
         ),

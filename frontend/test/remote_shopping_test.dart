@@ -12,6 +12,93 @@ import 'remote_commerce_test.dart' show cartJson, orderJson;
 import 'remote_session_test.dart' show jsonResponse;
 
 void main() {
+  for (final route in [
+    '/checkout/success/order-1',
+    '/account/orders/order-1',
+  ]) {
+    testWidgets('payment link survives delayed canonical refresh on $route', (
+      tester,
+    ) async {
+      var delayed = false;
+      final snapshot = orderJson()
+        ..['payment'] = {'provider': 'vnpay', 'status': 'PENDING'};
+      final api = ApiClient(
+        baseUrl: 'http://localhost/api/v1',
+        client: MockClient((r) async {
+          final path = r.url.path;
+          if (path.endsWith('/auth/login')) return jsonResponse(sessionJson());
+          if (path.endsWith('/orders/order-1')) {
+            if (delayed) {
+              await Future<void>.delayed(const Duration(milliseconds: 200));
+            }
+            return jsonResponse(snapshot);
+          }
+          if (path.endsWith('/orders')) {
+            return jsonResponse({
+              'items': [snapshot],
+              'total': 1,
+              'page': 1,
+              'limit': 100,
+            });
+          }
+          if (path.endsWith('/cart')) {
+            return jsonResponse(cartJson(quantity: 0));
+          }
+          if (path.endsWith('/start')) {
+            return jsonResponse({
+              'orderId': 'order-1',
+              'paymentStatus': 'PENDING',
+              'sandbox': true,
+              'reviewRequired': false,
+              'attempt': {
+                'reference': 'test',
+                'status': 'PENDING',
+                'expiresAt': '2026-10-21T12:00:00Z',
+              },
+              'checkoutUrl':
+                  'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?vnp_TxnRef=test',
+            });
+          }
+          return jsonResponse({}, 404);
+        }),
+      );
+      final container = ProviderContainer(
+        overrides: [
+          remoteApiProvider.overrideWithValue(true),
+          apiClientProvider.overrideWithValue(api),
+          sessionTokensProvider.overrideWithValue(api.tokens),
+        ],
+      );
+      addTearDown(() {
+        container.dispose();
+        api.close();
+      });
+      final router = createRouter(initialLocation: route);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: NepApp(router: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await container
+          .read(accountProvider.notifier)
+          .signIn('', 'an@example.com', 'example-password');
+      await tester.pumpAndSettle();
+      delayed = true;
+      final prepare = find.text('Chuẩn bị thanh toán');
+      await tester.ensureVisible(prepare);
+      await tester.tap(prepare);
+      await tester.pumpAndSettle();
+      expect(find.text('Mở VNPay sandbox (tab mới)'), findsOneWidget);
+      expect(
+        find.text(
+          'Thanh toán COD khi nhận hàng. Tổng tiền được xác nhận khi tạo đơn.',
+        ),
+        findsNothing,
+      );
+    });
+  }
   testWidgets(
     'successful order detail cannot certify a cart whose fetch failed',
     (tester) async {
@@ -171,7 +258,7 @@ void main() {
       await tester.tap(find.text('Nhà — Nguyễn An').last);
       await tester.pumpAndSettle();
       final confirm = find.text(
-        'Tôi xác nhận thông tin nhận hàng và đặt đơn COD.',
+        'Tôi xác nhận thông tin nhận hàng và phương thức thanh toán.',
       );
       await tester.ensureVisible(find.text('Giao nhanh · 50.000đ'));
       await tester.tap(find.text('Giao nhanh · 50.000đ'));

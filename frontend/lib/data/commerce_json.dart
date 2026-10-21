@@ -64,18 +64,22 @@ Order commerceOrder(Object? value, {required String email}) {
     _ => throw invalidCommerce,
   };
   final paymentStatus = switch (payment['status']) {
-    'PENDING' => 'Chưa thu tiền',
+    'PENDING' =>
+      payment['provider'] == 'vnpay' ? 'Chờ thanh toán' : 'Chưa thu tiền',
     'PAID' => 'Đã thanh toán',
     'CANCELLED' => 'Đã hủy',
     'FAILED' => 'Thanh toán thất bại',
+    'REFUNDED' => 'Đã hoàn tiền',
     _ => throw invalidCommerce,
   };
-  if (payment['provider'] != 'cod') throw invalidCommerce;
+  if (!['cod', 'vnpay'].contains(payment['provider'])) throw invalidCommerce;
   final createdAt = DateTime.tryParse(data['createdAt']?.toString() ?? '');
   if (createdAt == null) throw invalidCommerce;
   final order = Order(
     id: data['id'],
     status: status,
+    paymentProvider: payment['provider'],
+    paymentStatus: payment['status'],
     createdAt: createdAt,
     shipping: vnd(data['shipping']),
     items: List<CartItem>.unmodifiable(
@@ -86,7 +90,9 @@ Order commerceOrder(Object? value, {required String email}) {
       email: email,
       phone: address['phone'],
       address: address['address'],
-      payment: 'COD · $paymentStatus',
+      payment:
+          '${payment['provider'] == 'vnpay' ? 'VNPay sandbox' : 'COD'} · $paymentStatus',
+      paymentMethod: payment['provider'],
       express: data['shippingMethod'] == 'express',
     ),
   );

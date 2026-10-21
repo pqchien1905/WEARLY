@@ -518,7 +518,28 @@ class RemoteAdminOrder extends ConsumerWidget {
                           settleCod(context, ref, data, order.total),
                     ),
                   ],
-                  if (next != null) ...[
+                  if (payment['provider'] == 'vnpay') ...[
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Các lần thanh toán VNPay sandbox',
+                      style: T.body,
+                    ),
+                    for (final attempt in (payment['attempts'] as List? ?? []))
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: SelectableText(
+                          '${attempt['reference']} · ${attempt['status']} · ${money(vnd(attempt['amount']))}\nMã giao dịch: ${attempt['transactionNo'] ?? 'Chưa có'}${attempt['reviewRequired'] == true ? '\nCẦN KIỂM TRA: thanh toán trùng hoặc đơn đã hủy.' : ''}',
+                        ),
+                      ),
+                    if (payment['status'] != 'PAID')
+                      const Text(
+                        'Chờ xác minh thanh toán trước khi xử lý giao hàng.',
+                        style: T.small,
+                      ),
+                  ],
+                  if (next != null &&
+                      (payment['provider'] != 'vnpay' ||
+                          payment['status'] == 'PAID')) ...[
                     const SizedBox(height: 20),
                     AppButton(
                       next.$2,

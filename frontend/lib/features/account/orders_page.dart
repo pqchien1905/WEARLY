@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../checkout/payment_panel.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/commerce_state.dart';
@@ -85,7 +86,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
         children: [
           DemoNotice(
             text: store.remote
-                ? 'Đơn hàng được lưu theo tài khoản. Đơn COD chỉ được thanh toán khi bạn nhận hàng.'
+                ? 'Đơn hàng được lưu theo tài khoản. Trạng thái thanh toán và giao hàng được cập nhật riêng.'
                 : 'Đơn hàng mô phỏng – chưa thanh toán thật. Lịch sử của tab hiện tại, không phải dữ liệu tài khoản đã xác thực. Tải lại trang sẽ xóa đơn.',
           ),
           if (store.remote)
@@ -414,7 +415,12 @@ class _OrderDetail extends StatelessWidget {
         ),
         const SizedBox(height: 28),
         OrderProgress(status: order.status, remote: remote),
-        if (remote && order.status == 'Chờ xác nhận') _CancelOrder(order.id),
+        if (remote) PaymentPanel(key: ValueKey(order.id), order: order),
+        if (remote &&
+            order.status == 'Chờ xác nhận' &&
+            !(order.paymentProvider == 'vnpay' &&
+                ['PAID', 'REFUNDED'].contains(order.paymentStatus)))
+          _CancelOrder(order.id),
         const Divider(height: 64),
         Text('Thông tin nhận hàng', style: T.display(26)),
         const SizedBox(height: 16),
@@ -471,6 +477,7 @@ class _OrderDetail extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 480),
           child: CartSummary(
             remote: remote,
+            paymentMethod: order.paymentProvider,
             subtotal: order.subtotal,
             shipping: order.shipping,
           ),

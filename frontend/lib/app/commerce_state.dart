@@ -156,6 +156,18 @@ class CommerceController extends ChangeNotifier {
       await (orderRepository as RemoteOrderRepository).loadOrder(id);
     }
   });
+  // Refresh a visible payment result without disposing its checkout link.
+  // Errors propagate to the payment panel; the last verified order stays visible.
+  Future<void> refreshPaymentOrder(String id) async {
+    _requireAccount();
+    if (orderRepository is RemoteOrderRepository) {
+      await (orderRepository as RemoteOrderRepository).loadOrder(id);
+    }
+    if (_disposed) return;
+    detailState(id).loaded = true;
+    notifyListeners();
+  }
+
   Future<void> _mutate(
     Future<void> Function() action, {
     CommerceLoadState? state,

@@ -38,9 +38,10 @@ class CheckoutDraft {
     required this.address,
     this.express = false,
     this.payment = 'COD demo',
+    this.paymentMethod = 'cod',
     this.addressId,
   });
-  final String name, email, phone, address, payment;
+  final String name, email, phone, address, payment, paymentMethod;
   final bool express;
   final String? addressId;
 }
@@ -53,8 +54,10 @@ class Order {
     required this.shipping,
     this.status = 'Chờ xác nhận',
     required this.createdAt,
+    this.paymentProvider = 'cod',
+    this.paymentStatus = 'PENDING',
   });
-  final String id, status;
+  final String id, status, paymentProvider, paymentStatus;
   final List<CartItem> items;
   final CheckoutDraft draft;
   final int shipping;
@@ -68,6 +71,8 @@ class Order {
     shipping: shipping,
     status: value,
     createdAt: createdAt,
+    paymentProvider: paymentProvider,
+    paymentStatus: paymentStatus,
   );
 }
 

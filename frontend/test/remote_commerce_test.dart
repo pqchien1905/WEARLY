@@ -81,6 +81,102 @@ const draft = CheckoutDraft(
 
 void main() {
   test(
+    'definitive unavailable payment unlocks checkout for COD fallback',
+    () async {
+      final sent = <http.Request>[];
+      final api = ApiClient(
+        baseUrl: 'http://localhost/api/v1',
+        client: MockClient((r) async {
+          if (r.method == 'POST') {
+            sent.add(r);
+            if (sent.length == 1) {
+              return jsonResponse({
+                'error': {
+                  'code': 'PAYMENT_UNAVAILABLE',
+                  'message': 'Sandbox is unavailable',
+                },
+              }, 503);
+            }
+            return jsonResponse(orderJson(), 201);
+          }
+          return jsonResponse(cartJson());
+        }),
+      );
+      addTearDown(api.close);
+      final cart = RemoteCartRepository(api);
+      final orders = RemoteOrderRepository(api, cart);
+      addTearDown(orders.dispose);
+      await cart.refresh();
+      const vnpay = CheckoutDraft(
+        name: 'An',
+        email: 'an@example.com',
+        phone: '0901234567',
+        address: 'Test address',
+        addressId: 'address-1',
+        paymentMethod: 'vnpay',
+      );
+      await expectLater(orders.checkout(vnpay), throwsA(isA<ApiException>()));
+      expect(orders.hasPendingCheckout, isFalse);
+      expect(cart.locked, isFalse);
+      await orders.checkout(draft);
+      expect(jsonDecode(sent.last.body)['paymentMethod'], isNull);
+      expect(
+        sent.first.headers['Idempotency-Key'],
+        isNot(sent.last.headers['Idempotency-Key']),
+      );
+    },
+  );
+  test(
+    'VNPay method survives uncertain retries and decodes verified state',
+    () async {
+      final sent = <http.Request>[];
+      final api = ApiClient(
+        baseUrl: 'http://localhost/api/v1',
+        client: MockClient((r) async {
+          if (r.method == 'POST') {
+            sent.add(r);
+            if (sent.length == 1) throw http.ClientException('lost response');
+            return jsonResponse(
+              orderJson()
+                ..['payment'] = {'provider': 'vnpay', 'status': 'PENDING'},
+              201,
+            );
+          }
+          return jsonResponse(cartJson());
+        }),
+      );
+      addTearDown(api.close);
+      final cart = RemoteCartRepository(api);
+      final repo = RemoteOrderRepository(api, cart);
+      addTearDown(repo.dispose);
+      await cart.refresh();
+      const vnpay = CheckoutDraft(
+        name: 'An',
+        email: 'an@example.com',
+        phone: '0901234567',
+        address: 'Test address',
+        addressId: 'address-1',
+        payment: 'VNPay sandbox',
+        paymentMethod: 'vnpay',
+      );
+      await expectLater(repo.checkout(vnpay), throwsA(isA<ApiException>()));
+      final order = await repo.checkout(draft);
+      expect(jsonDecode(sent.first.body)['paymentMethod'], 'vnpay');
+      expect(sent.first.body, sent.last.body);
+      expect(order.paymentProvider, 'vnpay');
+      expect(order.paymentStatus, 'PENDING');
+      expect(order.draft.payment, contains('VNPay sandbox'));
+      expect(
+        commerceOrder(
+          orderJson()
+            ..['payment'] = {'provider': 'vnpay', 'status': 'REFUNDED'},
+          email: '',
+        ).paymentStatus,
+        'REFUNDED',
+      );
+    },
+  );
+  test(
     'shipping method comes from the order snapshot, regardless of its fee',
     () {
       final json = orderJson()..['shippingMethod'] = 'express';

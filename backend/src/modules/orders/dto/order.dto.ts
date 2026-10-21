@@ -5,6 +5,9 @@ export class CreateOrderDto {
   @ApiProperty({ enum: ['standard', 'express'] })
   @IsIn(['standard', 'express'])
   shippingMethod: 'standard' | 'express' = 'standard';
+  @ApiProperty({ enum: ['cod', 'vnpay'] })
+  @IsIn(['cod', 'vnpay'])
+  paymentMethod: 'cod' | 'vnpay' = 'cod';
   @ApiProperty({
     description: 'Exact VND subtotal from the last cart response',
   })

@@ -7,7 +7,8 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
 
 - [x] Foundation: timezone, schema/readiness, local backup and migration.
 - [x] Shipping snapshot, COD settlement, useful business reports.
-- [ ] VNPay sandbox, promotions, shipment tracking, cancellations/returns/refunds.
+- [x] VNPay sandbox local implementation and signed-fixture acceptance.
+- [ ] Promotions, shipment tracking, cancellations/returns/refunds.
 - [ ] Local email/support, staff roles/audit detail, persistent safe sessions.
 - [ ] Gemini Stylist and private asynchronous try-on with frontend integration.
 - [ ] Local tooling/CI/monitoring/recovery and store content/SEO.
@@ -123,3 +124,31 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   original checkout tab; resolve that explicitly in the next milestone plan.
 - No VNPay production code written yet. Full objective remains ACTIVE with all
   remaining milestones listed above; do not mistake a checkpoint for completion.
+
+## VNPay sandbox implementation — 21 October 2026
+
+- Added strict opt-in configuration, fixed sandbox checkout/query endpoints,
+  HMAC-SHA512 protocol verification, exact VND scaling and UTC+7 gateway dates.
+- PaymentAttempt persists15-minute references, retry/reconciliation and exception
+  review flags. Owner-only start/query; signed public IPN; return redirect never
+  settles. Cancellation/fulfillment are serialized with payment updates. Late or
+  double success is retained without repeating inventory movements.
+- Flutter selects VNPay, preserves checkout idempotency, opens a separate sandbox
+  tab and queries verified payment status. Admin sees attempts and review flags.
+  COD remains available. Setup documented in `docs/VNPAY_SANDBOX.md`.
+- Review fixes RED->GREEN: both success/detail pages retain the gateway link across
+  a delayed canonical reload; definitive PAYMENT_UNAVAILABLE unlocks checkout for
+  COD fallback. Unknown503/lost responses still reuse the frozen request.
+- Verified107/107 backend E2E,25/25unit,328 Flutter tests pass/2opt-in skipped.
+  Chrome VNPay local-fixture flow passes desktop/mobile, popup, query, callback
+  information page, reload/login and database assertions. Browser fixtures are
+  explicitly synthetic and send no requests to VNPay.
+- Backed up business DB to `before-vnpay-1792598826753.dump`, applied migration16,
+  all29 original tables retain identical counts and original-column fingerprints.
+  Business PaymentAttempt is empty; no payment fabricated. Ready/content/products/
+  payment-methods smoke200 using compiled worktree API.
+- Root backend/.env presence-only check still found Gemini/VNPay keys absent after
+  user said they will configure them. Real provider acceptance remains pending;
+  all other local milestones remain in scope.
+- Final VNPay checks: lint/build/analyze clean; COD Chrome regression also passes
+  after the shared checkout changes. Review found no deferred minor issues.

@@ -63,6 +63,11 @@ const schema = z
     S3_SECRET_ACCESS_KEY: z.string().default(''),
     AI_PROVIDER_URL: z.string().default(''),
     AI_PROVIDER_API_KEY: z.string().default(''),
+    VNPAY_ENABLED: z.enum(['true', 'false']).default('false'),
+    VNPAY_TMN_CODE: z.string().default(''),
+    VNPAY_HASH_SECRET: z.string().default(''),
+    VNPAY_RETURN_URL: z.string().default(''),
+    VNPAY_WEB_RETURN_URL: z.string().default(''),
     PASSWORD_RECOVERY_ENABLED: z.enum(['true', 'false']).default('false'),
     SMTP_HOST: z.string().default(''),
     SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
@@ -72,6 +77,51 @@ const schema = z
     SMTP_FROM: z.string().default(''),
     SMTP_ALLOW_INSECURE_LOCAL: z.enum(['true', 'false']).default('false'),
     PASSWORD_RESET_WEB_URL: z.string().default(''),
+  })
+  .superRefine((c, ctx) => {
+    if (c.VNPAY_ENABLED !== 'true') return;
+    const fail = (path: string) =>
+      ctx.addIssue({
+        code: 'custom',
+        path: [path],
+        message: 'Invalid VNPay sandbox configuration',
+      });
+    if (!/^[a-zA-Z0-9]{8}$/.test(c.VNPAY_TMN_CODE)) fail('VNPAY_TMN_CODE');
+    if (
+      c.VNPAY_HASH_SECRET.length < 16 ||
+      c.VNPAY_HASH_SECRET.startsWith('replace-')
+    )
+      fail('VNPAY_HASH_SECRET');
+    for (const key of ['VNPAY_RETURN_URL', 'VNPAY_WEB_RETURN_URL'] as const) {
+      try {
+        const url = new URL(c[key]);
+        const local = ['localhost', '127.0.0.1', '[::1]'].includes(
+          url.hostname,
+        );
+        if (
+          url.username ||
+          url.password ||
+          url.search ||
+          !(
+            url.protocol === 'https:' ||
+            (url.protocol === 'http:' && local && c.NODE_ENV !== 'production')
+          )
+        )
+          fail(key);
+        if (key === 'VNPAY_RETURN_URL') {
+          if (url.pathname !== '/api/v1/payments/vnpay/return' || url.hash)
+            fail(key);
+        } else if (
+          url.hash !== '#/payments/return' ||
+          !c.CORS_ORIGINS.split(',')
+            .map((s) => s.trim())
+            .includes(url.origin)
+        )
+          fail(key);
+      } catch {
+        fail(key);
+      }
+    }
   })
   .superRefine((c, ctx) => {
     if (c.PASSWORD_RECOVERY_ENABLED !== 'true') return;
