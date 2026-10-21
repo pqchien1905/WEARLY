@@ -400,3 +400,8 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   exact chosen-variant pricing, profile inputs, owner-scoped late-result guards and
   safe receipt polling/retry.11 new focused tests; full393 Flutter+2skips, analyzer
   clean. Browser acceptance/review/business migration remain pending.
+- Chrome --stylist PASS at375/1440 with real Gemini adapter and deterministic HTTP
+  response double: consent, exact SKU pricing, receipt ownership, lost reply/GET
+  recovery without another call, rate-limit/quota and disabled configuration.
+  Screenshots inspected; exactly3calls/3usage rows,2results/1failure. Guide:
+  docs/GEMINI_LOCAL.md. Independent review and business migration pending.

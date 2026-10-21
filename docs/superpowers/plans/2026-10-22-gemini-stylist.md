@@ -98,7 +98,7 @@ Page keyed by current user. Original demo remains usable in demo mode.
 Files: tools/test-frontend-api.cjs --stylist;tools/verify-stylist-browser.cjs;
 docs/GEMINI_LOCAL.md;docs/LOCAL_COMPLETION_PROGRESS.md.
 
-- [ ] Real Chrome/testDB with deterministic Gemini test adapter: login, consent,
+- [x] Real Chrome/testDB with deterministic Gemini test adapter: login, consent,
   grounded result/price, retry after lost response without duplicate invocation,
   quota/error/new request, private receipt denial,375/1440. Explicitly label test
   adapter evidence; no live-provider success claimed. Expected PASS.

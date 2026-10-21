@@ -21,6 +21,7 @@ Object.assign(process.env, normal, { DATABASE_URL: target.href, NODE_ENV: 'test'
 process.env.PASSWORD_RECOVERY_ENABLED = 'false';
 process.env.LOCAL_MAIL_ENABLED = 'false';
 process.env.VNPAY_ENABLED = 'false';
+process.env.GEMINI_API_KEY = ' ';
 process.chdir(backend);
 requireBackend('reflect-metadata');
 const { NestFactory } = requireBackend('@nestjs/core');
@@ -41,6 +42,7 @@ const refunds = process.argv.includes('--refunds');
 const support = process.argv.includes('--support');
 const staffMode = process.argv.includes('--staff');
 const sessions = process.argv.includes('--sessions');
+const stylist = process.argv.includes('--stylist');
 const mailpit = process.argv.includes('--mailpit');
 const promotionCode = 'BROWSER' + fixture.replaceAll('-', '').slice(-12).toUpperCase();
 if (admin) {
@@ -106,8 +108,20 @@ async function main() {
     reply.vnp_SecureHash=createHmac('sha512',fixtureSecret).update(fields.map(k=>reply[k]).join('|')).digest('hex');
     return Response.json(reply);
   };
+  if(stylist)Object.assign(process.env,{GEMINI_API_KEY:'local-fixture-not-a-real-key-2026',AI_STYLIST_USER_DAILY_LIMIT:'3'});
   const { AppModule } = requireBackend('./dist/app.module');
-  const app = payments || refunds
+  let fixtureAiCalls = 0;
+  const fixtureAiHttp = async (endpoint, init) => {
+    if(endpoint !== 'https://generativelanguage.googleapis.com/v1/interactions')throw Error('Unexpected Gemini endpoint');
+    const body=JSON.parse(init.body),input=JSON.parse(body.input);
+    if(body.store!==false || !input.catalog.some(p=>p.sku===fixture))throw Error('Invalid stateless catalog request');
+    fixtureAiCalls++;
+    if(fixtureAiCalls===3)return new Response('fixture rate limit',{status:429});
+    return Response.json({status:'completed',steps:[{type:'model_output',content:[{type:'text',text:JSON.stringify({message:'Áo cotton phù hợp cho ngày đi làm.',skus:[fixture]})}]}],usage:{total_input_tokens:42,total_output_tokens:20}});
+  };
+  const app = stylist
+    ? (await requireBackend('@nestjs/testing').Test.createTestingModule({imports:[AppModule]}).overrideProvider(requireBackend('./dist/integrations/ai-providers/gemini.client').GEMINI_HTTP).useValue(fixtureAiHttp).compile()).createNestApplication({logger:false})
+    : payments || refunds
     ? (await requireBackend('@nestjs/testing').Test.createTestingModule({imports:[AppModule]}).overrideProvider('VNPAY_HTTP').useValue(fixtureHttp).compile()).createNestApplication({logger:false})
     : await NestFactory.create(AppModule, { logger: false });
   const db = app.get(PrismaService);
@@ -120,7 +134,7 @@ async function main() {
     product = await db.product.create({ data: { slug: fixture, name: 'Áo cotton kiểm thử', description: 'Sản phẩm chỉ dành cho kiểm thử.', material: 'Cotton', style: 'Tối giản',
       categoryId: category.id, brandId: brand.id,
       images: { create: { url: 'assets/images/shirt.jpg', alt: 'Áo cotton', position: 0 } },
-      variants: { create: { sku: fixture, size: 'M', color: 'Trắng', colorHex: '#FFFFFF', price: '490000', inventory: { create: { quantity: 10 } } } } } });
+      variants: { create: { sku: fixture, size: 'M', color: stylist?'Trắng thử nghiệm':'Trắng', colorHex: '#FFFFFF', price: '490000', inventory: { create: { quantity: 10 } } } } } });
     const url = (await app.getUrl()) + '/api/v1';
     if(payments) app.get(requireBackend('@nestjs/config').ConfigService).set('VNPAY_RETURN_URL',url+'/payments/vnpay/return');
     if (recovery) {
@@ -167,6 +181,21 @@ async function main() {
       if (await db.passwordResetToken.count({ where: { userId: account.user.id, consumedAt: null } }) !== 0)
         throw new Error('Unconsumed reset token remained');
       console.log('PASS recovery database: token consumed and original session revoked.');
+    } else if(stylist) {
+      const email=fixture+'@example.com',otherEmail='browser-'+fixture+'@example.com',password='Stylist-browser-fixture-2026';
+      const accounts=[];
+      for(const who of [email,otherEmail]) {
+        const r=await fetch(url+'/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Khách Stylist',email:who,password})});
+        if(r.status!==201)throw Error('Stylist fixture registration failed');accounts.push(await r.json());
+      }
+      await flutter(['build','web','--release','--dart-define=USE_REMOTE_API=true','--dart-define=API_BASE_URL='+url]);
+      await require('./verify-stylist-browser.cjs')({root,url,email,password,callCount:()=>fixtureAiCalls,
+        foreignRead:async key=>(await fetch(url+'/ai/stylist/requests/'+key,{headers:{Authorization:'Bearer '+accounts[1].accessToken}})).status,
+        disable:()=>app.get(requireBackend('@nestjs/config').ConfigService).set('GEMINI_API_KEY',''),
+      });
+      const rows=await db.aiUsage.findMany({where:{userId:accounts[0].user.id}});
+      if(rows.length!==3||rows.filter(r=>r.status==='COMPLETED').length!==2||fixtureAiCalls!==3)throw Error('Incorrect Stylist usage/receipt accounting');
+      console.log('PASS Stylist database: three accepted attempts, two results, one rate limit; Gemini HTTP was a deterministic test double.');
     } else if(sessions) {
       const email=fixture+'@example.com',otherEmail='browser-'+fixture+'@example.com',adminEmail='admin-'+fixture+'@example.com',password='Browser-only-Password-2026';
       const accounts={};
@@ -420,6 +449,7 @@ async function main() {
         await db.catalogAsset.deleteMany({ where: { id: { in: assets.map(asset => asset.id) } } });
       }
       await db.$transaction(async tx => {
+        if(stylist)await tx.aiUsage.deleteMany({where:owner});
         if(support||staffMode)await tx.supportTicket.deleteMany({where:{email:fixture+'@example.com'}});
         const contentEvents = await tx.adminAuditEvent.findMany({
           where: { actorId: owner.userId, action: 'CONTENT_DRAFT_SAVED' }, select: { targetId: true },
