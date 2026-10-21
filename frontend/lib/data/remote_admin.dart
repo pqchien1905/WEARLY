@@ -52,6 +52,28 @@ class AdminRepository {
   Future<AdminRecord> detail(String kind, String id) =>
       _call('GET', 'admin/$kind/${Uri.encodeComponent(id)}');
   Future<AdminRecord> summary() => _call('GET', 'admin/summary');
+  Future<AdminPage> staff({String? email, int page = 1}) async => AdminPage(
+    await _call(
+      'GET',
+      'admin/staff',
+      query: {
+        'page': '$page',
+        'limit': '20',
+        if (email != null && email.isNotEmpty)
+          'email': email.trim().toLowerCase(),
+      },
+    ),
+  );
+  Future<AdminRecord> updateStaff(
+    String id, {
+    required String role,
+    required bool active,
+    required int version,
+  }) => _call(
+    'PATCH',
+    'admin/staff/${Uri.encodeComponent(id)}',
+    body: {'role': role, 'active': active, 'expectedVersion': version},
+  );
   Future<AdminRecord> content() => _call('GET', 'admin/content');
   Future<AdminRecord> saveContent(AdminRecord body) =>
       _call('PUT', 'admin/content', body: body);

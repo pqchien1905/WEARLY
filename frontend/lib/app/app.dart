@@ -13,6 +13,7 @@ import '../features/info/info_page.dart';
 import '../features/info/support_pages.dart';
 import '../features/info/collection_page.dart';
 import 'config.dart';
+import '../domain/staff_permissions.dart';
 import 'account_state.dart';
 import 'api_providers.dart';
 import 'auth_routes.dart';
@@ -78,7 +79,7 @@ GoRouter createRouter({String initialLocation = '/'}) {
       if (scope.read(remoteApiProvider) &&
           isAdminPath(state.uri.path) &&
           state.uri.path != '/admin/login' &&
-          scope.read(adminAccountProvider)?.role != 'ADMIN') {
+          !isStaff(scope.read(adminAccountProvider)?.role)) {
         return Uri(
           path: '/admin/login',
           queryParameters: {
@@ -86,13 +87,21 @@ GoRouter createRouter({String initialLocation = '/'}) {
           },
         ).toString();
       }
+      if (scope.read(remoteApiProvider) && state.uri.path == '/admin') {
+        final destination = staffHome(scope.read(adminAccountProvider)?.role);
+        if (destination != '/admin') return destination;
+      }
       return null;
     },
-    errorBuilder: (c, s) => StoreShell(
-      child: StatePanel(
-        title: 'Trang này không còn ở đây',
-        message: 'Đường dẫn không đúng hoặc đã thay đổi.',
-        action: AppButton('Về trang chủ', onPressed: () => c.go('/')),
+    errorBuilder: (c, s) => Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: StatePanel(
+            title: 'Trang này không còn ở đây',
+            message: 'Đường dẫn không đúng hoặc đã thay đổi.',
+            action: AppButton('Về trang chủ', onPressed: () => c.go('/')),
+          ),
+        ),
       ),
     ),
     routes: [
@@ -153,6 +162,7 @@ GoRouter createRouter({String initialLocation = '/'}) {
             '/admin/support',
             '/admin/support/:id',
             '/admin/mail',
+            '/admin/staff',
           ])
             appRoute(
               path: path,

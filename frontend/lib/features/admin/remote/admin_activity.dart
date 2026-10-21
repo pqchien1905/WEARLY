@@ -6,6 +6,7 @@ import 'admin_providers.dart';
 import 'admin_widgets.dart';
 
 const _actions = {
+  'STAFF_UPDATED': 'Thay đổi quyền nhân viên',
   'SUPPORT_REPLIED': 'Trả lời yêu cầu hỗ trợ',
   'SUPPORT_STATUS_CHANGED': 'Đổi trạng thái yêu cầu hỗ trợ',
   'PRODUCT_CREATED': 'Tạo sản phẩm',
@@ -93,6 +94,9 @@ class _AdminActivityPanelState extends ConsumerState<AdminActivityPanel> {
                         style: T.small,
                       ),
                       Text('Bản ghi: ${event['targetId']}', style: T.small),
+                      ...auditChanges(
+                        event['details'],
+                      ).map((line) => Text(line, style: T.small)),
                     ],
                   ),
                 ),
@@ -125,5 +129,46 @@ class _AdminActivityPanelState extends ConsumerState<AdminActivityPanel> {
         ),
       ],
     );
+  }
+}
+
+const _fields = {
+  'quantity': 'Số lượng',
+  'version': 'Phiên bản',
+  'staffVersion': 'Phiên bản quyền',
+  'role': 'Vai trò',
+  'active': 'Đang hoạt động',
+  'status': 'Trạng thái',
+  'price': 'Giá (VND)',
+  'amount': 'Số tiền (VND)',
+  'minSubtotal': 'Đơn tối thiểu (VND)',
+  'maxDiscount': 'Giảm tối đa (VND)',
+  'usageLimit': 'Giới hạn lượt dùng',
+  'perUserLimit': 'Lượt dùng mỗi khách',
+  'kind': 'Loại giảm giá',
+  'startsAt': 'Bắt đầu',
+  'expiresAt': 'Kết thúc',
+  'publishedVersion': 'Phiên bản đã xuất bản',
+  'tryOnSupported': 'Hỗ trợ thử đồ',
+  'categoryId': 'Danh mục',
+  'brandId': 'Thương hiệu',
+  'productId': 'Sản phẩm',
+  'provider': 'Thanh toán',
+  'primary': 'Khoản thu chính',
+};
+Iterable<String> auditChanges(Object? details) sync* {
+  if (details is! Map) return;
+  final before = details['before'] is Map ? details['before'] as Map : const {},
+      after = details['after'] is Map ? details['after'] as Map : const {};
+  String value(Object? item) => item == null
+      ? '—'
+      : item is bool
+      ? (item ? 'Có' : 'Không')
+      : staffRoleNames[item] ?? '$item';
+  for (final field in _fields.entries) {
+    if ((before.containsKey(field.key) || after.containsKey(field.key)) &&
+        before[field.key] != after[field.key]) {
+      yield '${field.value}: ${value(before[field.key])} → ${value(after[field.key])}';
+    }
   }
 }

@@ -1,5 +1,6 @@
 import '../core/network/api_client.dart';
 import '../domain/account.dart';
+import '../domain/staff_permissions.dart';
 
 UserProfile userFromJson(Object? value) {
   final user = value as Map<String, dynamic>;
@@ -56,7 +57,7 @@ class RemoteAccountRepository implements AccountRepository {
     if (operation != _operation || api.tokens.generation != generation) {
       throw sessionChanged;
     }
-    if (admin && profile.role != 'ADMIN') {
+    if (admin && !isStaff(profile.role)) {
       throw const ApiException(
         'FORBIDDEN',
         'Tài khoản này chưa có quyền quản trị.',

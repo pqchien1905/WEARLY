@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/account_state.dart';
 import '../../app/api_providers.dart';
 import '../../app/auth_routes.dart';
+import '../../domain/staff_permissions.dart';
 import '../../core/design/tokens.dart';
 import '../../core/network/api_client.dart';
 import '../../core/widgets/primitives.dart';
@@ -20,12 +21,19 @@ class _AdminLoginPageState extends ConsumerState<AdminLoginPage> {
   bool busy = false, obscure = true;
   String? error;
 
-  void enter() => context.go(
-    loginDestination(
+  void enter() {
+    final destination = loginDestination(
       GoRouterState.of(context).uri.queryParameters['next'],
       admin: true,
-    ),
-  );
+    );
+    final role = ref.read(adminAccountProvider)?.role;
+    context.go(
+      !ref.read(remoteApiProvider) ||
+              canVisitAdmin(role, Uri.parse(destination).path)
+          ? destination
+          : staffHome(role),
+    );
+  }
 
   Future<void> submit() async {
     if (busy || !form.currentState!.validate()) return;

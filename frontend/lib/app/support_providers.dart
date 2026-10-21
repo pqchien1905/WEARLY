@@ -3,6 +3,7 @@ import '../core/network/api_client.dart';
 import '../data/remote_support.dart';
 import 'account_state.dart';
 import 'api_providers.dart';
+import '../domain/staff_permissions.dart';
 
 final supportRepositoryProvider = Provider((ref) {
   final repo = RemoteSupportRepository(ref.watch(apiClientProvider));
@@ -11,7 +12,7 @@ final supportRepositoryProvider = Provider((ref) {
 });
 final adminSupportRepositoryProvider = Provider((ref) {
   final user = ref.watch(adminAccountProvider.select((u) => (u?.id, u?.role)));
-  if (!ref.watch(remoteApiProvider) || user.$2 != 'ADMIN') {
+  if (!ref.watch(remoteApiProvider) || !canStaff(user.$2, 'support.manage')) {
     throw const ApiException(
       'FORBIDDEN',
       'Chưa có quyền quản trị.',

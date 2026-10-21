@@ -114,12 +114,12 @@ admin staff search/update repository and paginated records. UI changing own role
 clears local admin session after confirmed success; stale result offers reload.
 Audit view renders translated field labels with old/new scalar values, not raw JSON.
 
-- [ ] Write widget/repository tests for role navigation/deep links, hidden order and
+- [x] Write widget/repository tests for role navigation/deep links, hidden order and
   return controls, versioned staff edit/conflict and before/after audit details.
-- [ ] Run focused Flutter tests. Expected RED missing permissions/page/controls.
-- [ ] Implement existing-style responsive UI and role-aware repository gates; preserve
+- [x] Run focused Flutter tests. Expected RED missing permissions/page/controls.
+- [x] Implement existing-style responsive UI and role-aware repository gates; preserve
   account-change invalidation and separate customer/admin sessions.
-- [ ] Full Flutter/analyze and Chrome --staff: register synthetic accounts in_test,
+- [x] Full Flutter/analyze and Chrome --staff: register synthetic accounts in_test,
   admin grants roles, warehouse inventory/order read + denied money, support ticket
   handling + denied staff, demotion invalidates session, reload/persistence,375/1440.
   Expected PASS; never change business staff accounts to test.

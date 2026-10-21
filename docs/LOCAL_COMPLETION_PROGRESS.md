@@ -315,3 +315,13 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   content, support and staff. Taxonomy/image events retain action/target only, and
   older rows remain empty rather than inventing history. RED3 API assertions and
   missing sanitizer -> GREEN10 focused/3unit; final163 E2E/46unit, lint/build clean.
+- Task3 UI: ten new login/route/control/staff conflict/self-demotion/audit tests;
+  full367 Flutter pass/2 opt-in skips and analyzer clean. Unknown-route fallback
+  formerly crashed because StoreShell read missing GoRouterState in errorBuilder;
+  reproduced RED and replaced with a standalone fallback. Existing admin settings
+  deep links retain their unavailable-screen behavior; regression3 RED->GREEN.
+- Chrome staff PASS: UI grants roles, warehouse inventory+2 and dispatch/delivery,
+  no COD collection, denied staff/money API, support reply and reload, then demotion
+  revokes current access. 375/1440 screenshots visually inspected. Fixture-only
+  data cleanup; no business account changed. Browser selector corrected to actual
+  Flutter accessibility button label; no product workaround. Review/migration pending.

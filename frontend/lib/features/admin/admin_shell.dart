@@ -6,6 +6,7 @@ import '../../core/widgets/store_shell.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/api_providers.dart';
 import '../../app/account_state.dart';
+import '../../domain/staff_permissions.dart';
 
 const adminNav = [
   ('Tổng quan', '/admin', Icons.space_dashboard_outlined),
@@ -29,6 +30,7 @@ class AdminShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final remote = ref.watch(remoteApiProvider);
+    final role = ref.watch(adminAccountProvider)?.role;
     final wide = MediaQuery.sizeOf(context).width >= 1024;
     final path = GoRouterState.of(context).uri.path;
     Widget navigation({bool drawer = false}) => Column(
@@ -46,18 +48,28 @@ class AdminShell extends ConsumerWidget {
           child: ListView(
             children: [
               for (final item
-                  in remote
-                      ? [
-                          ...adminNav.take(7),
-                          ...taxonomyNav,
-                          (
-                            'Hỗ trợ khách hàng',
-                            '/admin/support',
-                            Icons.support_agent,
-                          ),
-                          ('Theo dõi thư', '/admin/mail', Icons.mail_outline),
-                        ]
-                      : adminNav)
+                  in (remote
+                          ? [
+                              ...adminNav.take(7),
+                              ...taxonomyNav,
+                              (
+                                'Hỗ trợ khách hàng',
+                                '/admin/support',
+                                Icons.support_agent,
+                              ),
+                              (
+                                'Theo dõi thư',
+                                '/admin/mail',
+                                Icons.mail_outline,
+                              ),
+                              (
+                                'Nhân sự & quyền',
+                                '/admin/staff',
+                                Icons.manage_accounts_outlined,
+                              ),
+                            ]
+                          : adminNav)
+                      .where((item) => !remote || canVisitAdmin(role, item.$2)))
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,

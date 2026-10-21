@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/account_state.dart';
+import '../../../domain/staff_permissions.dart';
+export '../../../domain/staff_permissions.dart';
 import '../../../app/api_providers.dart';
 import '../../../app/refund_providers.dart';
 import '../../../core/network/api_client.dart';
@@ -10,7 +12,7 @@ final adminRepositoryProvider = Provider.autoDispose<AdminRepository>((ref) {
   final user = ref.watch(
     adminAccountProvider.select((u) => (u?.id, u?.email, u?.role)),
   );
-  if (!ref.watch(remoteApiProvider) || user.$3 != 'ADMIN') {
+  if (!ref.watch(remoteApiProvider) || !isStaff(user.$3)) {
     throw const ApiException(
       'FORBIDDEN',
       'Tài khoản chưa có quyền quản trị.',
@@ -21,6 +23,9 @@ final adminRepositoryProvider = Provider.autoDispose<AdminRepository>((ref) {
   ref.onDispose(repository.dispose);
   return repository;
 });
+final staffRoleProvider = Provider<String?>(
+  (ref) => ref.watch(adminAccountProvider.select((u) => u?.role)),
+);
 typedef AdminListKey = ({String kind, int page});
 typedef AdminDetailKey = ({String kind, String id});
 final adminListProvider = FutureProvider.autoDispose

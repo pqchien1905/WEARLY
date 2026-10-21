@@ -80,7 +80,8 @@ class AdminReturnActions extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (['PENDING', 'CONFIRMED'].contains(data['status']))
+        if (canStaff(ref.watch(staffRoleProvider), 'orders.cancel') &&
+            ['PENDING', 'CONFIRMED'].contains(data['status']))
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
             child: AppButton(
@@ -101,7 +102,11 @@ class AdminReturnActions extends ConsumerWidget {
                   spacing: 12,
                   runSpacing: 12,
                   children: [
-                    if (request.status == 'REQUESTED') ...[
+                    if (canStaff(
+                          ref.watch(staffRoleProvider),
+                          'returns.decide',
+                        ) &&
+                        request.status == 'REQUESTED') ...[
                       AppButton(
                         'Duyệt trả hàng',
                         onPressed: () => act(
@@ -124,7 +129,11 @@ class AdminReturnActions extends ConsumerWidget {
                         ),
                       ),
                     ],
-                    if (request.status == 'APPROVED')
+                    if (canStaff(
+                          ref.watch(staffRoleProvider),
+                          'returns.receive',
+                        ) &&
+                        request.status == 'APPROVED')
                       AppButton(
                         'Nhận hàng khách trả',
                         onPressed: () => act(

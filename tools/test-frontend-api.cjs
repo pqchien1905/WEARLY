@@ -19,6 +19,7 @@ Object.assign(process.env, normal, { DATABASE_URL: target.href, NODE_ENV: 'test'
   JWT_ACCESS_SECRET: randomUUID() + randomUUID(), JWT_REFRESH_SECRET: randomUUID() + randomUUID(),
   AI_QUEUE_PREFIX: 'flutter-test-' + randomUUID(), CORS_ORIGINS: 'http://127.0.0.1:4183' });
 process.env.PASSWORD_RECOVERY_ENABLED = 'false';
+process.env.LOCAL_MAIL_ENABLED = 'false';
 process.env.VNPAY_ENABLED = 'false';
 process.chdir(backend);
 requireBackend('reflect-metadata');
@@ -38,6 +39,7 @@ const shipments = process.argv.includes('--shipments');
 const returns = process.argv.includes('--returns');
 const refunds = process.argv.includes('--refunds');
 const support = process.argv.includes('--support');
+const staffMode = process.argv.includes('--staff');
 const mailpit = process.argv.includes('--mailpit');
 const promotionCode = 'BROWSER' + fixture.replaceAll('-', '').slice(-12).toUpperCase();
 if (admin) {
@@ -164,6 +166,28 @@ async function main() {
       if (await db.passwordResetToken.count({ where: { userId: account.user.id, consumedAt: null } }) !== 0)
         throw new Error('Unconsumed reset token remained');
       console.log('PASS recovery database: token consumed and original session revoked.');
+    } else if(staffMode) {
+      const email='admin-'+fixture+'@example.com',warehouseEmail='browser-'+fixture+'@example.com',supportEmail=fixture+'@example.com',password='Browser-only-Password-2026';
+      const accounts={};
+      for(const who of [email,warehouseEmail,supportEmail]){
+        const response=await fetch(url+'/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Nhân viên kiểm thử',email:who,password})});
+        if(response.status!==201)throw Error('Staff account fixture failed');accounts[who]=await response.json();
+      }
+      await db.user.update({where:{id:accounts[email].user.id},data:{role:'ADMIN'}});
+      const variant=await db.productVariant.findFirstOrThrow({where:{productId:product.id}});
+      const order=await db.order.create({data:{userId:accounts[supportEmail].user.id,idempotencyKey:randomUUID(),requestHash:'staff-fixture',addressSnapshot:{recipient:'Staff fixture',phone:'0901234567',address:'Test address'},subtotal:'490000',shipping:'30000',total:'520000',payment:{create:{provider:'cod',amount:'520000'}},items:{create:{variantId:variant.id,name:'Staff fixture',sku:variant.sku,slug:fixture,size:'M',color:'Trắng',image:'assets/images/shirt.jpg',unitPrice:'490000',quantity:1}}}});
+      const ticketResponse=await fetch(url+'/support',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestKey:randomUUID(),name:'Khách thử quyền',email:supportEmail,message:'Cần hỗ trợ chọn kích cỡ phù hợp.'})});
+      if(ticketResponse.status!==201)throw Error('Staff support fixture failed');const ticket=await ticketResponse.json();
+      await flutter(['build','web','--release','--dart-define=USE_REMOTE_API=true','--dart-define=API_BASE_URL='+url]);
+      await require('./verify-staff-browser.cjs')({root,url,email,warehouseEmail,supportEmail,password,orderId:order.id,ticketId:ticket.id,demote:async()=>{
+        const response=await fetch(url+'/admin/staff/'+accounts[supportEmail].user.id,{method:'PATCH',headers:{'Content-Type':'application/json',Authorization:'Bearer '+accounts[email].accessToken},body:JSON.stringify({expectedVersion:1,role:'CUSTOMER',active:true})});
+        if(response.status!==200)throw Error('Staff demotion failed');
+      }});
+      const result=await db.order.findUniqueOrThrow({where:{id:order.id},include:{payment:true}});
+      const inventory=await db.inventory.findUniqueOrThrow({where:{variantId:variant.id}});
+      if(result.status!=='DELIVERED'||result.payment.status!=='PENDING'||inventory.quantity!==12)throw Error('Staff fulfillment changed forbidden state');
+      if(await db.supportReply.count({where:{ticketId:ticket.id}})!==1)throw Error('Support reply did not persist');
+      console.log('PASS staff roles, exact inventory adjustment, delivery without COD collection and support persistence.');
     } else if(support) {
       const {MailService}=requireBackend('./dist/modules/mail/mail.service');
       const {MailWorker}=requireBackend('./dist/worker/mail.worker');
@@ -375,7 +399,7 @@ async function main() {
         await db.catalogAsset.deleteMany({ where: { id: { in: assets.map(asset => asset.id) } } });
       }
       await db.$transaction(async tx => {
-        if(support)await tx.supportTicket.deleteMany({where:{email:fixture+'@example.com'}});
+        if(support||staffMode)await tx.supportTicket.deleteMany({where:{email:fixture+'@example.com'}});
         const contentEvents = await tx.adminAuditEvent.findMany({
           where: { actorId: owner.userId, action: 'CONTENT_DRAFT_SAVED' }, select: { targetId: true },
         });

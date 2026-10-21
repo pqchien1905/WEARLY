@@ -7,6 +7,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/widgets/primitives.dart';
 import '../../../data/remote_support.dart';
 import 'admin_widgets.dart';
+import 'admin_providers.dart' show staffRoleProvider, canStaff;
 
 class RemoteSupportPage extends ConsumerStatefulWidget {
   const RemoteSupportPage({super.key});
@@ -32,11 +33,12 @@ class _RemoteSupportPageState extends ConsumerState<RemoteSupportPage> {
               outlined: true,
               onPressed: () => ref.invalidate(provider),
             ),
-            AppButton(
-              'Theo dõi thư',
-              outlined: true,
-              onPressed: () => context.go('/admin/mail'),
-            ),
+            if (canStaff(ref.watch(staffRoleProvider), 'mail.read'))
+              AppButton(
+                'Theo dõi thư',
+                outlined: true,
+                onPressed: () => context.go('/admin/mail'),
+              ),
           ],
         ),
         AdminAsync(

@@ -3,6 +3,7 @@ import '../core/network/api_client.dart';
 import '../data/remote_refunds.dart';
 import 'account_state.dart';
 import 'api_providers.dart';
+import '../domain/staff_permissions.dart';
 
 final refundRepositoryProvider = Provider((ref) {
   ref.watch(accountProvider.select((u) => (u?.id, u?.email)));
@@ -14,7 +15,7 @@ final adminRefundRepositoryProvider = Provider((ref) {
   final user = ref.watch(
     adminAccountProvider.select((u) => (u?.id, u?.email, u?.role)),
   );
-  if (!ref.watch(remoteApiProvider) || user.$3 != 'ADMIN') {
+  if (!ref.watch(remoteApiProvider) || !canStaff(user.$3, 'payments.manage')) {
     throw const ApiException(
       'FORBIDDEN',
       'Tài khoản chưa có quyền quản trị.',

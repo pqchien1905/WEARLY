@@ -18,6 +18,7 @@ import 'admin_activity.dart';
 import 'content_page.dart';
 import 'promotions_page.dart';
 import 'support_page.dart';
+import 'staff_page.dart';
 
 class RemoteAdminRoute extends StatelessWidget {
   const RemoteAdminRoute({super.key, required this.path});
@@ -30,6 +31,7 @@ class RemoteAdminRoute extends StatelessWidget {
     if (path == '/admin/promotions') return const RemotePromotionsPage();
     if (path == '/admin/support') return const RemoteSupportPage();
     if (path == '/admin/mail') return const RemoteMailPage();
+    if (path == '/admin/staff') return const RemoteStaffPage();
     if (parts.length == 4 && parts[2] == 'support') {
       return RemoteSupportDetail(id: parts[3]);
     }
@@ -169,7 +171,7 @@ class _RemoteAdminListState extends ConsumerState<RemoteAdminList> {
       'products': 'Sản phẩm',
       'inventory': 'Biến thể & kho',
       'orders': 'Đơn hàng',
-      'users': 'Khách hàng & tài khoản',
+      'users': 'Khách hàng',
     }[widget.kind]!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -541,7 +543,11 @@ class RemoteAdminOrder extends ConsumerWidget {
                       style: T.small,
                     ),
                   ],
-                  if (data['status'] == 'DELIVERED' &&
+                  if (canStaff(
+                        ref.watch(staffRoleProvider),
+                        'payments.manage',
+                      ) &&
+                      data['status'] == 'DELIVERED' &&
                       payment['provider'] == 'cod' &&
                       payment['status'] == 'PENDING') ...[
                     const SizedBox(height: 20),
@@ -574,7 +580,11 @@ class RemoteAdminOrder extends ConsumerWidget {
                         style: T.small,
                       ),
                   ],
-                  if (next != null &&
+                  if (canStaff(
+                        ref.watch(staffRoleProvider),
+                        'orders.fulfill',
+                      ) &&
+                      next != null &&
                       order.shipment?.status != 'DELIVERY_FAILED' &&
                       (payment['provider'] != 'vnpay' ||
                           [
@@ -608,16 +618,18 @@ class RemoteAdminOrder extends ConsumerWidget {
                       },
                     ),
                   ],
-                  ShipmentActions(data: data, order: order),
+                  if (canStaff(ref.watch(staffRoleProvider), 'orders.fulfill'))
+                    ShipmentActions(data: data, order: order),
                 ],
               ),
             ),
             AdminCard(child: OrderTracking(order: order)),
             AdminReturnActions(data: data, order: order),
-            AdminRefundActions(
-              key: ValueKey('refunds-${order.id}'),
-              orderId: order.id,
-            ),
+            if (canStaff(ref.watch(staffRoleProvider), 'payments.manage'))
+              AdminRefundActions(
+                key: ValueKey('refunds-${order.id}'),
+                orderId: order.id,
+              ),
             for (final item in order.items)
               AdminCard(
                 child: Column(

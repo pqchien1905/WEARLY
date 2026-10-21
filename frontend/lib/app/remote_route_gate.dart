@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../core/widgets/primitives.dart';
 import 'account_state.dart';
 import 'api_providers.dart';
+import '../domain/staff_permissions.dart';
 import '../features/admin/remote/admin_pages.dart';
 import '../features/catalog/remote_wishlist_page.dart';
 
@@ -16,8 +17,21 @@ class RemoteRouteGate extends ConsumerWidget {
     if (!ref.watch(remoteApiProvider)) return child;
     if (path == '/admin' || path.startsWith('/admin/')) {
       final account = ref.watch(adminAccountProvider);
-      if (account?.role != 'ADMIN') return const SizedBox.shrink();
-      return RemoteAdminRoute(key: ValueKey((account!.id, path)), path: path);
+      if (!isStaff(account?.role)) return const SizedBox.shrink();
+      if (!canVisitAdmin(account?.role, path)) {
+        return StatePanel(
+          title: 'Bạn chưa có quyền truy cập',
+          message: 'Vai trò hiện tại không được mở chức năng này.',
+          action: AppButton(
+            'Về khu vực làm việc',
+            onPressed: () => context.go(staffHome(account?.role)),
+          ),
+        );
+      }
+      return RemoteAdminRoute(
+        key: ValueKey((account!.id, account.role, path)),
+        path: path,
+      );
     }
     if (path == '/wishlist') {
       return ref.watch(accountProvider) == null

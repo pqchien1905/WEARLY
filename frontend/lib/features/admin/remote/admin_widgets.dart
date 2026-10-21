@@ -4,6 +4,7 @@ import '../../../core/design/tokens.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/widgets/primitives.dart';
 import '../../../app/account_state.dart';
+import '../../../domain/staff_permissions.dart';
 
 class AdminAsync<Value> extends StatelessWidget {
   const AdminAsync({
@@ -138,7 +139,7 @@ class _AdminMutationDialogState extends ConsumerState<AdminMutationDialog> {
   @override
   Widget build(BuildContext context) {
     final account = ref.watch(adminAccountProvider);
-    if (account?.role != 'ADMIN' || account?.id != identity) {
+    if (!isStaff(account?.role) || account?.id != identity) {
       return AlertDialog(
         title: const Text('Phiên quản trị đã kết thúc'),
         actions: [
