@@ -21,6 +21,7 @@ import { ContentModule } from './modules/content/content.module';
 import { CatalogMediaModule } from './modules/catalog-media/catalog-media.module';
 import { SupportModule } from './modules/support/support.module';
 import { MailModule } from './modules/mail/mail.module';
+import { OperationsModule } from './modules/operations/operations.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
@@ -42,6 +43,7 @@ import { MailModule } from './modules/mail/mail.module';
     CatalogMediaModule,
     SupportModule,
     MailModule,
+    OperationsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

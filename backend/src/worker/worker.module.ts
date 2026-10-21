@@ -16,6 +16,8 @@ import { RecoveryWorker } from './recovery.worker';
 import { CatalogMediaModule } from '../modules/catalog-media/catalog-media.module';
 import { MailModule } from '../modules/mail/mail.module';
 import { MailWorker } from './mail.worker';
+import { WorkerHeartbeat } from '../modules/operations/worker-heartbeat.service';
+import { operationsResourcesProvider } from '../modules/operations/operations.probes';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
@@ -31,6 +33,8 @@ import { MailWorker } from './mail.worker';
     RetentionWorker,
     RecoveryWorker,
     MailWorker,
+    WorkerHeartbeat,
+    operationsResourcesProvider,
     AiUsageService,
     GarmentReader,
     {

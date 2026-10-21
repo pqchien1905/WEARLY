@@ -92,13 +92,13 @@ Interfaces: OperationsService.snapshot():Promise<OperationsSnapshot> from indepe
 OperationsProbes.database()/redis()/storage()/mail(); WorkerHeartbeat lifecycle uses
 configured prefix and injectable bounded Redis transport. No Prisma migration.
 
-- [ ] Write RED for admin-only access/no-store, aggregate fixture counts and no PII,
+- [x] Write RED for admin-only access/no-store, aggregate fixture counts and no PII,
   missing/stale/foreign heartbeat, compare-and-delete, disabled integrations,
   unresponsive PG/Redis/S3/SMTP and honest partial failure. Expected missing module.
-- [ ] Implement probes/DTO/read model, heartbeat and module wiring. Bounded clock/
+- [x] Implement probes/DTO/read model, heartbeat and module wiring. Bounded clock/
   injection seams support unit tests; real PG/Redis route tests prove authorization
   and namespace isolation. Do not log raw provider/DB errors.
-- [ ] Run focused Jest, then full native E2E with worker/storage and unit/lint/build;
+- [x] Run focused Jest, then full native E2E with worker/storage and unit/lint/build;
   inspect results and commit. No business data mutation.
 
 ## Task 2: remote admin operations view and browser acceptance

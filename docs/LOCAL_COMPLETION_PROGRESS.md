@@ -466,3 +466,19 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   Guide: docs/GEMINI_LOCAL.md. Root.env Gemini/VNPay fields still empty; external
   acceptance, local operations/CI/backup-restore, identity/policies/SEO and final
   root integration remain required. Full A-Z goal ACTIVE.
+
+## Local operations / monitoring / CI — in progress, 22 October 2026
+
+- ADMIN-only private operations snapshot and bounded PG/Redis/S3/SMTP probes,
+  aggregate queues/AI estimates/failures/mail/cleanup, and worker heartbeat added.
+  Unavailable measurements remain null. Only allowlisted failures/kinds are shown;
+  heartbeat proves liveness, SMTP socket proves reachability, provider flags prove
+  configuration only. No external-provider call or business schema/data change.
+- Task1: 199/199 real E2E with Redis/MinIO,83unit,lint/build PASS. Real tests cover
+  permissions, aggregate deltas/privacy, namespace/stale heartbeat, two workers'
+  compare-delete ownership and alternate search_path/UTC. Unit stalled transports
+  all hit deadlines and dispose. Existing pg concurrent-query deprecation notices
+  remain in the full suite; all assertions pass.
+- Remote operations UI, owned native process lifecycle, CI/operator guide and
+  independent review remain. Native backup/restore is a subsequent required
+  milestone, followed by identity/policies/SEO, configured providers and integration.
