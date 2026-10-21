@@ -49,6 +49,7 @@ Order commerceOrder(Object? value, {required String email}) {
   if (data['currency'] != 'VND' ||
       data['id'] is! String ||
       data['items'] is! List ||
+      !['standard', 'express'].contains(data['shippingMethod']) ||
       address['recipient'] is! String ||
       address['phone'] is! String ||
       address['address'] is! String) {
@@ -86,7 +87,7 @@ Order commerceOrder(Object? value, {required String email}) {
       phone: address['phone'],
       address: address['address'],
       payment: 'COD · $paymentStatus',
-      express: vnd(data['shipping']) == 50000,
+      express: data['shippingMethod'] == 'express',
     ),
   );
   if (order.items.isEmpty ||

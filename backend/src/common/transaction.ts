@@ -1,8 +1,12 @@
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../database/prisma.service';
 export function isTransactionConflict(error: unknown): boolean {
-  if (error instanceof Prisma.PrismaClientKnownRequestError)
-    return error.code === 'P2034';
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === 'P2034') return true;
+    // Raw SQL (including FOR UPDATE) wraps the same pg conflict in P2010.
+    if (error.code !== 'P2010') return false;
+    error = error.meta?.driverAdapterError;
+  }
   // Prisma's pg adapter can expose a commit-time conflict without wrapping it
   // in P2034. Only retry PostgreSQL's explicit serialization/deadlock outcomes.
   if (!(error instanceof Error) || error.name !== 'DriverAdapterError')

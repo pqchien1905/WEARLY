@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:nep_storefront/core/network/api_client.dart';
 import 'package:nep_storefront/data/remote_commerce.dart';
+import 'package:nep_storefront/data/commerce_json.dart';
 import 'package:nep_storefront/domain/commerce.dart';
 import 'remote_session_test.dart' show jsonResponse;
 import 'remote_account_test.dart' show sessionJson;
@@ -42,6 +43,7 @@ Map<String, Object?> orderJson({
   'currency': 'VND',
   'subtotal': '490000',
   'shipping': '30000',
+  'shippingMethod': 'standard',
   'total': '520000',
   'createdAt': '2026-10-18T10:00:00.000Z',
   'version': 0,
@@ -78,6 +80,28 @@ const draft = CheckoutDraft(
 );
 
 void main() {
+  test(
+    'shipping method comes from the order snapshot, regardless of its fee',
+    () {
+      final json = orderJson()..['shippingMethod'] = 'express';
+      expect(
+        commerceOrder(json, email: 'an@example.com').draft.express,
+        isTrue,
+      );
+      json['shippingMethod'] = 'standard';
+      json['shipping'] = '50000';
+      json['total'] = '540000';
+      expect(
+        commerceOrder(json, email: 'an@example.com').draft.express,
+        isFalse,
+      );
+      json['shippingMethod'] = 'unknown';
+      expect(
+        () => commerceOrder(json, email: 'an@example.com'),
+        throwsA(isA<ApiException>()),
+      );
+    },
+  );
   test(
     'lost checkout response followed by rate limit preserves the original request',
     () async {

@@ -136,8 +136,9 @@ async function main() {
       const saved = await db.product.findUniqueOrThrow({ where: { slug: fixture + '-admin' }, include: { variants: { include: { inventory: true } }, images: true, category: true, brand: true } });
       if (!saved.active || saved.variants.length !== 1 || saved.variants[0].inventory.quantity !== 8 || saved.variants[0].price.toString() !== '700000' || saved.images.length !== 1) throw new Error('Persisted admin product does not match browser operations');
       if (saved.category.slug !== fixture + '-taxonomy' || saved.category.name !== 'BST thu đông kiểm thử' || saved.brand.slug !== fixture + '-taxonomy' || saved.brand.name !== 'Studio thu đông kiểm thử') throw new Error('Product taxonomy assignment did not persist');
-      const delivered = await db.order.findUniqueOrThrow({ where: { id: order.id }, include: { payment: true } });
-      if (delivered.status !== 'DELIVERED' || delivered.payment.status !== 'PENDING') throw new Error('Persisted order/COD state mismatch');
+      const delivered = await db.order.findUniqueOrThrow({ where: { id: order.id }, include: { payment: { include: { settlement: true } } } });
+      if (delivered.status !== 'DELIVERED' || delivered.shippingMethod !== 'standard' || delivered.payment.status !== 'PAID') throw new Error('Persisted order/COD state mismatch');
+      if (delivered.payment.settlement?.reference !== 'COD-BROWSER-001' || delivered.payment.settlement?.actorId !== adminUser.user.id || delivered.payment.settlement?.amount.toString() !== '520000') throw new Error('Persisted COD receipt mismatch');
       const activity = await db.adminAuditEvent.findMany({ where: { actorId: adminUser.user.id } });
       if (!saved.images[0].url.startsWith('catalog/images/')) throw new Error('Uploaded catalog image did not persist as the cover');
       const catalog = await db.catalogAsset.findMany({ where: { productId: saved.id } });
@@ -149,7 +150,7 @@ async function main() {
       const content = await db.storeContent.findUniqueOrThrow({ where: { key: 'storefront' } });
       if (content.version !== 3 || content.publishedVersion !== 2 || content.banner !== 'Bản nháp tiếp theo' || content.publishedBanner !== 'Campaign kiểm thử' || content.publishedPolicy !== 'Chính sách kiểm thử đã xuất bản.') throw new Error('Draft/public content isolation mismatch');
       console.log('PASS persistent admin history: authenticated actor and all thirteen action categories; draft/public content isolation and verified catalog cover.');
-      console.log('PASS database assertions: product, SKU, gallery, stock, order delivered with COD pending.');
+      console.log('PASS database assertions: product, SKU, gallery, stock, delivered COD with explicit collection receipt.');
     } else if (style) {
       const password = 'Browser-only-Password-2026';
       const send = async (method, endpoint, body, token) => {

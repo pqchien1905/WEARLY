@@ -6,7 +6,7 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
 ## Milestones
 
 - [x] Foundation: timezone, schema/readiness, local backup and migration.
-- [ ] Shipping snapshot, COD settlement, useful business reports.
+- [x] Shipping snapshot, COD settlement, useful business reports.
 - [ ] VNPay sandbox, promotions, shipment tracking, cancellations/returns/refunds.
 - [ ] Local email/support, staff roles/audit detail, persistent safe sessions.
 - [ ] Gemini Stylist and private asynchronous try-on with frontend integration.
@@ -70,3 +70,35 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
 
 - Foundation final:90/90 real E2E,17/17 unit, lint/build and diff check pass.
   Two review findings resolved with SQL-timeout and transport-stall regressions.
+
+## Shipping / COD milestone
+
+- Task1 RED: checkout omitted shippingMethod and Flutter inferred express from fee.
+  GREEN:12 commerce E2E and10 remote-commerce tests. New checked column backfills
+  historical50000 as express; all new orders persist the selected method.
+- Task2 RED: missing settlement endpoint/reports. GREEN:5 real HTTP/PG tests cover
+  authorization/validation, eligibility/amount/version, concurrent idempotency,
+  received-versus-awaiting reporting and audit failure rollback. Delivery stays unpaid.
+- Real concurrent settlement exposed P2010 wrapping PostgreSQL serialization conflict.
+  Narrow retry recognition now unwraps only the known driver conflict; unit RED→GREEN.
+- Task3 RED→GREEN:3 widgets exercise amount/reference validation, pending double click,
+  successful receipt, canonical reload after409 and separate report amounts. Reporting
+  formats aggregate VND strings directly, avoiding floating-point conversion.
+- Latest checks:96/96 backend E2E,18/18 unit, lint/build pass; Flutter321 pass,
+  2 opt-in skipped, analyze clean, web build passes. Chrome acceptance and milestone
+  review/local business migration are still in progress.
+- Review found unknown legacy fees would be guessed standard; ordered preflight now
+  aborts before the backfill. RealPG temp-table test RED→GREEN for40000; known
+  0/30000/50000 map correctly. Current business DB had zero legacy orders.
+- Receipt timezone review resolved with explicit UTC+7 label; widget RED→GREEN.
+- First Chrome acceptance exposed missing accessible receipt text (payment201,
+  visual receipt present, semantics blank). Added SelectableText semantics label;
+  accessible-name regression RED→GREEN. Full Chrome rerun in progress.
+- Business backup `before-settlement-1792597220925.dump` (108,489 bytes) verified,
+  migrations12→15 applied. All28 existing tables retain exact original-column
+  counts/fingerprints; no business receipt fabricated. Ready/content/products200.
+
+- Milestone2 final:98/98 backend E2E,18/18 unit; Flutter321 pass/2opt-in skips,
+  analyze clean; real Chrome admin desktop/mobile pass including delivered?explicit
+  COD collection?persisted receipt, no browser errors. Local ready/content/products200.
+  All review findings resolved; log/screenshot evidence under `.tools/`.

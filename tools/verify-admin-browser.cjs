@@ -166,6 +166,14 @@ module.exports = async function verify({ root, fixture, email, customerEmail, pa
     await page.getByText('Đã giao', { exact: true }).waitFor();
     assert((await page.locator('body').ariaSnapshot()).includes('Chưa thu tiền'));
     await page.screenshot({ path: path.join(output, 'order-mobile.png'), fullPage: true });
+    await button('Đối soát COD');
+    await fill('Số tiền đã thu (VND)', '520000');
+    await fill('Mã đối soát', 'COD-BROWSER-001');
+    await button('Lưu thay đổi');
+    await page.getByText('Mã đối soát: COD-BROWSER-001', { exact: true }).waitFor();
+    assert((await page.locator('body').ariaSnapshot()).includes('Đã thanh toán'));
+    assert.equal(await page.getByRole('button', { name: 'Đối soát COD', exact: true }).count(), 0);
+    await page.screenshot({ path: path.join(output, 'cod-receipt-mobile.png'), fullPage: true });
     await route('/admin/content');
     await fill('Tiêu đề campaign', 'Campaign kiểm thử');
     await fill('Nội dung chính sách', 'Chính sách kiểm thử đã xuất bản.');

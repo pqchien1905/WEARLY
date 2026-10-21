@@ -71,6 +71,17 @@ class RemoteAdminDashboard extends ConsumerWidget {
             spacing: 16,
             children: [
               for (final metric in [
+                (
+                  'Tiền đã thu · toàn thời gian',
+                  'paidRevenueVnd',
+                  '/admin/orders',
+                ),
+                (
+                  'COD đã giao, chờ đối soát',
+                  'codAwaitingSettlementVnd',
+                  '/admin/orders',
+                ),
+                ('Đơn đã thanh toán', 'paidOrders', '/admin/orders'),
                 ('Sản phẩm', 'products', '/admin/products'),
                 ('Số lượng trong kho', 'inventoryUnits', '/admin/inventory'),
                 ('Đơn hàng', 'orders', '/admin/orders'),
@@ -87,7 +98,12 @@ class RemoteAdminDashboard extends ConsumerWidget {
                       children: [
                         Text(metric.$1, style: T.small),
                         const SizedBox(height: 12),
-                        Text('${data[metric.$2]}', style: T.display(36)),
+                        Text(
+                          metric.$2.endsWith('Vnd')
+                              ? '${(data[metric.$2] as String).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (match) => '${match[1]}.')} ₫'
+                              : '${data[metric.$2]}',
+                          style: T.display(36),
+                        ),
                         TextButton(
                           onPressed: () => context.go(metric.$3),
                           child: const Text('Xem danh sách'),
@@ -353,6 +369,61 @@ Future<void> adjustInventory(
   }
 }
 
+Future<void> settleCod(
+  BuildContext context,
+  WidgetRef ref,
+  AdminRecord order,
+  int total,
+) async {
+  final amount = TextEditingController(), reference = TextEditingController();
+  final repo = ref.read(adminRepositoryProvider);
+  final changed = await showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => AdminMutationDialog(
+      title: 'Đối soát COD',
+      message:
+          'Chỉ xác nhận sau khi đã nhận đủ ${money(total)} cho đơn ${order['id']}. Mã đối soát dùng để tra cứu khoản thu.',
+      reload: () => refreshAdmin(ref),
+      onDisposed: () {
+        amount.dispose();
+        reference.dispose();
+      },
+      fields: [
+        AppField(
+          label: 'Số tiền đã thu (VND)',
+          controller: amount,
+          keyboardType: TextInputType.number,
+          validator: (value) =>
+              priceValidation(value) ??
+              (int.tryParse(value ?? '') != total
+                  ? 'Số tiền phải bằng tổng đơn ${money(total)}.'
+                  : null),
+        ),
+        AppField(
+          label: 'Mã đối soát',
+          controller: reference,
+          validator: (value) => (value ?? '').trim().length < 3
+              ? 'Nhập mã đối soát từ 3 đến 100 ký tự.'
+              : requiredText(value, max: 100),
+        ),
+      ],
+      submit: () async {
+        await repo.settleCod(
+          order['id'],
+          amount: amount.text,
+          reference: reference.text.trim(),
+          version: order['version'],
+        );
+      },
+    ),
+  );
+  if (context.mounted && changed == true) {
+    refreshAdmin(ref);
+    toast(context, 'Đã ghi nhận tiền thu COD.');
+  }
+}
+
 class RemoteAdminOrder extends ConsumerWidget {
   const RemoteAdminOrder({super.key, required this.id});
   final String id;
@@ -364,6 +435,10 @@ class RemoteAdminOrder extends ConsumerWidget {
       reload: () => ref.invalidate(adminDetailProvider(key)),
       builder: (data) {
         final order = commerceOrder(data, email: data['user']?['email'] ?? '');
+        final payment = commerceMap(data['payment']);
+        final receipt = payment['settlement'] == null
+            ? null
+            : commerceMap(payment['settlement']);
         final next = {
           'PENDING': ('CONFIRMED', 'Xác nhận đơn'),
           'CONFIRMED': ('SHIPPED', 'Bắt đầu giao hàng'),
@@ -407,6 +482,42 @@ class RemoteAdminOrder extends ConsumerWidget {
                     'Trạng thái giao hàng và tiền thu COD được theo dõi riêng.',
                     style: T.small,
                   ),
+                  Text(
+                    order.draft.express
+                        ? 'Giao hàng nhanh'
+                        : 'Giao hàng tiêu chuẩn',
+                    style: T.small,
+                  ),
+                  if (receipt != null) ...[
+                    const SizedBox(height: 12),
+                    SelectableText(
+                      'Mã đối soát: ${receipt['reference']}',
+                      semanticsLabel: 'Mã đối soát: ${receipt['reference']}',
+                      style: T.body,
+                    ),
+                    Text(
+                      'Đã thu: ${money(vnd(receipt['amount']))}',
+                      style: T.body,
+                    ),
+                    Text(
+                      'Người ghi nhận: ${receipt['actorId']}',
+                      style: T.small,
+                    ),
+                    Text(
+                      '${DateTime.parse(receipt['settledAt'] as String).toUtc().add(const Duration(hours: 7)).toIso8601String().substring(0, 19).replaceFirst('T', ' ')} (UTC+7)',
+                      style: T.small,
+                    ),
+                  ],
+                  if (data['status'] == 'DELIVERED' &&
+                      payment['provider'] == 'cod' &&
+                      payment['status'] == 'PENDING') ...[
+                    const SizedBox(height: 20),
+                    AppButton(
+                      'Đối soát COD',
+                      onPressed: () =>
+                          settleCod(context, ref, data, order.total),
+                    ),
+                  ],
                   if (next != null) ...[
                     const SizedBox(height: 20),
                     AppButton(

@@ -17,6 +17,7 @@ const _actions = {
   'BRAND_RENAMED': 'Đổi tên thương hiệu',
   'INVENTORY_ADJUSTED': 'Điều chỉnh tồn kho',
   'ORDER_STATUS_CHANGED': 'Chuyển trạng thái đơn hàng',
+  'COD_SETTLED': 'Đối soát tiền thu COD',
   'CONTENT_DRAFT_SAVED': 'Lưu bản nháp nội dung',
   'CONTENT_PUBLISHED': 'Xuất bản nội dung',
 };

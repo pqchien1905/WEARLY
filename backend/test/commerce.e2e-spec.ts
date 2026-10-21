@@ -108,6 +108,17 @@ describe('Commerce with real PostgreSQL', () => {
       .expect(200);
     expect(swagger.body.paths['/api/v1/products']).toBeDefined();
   });
+  it('persists the chosen shipping method in checkout and order history', async () => {
+    const c = await customer(), p = await product(2);
+    await api(c.accessToken).add(p.variants[0].sku).expect(201);
+    const result = await request(app.getHttpServer()).post('/api/v1/orders')
+      .auth(c.accessToken, { type: 'bearer' }).set('Idempotency-Key', randomUUID())
+      .send({ addressId: c.address.id, shippingMethod: 'express', expectedSubtotal: '490000' }).expect(201);
+    expect(result.body.shippingMethod).toBe('express');
+    const history = await request(app.getHttpServer()).get('/api/v1/orders/' + result.body.id)
+      .auth(c.accessToken, { type: 'bearer' }).expect(200);
+    expect(history.body.shippingMethod).toBe('express');
+  });
   it('returns safe client errors for malformed and oversized JSON', async () => {
     for (const body of ['{"password":"private-input",', 'private-input', '{"password":private-input}']) {
       const malformed = await request(app.getHttpServer())

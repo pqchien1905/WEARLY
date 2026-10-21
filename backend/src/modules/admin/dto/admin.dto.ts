@@ -119,3 +119,10 @@ export class OrderStatusDto {
   status!: 'CONFIRMED' | 'SHIPPED' | 'DELIVERED';
   @ApiProperty() @IsInt() @Min(0) expectedVersion!: number;
 }
+export class SettleCodDto {
+  @ApiProperty() @Matches(/^[1-9]\d{0,13}$/) amount!: string;
+  @ApiProperty()
+  @Transform(({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value)
+  @IsString() @MinLength(3) @MaxLength(100) reference!: string;
+  @ApiProperty() @IsInt() @Min(0) expectedVersion!: number;
+}

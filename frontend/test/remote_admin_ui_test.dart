@@ -559,6 +559,164 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  testWidgets(
+    'delivered COD validates collection and records one receipt while pending',
+    (tester) async {
+      var paid = false, writes = 0;
+      final response = Completer<http.Response>();
+      Map<String, Object?> server() => {
+        ...orderJson(status: 'DELIVERED'),
+        'version': paid ? 4 : 3,
+        'payment': {
+          'provider': 'cod',
+          'status': paid ? 'PAID' : 'PENDING',
+          'settlement': paid
+              ? {
+                  'amount': '520000',
+                  'reference': 'COD-LOCAL-001',
+                  'actorId': 'admin-1',
+                  'settledAt': '2026-10-21T10:00:00.000Z',
+                }
+              : null,
+        },
+      };
+      await setup(tester, '/admin/orders/order-1', (r) async {
+        if (r.method == 'POST') {
+          expect(r.url.path, '/api/v1/admin/orders/order-1/settle-cod');
+          expect(jsonDecode(r.body), {
+            'amount': '520000',
+            'reference': 'COD-LOCAL-001',
+            'expectedVersion': 3,
+          });
+          writes++;
+          return response.future;
+        }
+        return jsonResponse(server());
+      });
+      final collect = find.widgetWithText(FilledButton, 'Đối soát COD');
+      await tester.ensureVisible(collect);
+      await tester.tap(collect);
+      await tester.pumpAndSettle();
+      final save = find.widgetWithText(FilledButton, 'Lưu thay đổi');
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+      expect(writes, 0);
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Số tiền đã thu (VND)'),
+        '519999',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Mã đối soát'),
+        'COD-LOCAL-001',
+      );
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+      expect(writes, 0);
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Số tiền đã thu (VND)'),
+        '520000',
+      );
+      await tester.tap(save);
+      await tester.pump();
+      await tester.tap(save);
+      await tester.pump();
+      expect(writes, 1);
+      paid = true;
+      response.complete(jsonResponse(server(), 201));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('COD-LOCAL-001'), findsOneWidget);
+      final semantics = tester.ensureSemantics();
+      try {
+        await tester.pump();
+        expect(
+          find.bySemanticsLabel('Mã đối soát: COD-LOCAL-001'),
+          findsOneWidget,
+        );
+      } finally {
+        semantics.dispose();
+      }
+      expect(find.text('2026-10-21 17:00:00 (UTC+7)'), findsOneWidget);
+      expect(find.textContaining('Đã thanh toán'), findsOneWidget);
+      expect(collect, findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'settlement conflict reloads canonical receipt before another collection',
+    (tester) async {
+      var paid = false, writes = 0;
+      await setup(tester, '/admin/orders/order-1', (r) async {
+        if (r.method == 'POST') {
+          writes++;
+          paid = true;
+          return jsonResponse({
+            'error': {
+              'code': 'SETTLEMENT_CONFLICT',
+              'message': 'Already collected',
+            },
+          }, 409);
+        }
+        return jsonResponse({
+          ...orderJson(status: 'DELIVERED'),
+          'payment': {
+            'provider': 'cod',
+            'status': paid ? 'PAID' : 'PENDING',
+            'settlement': paid
+                ? {
+                    'amount': '520000',
+                    'reference': 'OTHER-RECEIPT',
+                    'actorId': 'admin-2',
+                    'settledAt': '2026-10-21T10:00:00.000Z',
+                  }
+                : null,
+          },
+        });
+      });
+      final collect = find.widgetWithText(FilledButton, 'Đối soát COD');
+      await tester.ensureVisible(collect);
+      await tester.tap(collect);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Số tiền đã thu (VND)'),
+        '520000',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Mã đối soát'),
+        'MY-RECEIPT',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Lưu thay đổi'));
+      await tester.pumpAndSettle();
+      expect(find.text('Tải lại dữ liệu'), findsOneWidget);
+      await tester.tap(find.text('Tải lại dữ liệu'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('OTHER-RECEIPT'), findsOneWidget);
+      expect(collect, findsNothing);
+      expect(writes, 1);
+    },
+  );
+  testWidgets('dashboard separates received money from delivered unpaid COD', (
+    tester,
+  ) async {
+    await setup(
+      tester,
+      '/admin',
+      (r) async => r.url.path.endsWith('/audit')
+          ? jsonResponse(pageJson([], total: 0))
+          : jsonResponse({
+              'products': 1,
+              'inventoryUnits': 5,
+              'orders': 3,
+              'pendingOrders': 1,
+              'customers': 1,
+              'paidOrders': 1,
+              'paidRevenueVnd': '520000',
+              'codAwaitingSettlementVnd': '30000',
+            }),
+    );
+    expect(find.text('Tiền đã thu · toàn thời gian'), findsOneWidget);
+    expect(find.textContaining('520.000'), findsOneWidget);
+    expect(find.text('COD đã giao, chờ đối soát'), findsOneWidget);
+  });
   testWidgets('order detail advances exact version and keeps COD unpaid', (
     tester,
   ) async {

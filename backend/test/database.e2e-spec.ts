@@ -2,6 +2,8 @@ import 'reflect-metadata';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';
+import { readFileSync, existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { PrismaService } from '../src/database/prisma.service';
 import { databaseNow } from '../src/modules/recovery/recovery.service';
 
@@ -46,5 +48,33 @@ describe('Database time on native non-UTC PostgreSQL', () => {
     const user = await db.user.create({ data: { email, name: 'UTC regression', passwordHash: 'unused-test-hash' } });
     expect(user.createdAt.getTime()).toBeGreaterThanOrEqual(before - 2000);
     expect(user.createdAt.getTime()).toBeLessThanOrEqual(Date.now() + 2000);
+  });
+  it('refuses unknown historical shipping fees before adding a guessed method', async () => {
+    const client = new Client({ connectionString: process.env.TEST_DATABASE_URL });
+    await client.connect();
+    try {
+      await client.query('CREATE TEMP TABLE "Order" (shipping decimal(14,0) NOT NULL)');
+      await client.query('INSERT INTO "Order" VALUES (40000)');
+      const migrate = async () => {
+        const preflight = resolve('prisma/migrations/20261021085000_shipping_preflight/migration.sql');
+        if (existsSync(preflight)) await client.query(readFileSync(preflight, 'utf8'));
+        await client.query(readFileSync(resolve('prisma/migrations/20261021090000_order_shipping_method/migration.sql'), 'utf8'));
+      };
+      await expect(migrate()).rejects.toThrow('Unknown historical shipping fee');
+      const columns = await client.query(`SELECT attname FROM pg_attribute WHERE attrelid='pg_temp."Order"'::regclass AND attname='shippingMethod'`);
+      expect(columns.rows).toEqual([]);
+    } finally { await client.end(); }
+  });
+  it('maps only known historical shipping fees to their original method', async () => {
+    const client = new Client({ connectionString: process.env.TEST_DATABASE_URL });
+    await client.connect();
+    try {
+      await client.query('CREATE TEMP TABLE "Order" (shipping decimal(14,0) NOT NULL)');
+      await client.query('INSERT INTO "Order" VALUES (0),(30000),(50000)');
+      const preflight = resolve('prisma/migrations/20261021085000_shipping_preflight/migration.sql');
+      if (existsSync(preflight)) await client.query(readFileSync(preflight, 'utf8'));
+      await client.query(readFileSync(resolve('prisma/migrations/20261021090000_order_shipping_method/migration.sql'), 'utf8'));
+      expect((await client.query('SELECT "shippingMethod" FROM "Order" ORDER BY shipping')).rows.map(r => r.shippingMethod)).toEqual(['standard', 'standard', 'express']);
+    } finally { await client.end(); }
   });
 });

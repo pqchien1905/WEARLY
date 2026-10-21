@@ -20,6 +20,7 @@ import {
   CreateProductDto,
   CreateSkuDto,
   OrderStatusDto,
+  SettleCodDto,
   UpdateProductDto,
   UpdateSkuDto,
 } from './dto/admin.dto';
@@ -124,5 +125,12 @@ export class AdminController {
   }
   @Get('users') users(@Query() q: PageDto) {
     return this.service.list('users', q);
+  }
+  @Post('orders/:id/settle-cod') settleCod(
+    @CurrentUser() u: Identity,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SettleCodDto,
+  ) {
+    return this.service.settleCod(u.id, id, dto);
   }
 }

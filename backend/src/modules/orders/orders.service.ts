@@ -103,6 +103,7 @@ export class OrdersService {
           },
           subtotal,
           shipping,
+          shippingMethod: dto.shippingMethod,
           total: subtotal.plus(shipping),
           items: {
             create: cart.items.map((i) => ({

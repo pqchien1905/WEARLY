@@ -294,3 +294,19 @@ thoát của công cụ native, không coi thông báo cấu hình Prisma trên 
 Đợt nâng cấp ngày21/10 đã sao lưu trước migration và xác minh dữ liệu cũ nguyên vẹn.
 Bằng chứng local nằm trong `.tools/local-completion-20261021/`; đây là dữ liệu
 riêng tư, đã được gitignore. Tiến độ toàn bộ chức năng ở `LOCAL_COMPLETION_PROGRESS.md`.
+
+## Giao hàng và đối soát COD local
+
+Đơn lưu riêng phương thức `standard` hoặc `express`; không suy ra từ phí giao hàng.
+Migration chỉ chuyển phí cũ0/30.000/50.000đ; phí khác sẽ dừng để đối chiếu dữ liệu.
+Đợt nâng cấp này đã kiểm tra database local không có đơn lịch sử cần đối chiếu.
+
+Trong quản trị, mở đơn COD **đã giao**, chọn **Đối soát COD**, nhập đúng số tiền
+đã thu và mã đối soát3–100 ký tự. Chỉ lưu sau khi thực sự nhận đủ tiền.
+Đơn đã giao vẫn chưa thanh toán cho đến thao tác này. Hệ thống lưu người thực hiện,
+thời điểm UTC, biên nhận và nhật ký trong cùng giao dịch; gửi lại cùng yêu cầu
+không tạo khoản thu thứ hai. Biên nhận hiển thị giờUTC+7 có nhãn.
+
+Dashboard hiển thị tiền đã thu và COD đã giao chờ đối soát riêng biệt, tính từ đầu
+đến nay, gồm phí giao hàng. Đây chưa phải báo cáo lợi nhuận hay báo cáo kế toán.
+VNPay sandbox, vận chuyển mô phỏng/GHN sandbox và hoàn tiền thuộc các mốc kế tiếp.

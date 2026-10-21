@@ -135,4 +135,18 @@ class AdminRepository {
     'admin/orders/${Uri.encodeComponent(id)}/status',
     body: {'status': status, 'expectedVersion': version},
   );
+  Future<AdminRecord> settleCod(
+    String id, {
+    required String amount,
+    required String reference,
+    required int version,
+  }) => _call(
+    'POST',
+    'admin/orders/${Uri.encodeComponent(id)}/settle-cod',
+    body: {
+      'amount': amount,
+      'reference': reference,
+      'expectedVersion': version,
+    },
+  );
 }

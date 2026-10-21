@@ -44,6 +44,7 @@ enum AdminAuditAction {
   CONTENT_DRAFT_SAVED
   CONTENT_PUBLISHED
   PRODUCT_IMAGE_UPLOADED
+  COD_SETTLED
 }
 // Historical identifiers intentionally survive changes to the referenced entities.
 // Do not copy request bodies or credentials into activity history.
@@ -294,6 +295,7 @@ model Order {
   addressSnapshot Json
   subtotal Decimal @db.Decimal(14, 0)
   shipping Decimal @db.Decimal(14, 0)
+  shippingMethod String @default("standard") @db.VarChar(20)
   total Decimal @db.Decimal(14, 0)
   currency String @default("VND")
   version Int @default(0)
@@ -333,6 +335,17 @@ model Payment {
   providerTransactionId String? @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  settlement PaymentSettlement?
+}
+model PaymentSettlement {
+  id String @id @default(uuid()) @db.Uuid
+  paymentId String @unique @db.Uuid
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  actorId String @db.Uuid
+  amount Decimal @db.Decimal(14, 0)
+  reference String @db.VarChar(100)
+  settledAt DateTime @default(now())
+  @@index([settledAt])
 }
 model Coupon {
   id String @id @default(uuid()) @db.Uuid
