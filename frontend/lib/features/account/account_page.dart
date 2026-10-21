@@ -389,7 +389,7 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                           if (context.mounted) {
                             toast(
                               context,
-                              'Đã xóa phiên trên thiết bị. Máy chủ chưa xác nhận thu hồi phiên; vui lòng đăng nhập và đăng xuất lại khi có mạng.',
+                              'Máy chủ chưa xác nhận đăng xuất. Kiểm tra kết nối và thử đăng xuất lại.',
                             );
                           }
                         }

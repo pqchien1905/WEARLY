@@ -349,3 +349,8 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
 - RED7 route tests -> GREEN8; full171 E2E/46unit, lint/build clean. Password reset
   and staff administration revoke browser sessions too. Migration24 testDB only;
   business DB remains23. Frontend/Chrome/review/business acceptance remain pending.
+- Frontend: memory-only access/identity, credentialed browser client, guarded shared
+  renewal, actual-network auth ordering, stale/timed-out login revocation, startup
+  gating and retryable network failures.11 new tests; full379 Flutter+2skips and
+  analyzer clean. Recovery entry skips restoration to scrub link immediately;
+  existing reset regression RED->GREEN. Chrome/review/business acceptance pending.

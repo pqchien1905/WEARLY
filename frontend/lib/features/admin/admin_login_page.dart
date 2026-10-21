@@ -70,7 +70,7 @@ class _AdminLoginPageState extends ConsumerState<AdminLoginPage> {
       if (mounted) {
         setState(
           () => error =
-              'Đã thoát trên thiết bị này. Không thể xác nhận đăng xuất với máy chủ.',
+              'Máy chủ chưa xác nhận đăng xuất. Kiểm tra kết nối và thử đăng xuất lại.',
         );
       }
     }

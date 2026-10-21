@@ -86,13 +86,13 @@ Interfaces: ApiClient.browserScope optional, browserAuth(action,body?) serialize
 through actual transport; SessionTokens.userId optional and nullable refreshToken;
 RemoteAccountRepository.restore(); AccountController.restore(); startup FutureProvider.
 
-- [ ] Tests for no JS refresh token, shared401 renewal, another user's cookie without
+- [x] Tests for no JS refresh token, shared401 renewal, another user's cookie without
   mutation replay, transient error retry, delayed bootstrap vs login/logout, actual
   network ordering after timeout, startup protected-page gating and logout retry.
   Run before implementation; Expected RED missing browser session support.
-- [ ] Implement credentialed conditional web client, browser auth transport, identity
+- [x] Implement credentialed conditional web client, browser auth transport, identity
   guards and startup/error states. Keep demo/native tests and permissions behavior.
-- [ ] Focused/full Flutter and analyze. Expected PASS. Commit.
+- [x] Focused/full Flutter and analyze. Expected PASS. Commit.
 
 ## Task 3: Chrome and local acceptance
 

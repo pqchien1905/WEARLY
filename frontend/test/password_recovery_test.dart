@@ -114,6 +114,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            browserSessionsEnabledProvider.overrideWithValue(true),
             remoteApiProvider.overrideWithValue(true),
             apiClientProvider.overrideWithValue(api),
           ],

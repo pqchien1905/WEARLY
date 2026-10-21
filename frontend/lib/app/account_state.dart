@@ -29,6 +29,16 @@ final adminAccountProvider = NotifierProvider<AccountController, UserProfile?>(
   () => AccountController(admin: true),
 );
 
+final browserSessionBootstrapProvider = FutureProvider<void>((ref) async {
+  // Defer notifier changes until the provider/widget construction has finished.
+  await Future<void>.delayed(Duration.zero);
+  if (!ref.mounted) return;
+  await Future.wait([
+    ref.read(accountProvider.notifier).restore(),
+    ref.read(adminAccountProvider.notifier).restore(),
+  ]);
+});
+
 class AccountController extends Notifier<UserProfile?> {
   AccountController({this.admin = false});
   final bool admin;
@@ -83,11 +93,27 @@ class AccountController extends Notifier<UserProfile?> {
     if (ref.mounted && token == _generation) state = saved;
   }
 
+  Future<void> restore() async {
+    final repository = ref.read(_repository);
+    if (repository is! RemoteAccountRepository ||
+        repository.api.browserScope == null) {
+      return;
+    }
+    final generation = ++_generation;
+    final profile = await repository.restore();
+    if (ref.mounted && generation == _generation) state = profile;
+  }
+
   Future<void> requestPasswordReset(String email) =>
       ref.read(_repository).requestPasswordReset(email);
   Future<void> signOut() async {
-    ++_generation;
-    state = null;
-    await ref.read(_repository).signOut();
+    final generation = ++_generation;
+    final repository = ref.read(_repository);
+    final browser =
+        repository is RemoteAccountRepository &&
+        repository.api.browserScope != null;
+    if (!browser) state = null;
+    await repository.signOut();
+    if (ref.mounted && generation == _generation) state = null;
   }
 }

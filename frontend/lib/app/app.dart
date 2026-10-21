@@ -313,6 +313,10 @@ class NepApp extends ConsumerStatefulWidget {
 
 class _NepAppState extends ConsumerState<NepApp> {
   late final router = widget.router ?? createRouter();
+  // A recovery-link entry must scrub its token immediately and start signed out,
+  // even if session restoration would fail or stall. Normal reloads restore both.
+  late final restoreBrowserSessions =
+      router.routeInformationProvider.value.uri.path != '/reset-password';
   @override
   void dispose() {
     router.dispose();
@@ -322,6 +326,33 @@ class _NepAppState extends ConsumerState<NepApp> {
   @override
   Widget build(BuildContext context) {
     if (ref.watch(remoteApiProvider)) {
+      if (ref.watch(browserSessionsEnabledProvider) && restoreBrowserSessions) {
+        final bootstrap = ref.watch(browserSessionBootstrapProvider);
+        if (bootstrap.isLoading || bootstrap.hasError) {
+          return MaterialApp(
+            title: BrandConfig.title,
+            debugShowCheckedModeBanner: false,
+            theme: buildTheme(),
+            home: Scaffold(
+              body: SafeArea(
+                child: Center(
+                  child: bootstrap.hasError
+                      ? StatePanel(
+                          title: 'Chưa khôi phục được phiên đăng nhập',
+                          message: 'Kiểm tra kết nối với máy chủ rồi thử lại.',
+                          action: AppButton(
+                            'Thử khôi phục lại',
+                            onPressed: () =>
+                                ref.invalidate(browserSessionBootstrapProvider),
+                          ),
+                        )
+                      : const CircularProgressIndicator(),
+                ),
+              ),
+            ),
+          );
+        }
+      }
       ref.listen(adminAccountProvider, (_, _) => router.refresh());
     }
     return MaterialApp.router(

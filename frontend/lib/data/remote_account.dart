@@ -37,21 +37,30 @@ class RemoteAccountRepository implements AccountRepository {
     }
     final operation = ++_operation;
     final generation = api.tokens.generation;
+    final body = {
+      if (register) 'name': name.trim(),
+      'email': email.trim(),
+      'password': password,
+    };
     final value =
-        await api.request(
-              'POST',
-              admin
-                  ? 'auth/admin/login'
-                  : register
-                  ? 'auth/register'
-                  : 'auth/login',
-              authenticated: false,
-              body: {
-                if (register) 'name': name.trim(),
-                'email': email.trim(),
-                'password': password,
-              },
-            )
+        (api.browserScope != null
+                ? await api.browserAuth(
+                    register ? 'register' : 'login',
+                    body: body,
+                    isCurrent: () =>
+                        operation == _operation &&
+                        api.tokens.generation == generation,
+                  )
+                : await api.request(
+                    'POST',
+                    admin
+                        ? 'auth/admin/login'
+                        : register
+                        ? 'auth/register'
+                        : 'auth/login',
+                    authenticated: false,
+                    body: body,
+                  ))
             as Map<String, dynamic>;
     final profile = userFromJson(value['user']);
     if (operation != _operation || api.tokens.generation != generation) {
@@ -65,9 +74,37 @@ class RemoteAccountRepository implements AccountRepository {
     }
     api.tokens.set(
       accessToken: value['accessToken'] as String,
-      refreshToken: value['refreshToken'] as String,
+      refreshToken: value['refreshToken'] as String?,
+      userId: profile.id,
     );
     return profile;
+  }
+
+  Future<UserProfile?> restore() async {
+    if (api.browserScope == null) return null;
+    final operation = ++_operation, generation = api.tokens.generation;
+    try {
+      final data = await api.browserAuth('refresh') as Map<String, dynamic>;
+      if (operation != _operation || api.tokens.generation != generation) {
+        throw sessionChanged;
+      }
+      final profile = userFromJson(data['user']);
+      if (admin && !isStaff(profile.role)) throw sessionChanged;
+      api.tokens.set(
+        accessToken: data['accessToken'] as String,
+        userId: profile.id,
+      );
+      return profile;
+    } on ApiException catch (error) {
+      if (operation != _operation || api.tokens.generation != generation) {
+        throw sessionChanged;
+      }
+      if (error.status == 401) {
+        api.tokens.clear();
+        return null;
+      }
+      rethrow;
+    }
   }
 
   @override
@@ -91,7 +128,12 @@ class RemoteAccountRepository implements AccountRepository {
 
   @override
   Future<void> signOut() async {
-    _operation++;
+    final operation = ++_operation;
+    if (api.browserScope != null) {
+      await api.browserAuth('logout');
+      if (operation == _operation) api.tokens.clear();
+      return;
+    }
     final access = api.tokens.accessToken;
     api.tokens.clear();
     if (access != null) {

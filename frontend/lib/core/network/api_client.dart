@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'session_tokens.dart';
+import 'platform_http_client.dart';
 
 class ApiException implements Exception {
   const ApiException(this.code, this.message, {this.status, this.details});
@@ -24,9 +25,11 @@ class ApiClient {
     required String baseUrl,
     http.Client? client,
     SessionTokens? tokens,
+    this.browserScope,
     this.timeout = const Duration(seconds: 15),
   }) : _base = Uri.parse(baseUrl.endsWith('/') ? baseUrl : '$baseUrl/'),
-       _client = client ?? http.Client(),
+       _client =
+           client ?? platformHttpClient(credentials: browserScope != null),
        tokens = tokens ?? SessionTokens() {
     if (!['http', 'https'].contains(_base.scheme) ||
         _base.host.isEmpty ||
@@ -42,8 +45,81 @@ class ApiClient {
   final http.Client _client;
   final SessionTokens tokens;
   final Duration timeout;
+  final String? browserScope;
+  Future<void> _browserRequests = Future<void>.value();
   Future<void>? _refreshing;
   int? _refreshGeneration;
+  bool get _canRefresh => browserScope != null
+      ? tokens.userId != null
+      : tokens.refreshToken != null;
+
+  /// Cookie mutations are ordered through actual network completion, including
+  /// after a caller timeout. Discarded successful logins are revoked before the
+  /// next queued login/logout can run, preventing late cookie resurrection.
+  Future<Object?> browserAuth(
+    String action, {
+    Map<String, Object?>? body,
+    bool Function()? isCurrent,
+  }) async {
+    if (!const ['customer', 'admin'].contains(browserScope) ||
+        !const ['login', 'register', 'refresh', 'logout'].contains(action)) {
+      throw ArgumentError('Invalid browser authentication operation');
+    }
+    var expired = false;
+    Future<http.Response> send(String operation) async {
+      final request = http.Request(
+        'POST',
+        _base.resolve('auth/browser/$browserScope/$operation'),
+      );
+      request.headers.addAll({
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-Wearly-Browser': '1',
+      });
+      request.body = jsonEncode(operation == action ? body ?? {} : {});
+      return http.Response.fromStream(await _client.send(request));
+    }
+
+    final transport = _browserRequests.then((_) async {
+      if (expired && action != 'logout') {
+        throw TimeoutException('Queued authentication expired');
+      }
+      if (isCurrent != null && !isCurrent()) throw sessionChanged;
+      final response = await send(action);
+      if ((action == 'login' || action == 'register') &&
+          response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          (expired || (isCurrent != null && !isCurrent()))) {
+        await send('logout');
+        throw sessionChanged;
+      }
+      return response;
+    });
+    _browserRequests = transport.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    try {
+      final response = await transport.timeout(
+        timeout,
+        onTimeout: () {
+          expired = true;
+          throw TimeoutException('Browser authentication timed out');
+        },
+      );
+      return _decode(response, login: action == 'login');
+    } on TimeoutException {
+      throw const ApiException(
+        'TIMEOUT',
+        'Kết nối quá thời gian chờ. Hãy thử lại.',
+      );
+    } on http.ClientException {
+      throw const ApiException(
+        'CONNECTION_ERROR',
+        'Không kết nối được máy chủ. Kiểm tra mạng và thử lại.',
+      );
+    }
+  }
 
   Future<Object?> get(String path, {Map<String, String>? query}) =>
       request('GET', path, query: query);
@@ -77,7 +153,7 @@ class ApiClient {
         authenticated &&
         refresh &&
         !path.startsWith('auth/') &&
-        tokens.refreshToken != null) {
+        _canRefresh) {
       if (tokens.accessToken == access) await _refresh(generation);
       if (tokens.generation != generation) throw sessionChanged;
       return request(
@@ -144,9 +220,7 @@ class ApiClient {
         onLateCompletion: onLateCompletion,
       );
       if (tokens.generation != generation) throw sessionChanged;
-      if (response.statusCode == 401 &&
-          attempt == 0 &&
-          tokens.refreshToken != null) {
+      if (response.statusCode == 401 && attempt == 0 && _canRefresh) {
         if (tokens.accessToken == access) await _refresh(generation);
         continue;
       }
@@ -229,20 +303,27 @@ class ApiClient {
   Future<void> _rotate(int generation) async {
     final refreshToken = tokens.refreshToken;
     try {
-      final response = await _send(
-        'POST',
-        'auth/refresh',
-        body: {'refreshToken': refreshToken},
-      );
+      final data = browserScope != null
+          ? await browserAuth('refresh')
+          : _decode(
+              await _send(
+                'POST',
+                'auth/refresh',
+                body: {'refreshToken': refreshToken},
+              ),
+            );
       if (tokens.generation != generation) throw sessionChanged;
-      final data = _decode(response);
       if (data is! Map ||
           data['accessToken'] is! String ||
-          data['refreshToken'] is! String) {
+          (browserScope == null && data['refreshToken'] is! String)) {
         throw const ApiException(
           'INVALID_RESPONSE',
           'Phiên đăng nhập không hợp lệ. Hãy đăng nhập lại.',
         );
+      }
+      if (browserScope != null &&
+          (data['user'] is! Map || data['user']['id'] != tokens.userId)) {
+        throw sessionChanged;
       }
       if (!tokens.rotate(
         generation: generation,
@@ -251,8 +332,15 @@ class ApiClient {
       )) {
         throw sessionChanged;
       }
-    } catch (_) {
-      if (tokens.generation == generation) tokens.clear();
+    } catch (error) {
+      final terminal =
+          browserScope == null ||
+          error is! ApiException ||
+          error.status == 401 ||
+          error.status == 403 ||
+          error.code == 'SESSION_CHANGED' ||
+          error.code == 'INVALID_RESPONSE';
+      if (tokens.generation == generation && terminal) tokens.clear();
       rethrow;
     }
   }
