@@ -110,12 +110,12 @@ tools/test-frontend-api.cjs --operations;tools/verify-operations-browser.cjs.
 Interfaces: Task1 OperationsSnapshot; existing adminApiClientProvider, AdminAsync,
 staff.manage route permissions and account-keyed RemoteAdminRoute lifecycle.
 
-- [ ] RED DTO/widget tests: unknown vs zero, stale worker with pending queue,
+- [x] RED DTO/widget tests: unknown vs zero, stale worker with pending queue,
   disabled provider/mail, exact estimates, retry, changed account/late data and375px.
-- [ ] Implement navigation/page in existing design system. No paid retries and
+- [x] Implement navigation/page in existing design system. No paid retries and
   no settings secret editors. Fixture browser uses real PG/Redis and synthetic
   aggregate state, verifies ADMIN access and other-role denial at375/1440.
-- [ ] Focused/full Flutter/analyze and Chrome PASS; inspect screenshots, commit.
+- [x] Focused/full Flutter/analyze and Chrome PASS; inspect screenshots, commit.
 
 ## Task 3: owned native API/worker/web lifecycle
 

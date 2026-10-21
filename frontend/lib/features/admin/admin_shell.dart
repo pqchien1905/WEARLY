@@ -53,6 +53,11 @@ class AdminShell extends ConsumerWidget {
                               ...adminNav.take(7),
                               ...taxonomyNav,
                               (
+                                'Vận hành & AI',
+                                '/admin/ai-monitoring',
+                                Icons.monitor_heart_outlined,
+                              ),
+                              (
                                 'Hỗ trợ khách hàng',
                                 '/admin/support',
                                 Icons.support_agent,

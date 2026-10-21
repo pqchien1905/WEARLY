@@ -19,6 +19,7 @@ import 'content_page.dart';
 import 'promotions_page.dart';
 import 'support_page.dart';
 import 'staff_page.dart';
+import 'operations_page.dart';
 
 class RemoteAdminRoute extends StatelessWidget {
   const RemoteAdminRoute({super.key, required this.path});
@@ -32,6 +33,7 @@ class RemoteAdminRoute extends StatelessWidget {
     if (path == '/admin/support') return const RemoteSupportPage();
     if (path == '/admin/mail') return const RemoteMailPage();
     if (path == '/admin/staff') return const RemoteStaffPage();
+    if (path == '/admin/ai-monitoring') return const RemoteOperationsPage();
     if (parts.length == 4 && parts[2] == 'support') {
       return RemoteSupportDetail(id: parts[3]);
     }
@@ -55,7 +57,7 @@ class RemoteAdminRoute extends StatelessWidget {
     return const StatePanel(
       title: 'Chức năng quản trị chưa khả dụng',
       message:
-          'Khuyến mãi và theo dõi AI sẽ được kết nối ở giai đoạn tiếp theo.',
+          'Chức năng này chưa được kết nối. Hãy chọn mục có trong menu quản trị.',
     );
   }
 }

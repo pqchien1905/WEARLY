@@ -485,4 +485,11 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
 - During UI integration, inspected BullMQ's count helper and found it removes
   legacy markers. Replaced it with atomic read-only Redis aggregation. Real
   regression RED->GREEN covers preserved markers plus paused/priority counts;
- 200/200 full E2E,83unit,lint/build PASS. Oldest priority age stays explicitly unknown.
+  200/200 full E2E,83unit,lint/build PASS. Oldest priority age stays explicitly unknown.
+- Remote ADMIN page /admin/ai-monitoring now shows private operations data, null
+  measurements, UTC windows and exact VND estimate strings. Manual refresh only;
+  account changes discard late data.425Flutter+2 opt-in skips,analyze PASS.
+- Chrome --operations PASS with real PG/Redis/MinIO and synthetic rows: heartbeat
+  start/stop, unavailable Redis with healthy DB, recovery, private/no-store response,
+  ADMIN-only deep link and customer403.375/1440 screenshots inspected. No external
+  provider calls. Owned local process lifecycle and CI/review still pending.

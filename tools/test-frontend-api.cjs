@@ -44,9 +44,10 @@ const staffMode = process.argv.includes('--staff');
 const sessions = process.argv.includes('--sessions');
 const stylist = process.argv.includes('--stylist');
 const tryon = process.argv.includes('--tryon');
+const operations = process.argv.includes('--operations');
 const mailpit = process.argv.includes('--mailpit');
 const promotionCode = 'BROWSER' + fixture.replaceAll('-', '').slice(-12).toUpperCase();
-if (admin || tryon) {
+if (admin || tryon || operations) {
   process.env.S3_BUCKET = test.TEST_S3_BUCKET || normal.S3_BUCKET + '-test';
   if (!process.env.S3_BUCKET.endsWith('-test') || process.env.S3_BUCKET === normal.S3_BUCKET)
     throw new Error('Catalog browser upload requires a dedicated test bucket.');
@@ -62,7 +63,7 @@ function flutter(args) {
   });
 }
 async function main() {
-  let smtp, recoveryWorker, recoveryQueue, mailWorker, tryonWorker, tryonQueue, suiteLock;
+  let smtp, recoveryWorker, recoveryQueue, mailWorker, tryonWorker, tryonQueue, suiteLock, operationsQueue, operationsHeartbeat;
   const releaseTryonGates=[];
   const mails = [];
   if (support || (recovery && mailpit)) {
@@ -259,6 +260,31 @@ async function main() {
       const rows=await db.aiUsage.findMany({where:{userId:accounts[0].user.id}});
       if(rows.length!==3||rows.filter(r=>r.status==='COMPLETED').length!==2||fixtureAiCalls!==3)throw Error('Incorrect Stylist usage/receipt accounting');
       console.log('PASS Stylist database: three accepted attempts, two results, one rate limit; Gemini HTTP was a deterministic test double.');
+    } else if(operations) {
+      const email=fixture+'@example.com',managerEmail='browser-'+fixture+'@example.com',customerEmail='admin-'+fixture+'@example.com',password='Operations-browser-fixture-2026';
+      const accounts={};
+      for(const [who,role] of [[email,'ADMIN'],[managerEmail,'MANAGER'],[customerEmail,'CUSTOMER']]) {
+        const r=await fetch(url+'/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Kiểm thử vận hành',email:who,password})});
+        if(r.status!==201)throw Error('Operations fixture registration failed');accounts[who]=await r.json();
+        await db.user.update({where:{id:accounts[who].user.id},data:{role}});
+      }
+      const now=new Date();
+      await db.aiUsage.createMany({data:[
+        {userId:accounts[email].user.id,kind:'TRY_ON',requestKey:randomUUID(),inputHash:'a'.repeat(64),model:'gemini-fixture',estimatedCostVnd:3000,status:'RESERVED',deadlineAt:new Date(now.getTime()-1000),expiresAt:new Date(now.getTime()+3600000)},
+        {userId:accounts[email].user.id,kind:'STYLIST',requestKey:randomUUID(),inputHash:'b'.repeat(64),model:'gemini-fixture',estimatedCostVnd:500,status:'FAILED',errorCode:'private-fixture-error',deadlineAt:now,expiresAt:new Date(now.getTime()+3600000)},
+      ]});
+      const config=app.get(requireBackend('@nestjs/config').ConfigService),redisPort=config.get('REDIS_PORT');
+      const {WorkerHeartbeat}=requireBackend('./dist/modules/operations/worker-heartbeat.service');
+      const {operationsResources}=requireBackend('./dist/modules/operations/operations.probes');
+      operationsQueue=new (requireBackend('bullmq').Queue)('wearly-try-on',{prefix:process.env.AI_QUEUE_PREFIX,connection:{host:config.get('REDIS_HOST'),port:redisPort}});
+      await operationsQueue.add('synthetic-monitor',{private:'private-fixture-payload'},{jobId:randomUUID()});
+      operationsHeartbeat=new WorkerHeartbeat(config,operationsResources);
+      await flutter(['build','web','--release','--dart-define=USE_REMOTE_API=true','--dart-define=API_BASE_URL='+url]);
+      await require('./verify-operations-browser.cjs')({root,url,email,managerEmail,password,
+        startWorker:()=>operationsHeartbeat.onModuleInit(),stopWorker:()=>operationsHeartbeat.onModuleDestroy(),
+        redisUnavailable:(disabled)=>config.set('REDIS_PORT',disabled?1:redisPort),
+        customerDenied:async()=>{const r=await fetch(url+'/admin/operations',{headers:{Authorization:'Bearer '+accounts[customerEmail].accessToken}});if(r.status!==403)throw Error('Customer can access operations');},
+      });
     } else if(sessions) {
       const email=fixture+'@example.com',otherEmail='browser-'+fixture+'@example.com',adminEmail='admin-'+fixture+'@example.com',password='Browser-only-Password-2026';
       const accounts={};
@@ -498,6 +524,8 @@ async function main() {
     }
     console.log('PASS real PostgreSQL shopping; normal development database untouched.');
   } finally {
+    await operationsHeartbeat?.onModuleDestroy();
+    if(operationsQueue){await operationsQueue.obliterate({force:true});await operationsQueue.close();}
     for(const release of releaseTryonGates)await release();
     await tryonWorker?.onModuleDestroy();
     if(tryonQueue){await tryonQueue.obliterate({force:true});await tryonQueue.close();}
@@ -524,7 +552,7 @@ async function main() {
           await tx.tryOnResult.deleteMany({where:{job:owner}});await tx.outboxEvent.deleteMany({where:{job:owner}});
           await tx.aIJob.deleteMany({where:owner});await tx.aiUsage.deleteMany({where:owner});await tx.imageAsset.deleteMany({where:owner});
         }
-        if(stylist)await tx.aiUsage.deleteMany({where:owner});
+        if(stylist||operations)await tx.aiUsage.deleteMany({where:owner});
         if(support||staffMode)await tx.supportTicket.deleteMany({where:{email:fixture+'@example.com'}});
         const contentEvents = await tx.adminAuditEvent.findMany({
           where: { actorId: owner.userId, action: 'CONTENT_DRAFT_SAVED' }, select: { targetId: true },
