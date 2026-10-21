@@ -6,6 +6,7 @@ import { fail } from '../../common/errors';
 import { PageDto } from '../products/dto/query-products.dto';
 import { publicUser } from '../auth/auth.service';
 import { recordAdminActivity } from './audit';
+import { queueOrderMail } from '../mail/outbox';
 import { adminOrderInclude } from '../orders/order-includes';
 import { recordFulfillment } from '../shipments/shipment-transitions';
 import {
@@ -371,6 +372,13 @@ export class AdminService {
         },
       });
       await recordAdminActivity(tx, actorId, 'COD_SETTLED', id);
+      await queueOrderMail(
+        tx,
+        id,
+        'cod-settled:' + payment.id,
+        'Đã ghi nhận thu tiền COD',
+        `Đã xác nhận thu ${payment.amount.toFixed(0)} VND cho đơn hàng.`,
+      );
       return tx.order.findUniqueOrThrow({
         where: { id },
         include: adminOrderInclude,

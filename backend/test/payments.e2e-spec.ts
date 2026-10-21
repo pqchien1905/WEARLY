@@ -320,6 +320,11 @@ describe('VNPay sandbox workflow with PostgreSQL and signed transport fixtures',
     ).toBe('PENDING');
     const result = await Promise.all([callback(signed), callback(signed)]);
     expect(result.map((r) => r.body.RspCode).sort()).toEqual(['00', '02']);
+    const notices = await db.mailOutbox.findMany({
+      where: { orderId: f.order.id, eventKey: { startsWith: 'vnpay-paid:' } },
+    });
+    expect(notices).toHaveLength(1);
+    expect(notices[0].body).toContain('VNPay sandbox');
     const order = await db.order.findUniqueOrThrow({
       where: { id: f.order.id },
       include: { payment: true },
@@ -467,7 +472,13 @@ describe('VNPay sandbox workflow with PostgreSQL and signed transport fixtures',
       (await db.payment.findUniqueOrThrow({ where: { orderId: g.order.id } }))
         .status,
     ).toBe('PAID');
-    expect((await db.order.findUniqueOrThrow({ where: { id: g.order.id } })).status).toBe(cancel.status === 201 ? 'CANCELLED' : 'PENDING');
-    expect(await db.inventoryMovement.count({ where: { orderId: g.order.id, reason: 'CANCEL' } })).toBe(cancel.status === 201 ? 1 : 0);
+    expect(
+      (await db.order.findUniqueOrThrow({ where: { id: g.order.id } })).status,
+    ).toBe(cancel.status === 201 ? 'CANCELLED' : 'PENDING');
+    expect(
+      await db.inventoryMovement.count({
+        where: { orderId: g.order.id, reason: 'CANCEL' },
+      }),
+    ).toBe(cancel.status === 201 ? 1 : 0);
   });
 });

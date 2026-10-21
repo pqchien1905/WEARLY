@@ -15,6 +15,7 @@ import { VnpayProvider } from '../../integrations/payments/vnpay.provider';
 import { PromotionsService } from '../promotions/promotions.service';
 import { orderInclude as include } from './order-includes';
 import { cancelOrder } from './cancel-order';
+import { queueOrderStatus } from '../mail/outbox';
 @Injectable()
 export class OrdersService {
   constructor(
@@ -143,7 +144,9 @@ export class OrdersService {
           shipping,
           shippingMethod: dto.shippingMethod,
           total,
-          history: { create: { status: 'PENDING', version: 0, actorId: userId } },
+          history: {
+            create: { status: 'PENDING', version: 0, actorId: userId },
+          },
           items: {
             create: cart.items.map((i) => ({
               variantId: i.variantId,
@@ -190,6 +193,7 @@ export class OrdersService {
         where: { id: cart.id },
         data: { version: { increment: 1 } },
       });
+      await queueOrderStatus(tx, order.id, 'PENDING', 0);
       return order;
     });
   }

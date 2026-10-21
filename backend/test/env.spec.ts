@@ -6,6 +6,27 @@ const good = {
   CORS_ORIGINS: 'http://localhost:5173',
 };
 describe('configuration', () => {
+  it('requires loopback non-production SMTP for local transaction mail', () => {
+    expect(validateEnv(good)).toHaveProperty('LOCAL_MAIL_ENABLED', 'false');
+    const local = {
+      ...good,
+      LOCAL_MAIL_ENABLED: 'true',
+      SMTP_HOST: '127.0.0.1',
+      SMTP_PORT: 1025,
+      SMTP_FROM: 'store@example.test',
+      SMTP_ALLOW_INSECURE_LOCAL: 'true',
+    };
+    expect(validateEnv(local)).toHaveProperty('LOCAL_MAIL_ENABLED', 'true');
+    for (const patch of [
+      { NODE_ENV: 'production' },
+      { SMTP_HOST: 'smtp.example.test' },
+      { SMTP_FROM: '' },
+      { SMTP_ALLOW_INSECURE_LOCAL: 'false' },
+      { SMTP_USER: 'partial-auth' },
+    ]) {
+      expect(() => validateEnv({ ...local, ...patch })).toThrow();
+    }
+  });
   it('requires explicit complete sandbox configuration and an allowed storefront return', () => {
     expect(validateEnv(good)).toHaveProperty('VNPAY_ENABLED', 'false');
     expect(() => validateEnv({ ...good, VNPAY_ENABLED: 'true' })).toThrow();

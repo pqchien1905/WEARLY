@@ -69,6 +69,7 @@ const schema = z
     VNPAY_RETURN_URL: z.string().default(''),
     VNPAY_WEB_RETURN_URL: z.string().default(''),
     PASSWORD_RECOVERY_ENABLED: z.enum(['true', 'false']).default('false'),
+    LOCAL_MAIL_ENABLED: z.enum(['true', 'false']).default('false'),
     SMTP_HOST: z.string().default(''),
     SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
     SMTP_SECURE: z.enum(['true', 'false']).default('false'),
@@ -77,6 +78,22 @@ const schema = z
     SMTP_FROM: z.string().default(''),
     SMTP_ALLOW_INSECURE_LOCAL: z.enum(['true', 'false']).default('false'),
     PASSWORD_RESET_WEB_URL: z.string().default(''),
+  })
+  .superRefine((c, ctx) => {
+    if (c.LOCAL_MAIL_ENABLED !== 'true') return;
+    const fail = (path: string) =>
+      ctx.addIssue({
+        code: 'custom',
+        path: [path],
+        message: 'Invalid local mail configuration',
+      });
+    if (c.NODE_ENV === 'production') fail('LOCAL_MAIL_ENABLED');
+    if (!['localhost', '127.0.0.1', '[::1]', '::1'].includes(c.SMTP_HOST))
+      fail('SMTP_HOST');
+    if (c.SMTP_ALLOW_INSECURE_LOCAL !== 'true')
+      fail('SMTP_ALLOW_INSECURE_LOCAL');
+    if (!z.email().safeParse(c.SMTP_FROM).success) fail('SMTP_FROM');
+    if (Boolean(c.SMTP_USER) !== Boolean(c.SMTP_PASSWORD)) fail('SMTP_USER');
   })
   .superRefine((c, ctx) => {
     if (c.VNPAY_ENABLED !== 'true') return;

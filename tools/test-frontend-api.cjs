@@ -37,6 +37,8 @@ const promotions = process.argv.includes('--promotions');
 const shipments = process.argv.includes('--shipments');
 const returns = process.argv.includes('--returns');
 const refunds = process.argv.includes('--refunds');
+const support = process.argv.includes('--support');
+const mailpit = process.argv.includes('--mailpit');
 const promotionCode = 'BROWSER' + fixture.replaceAll('-', '').slice(-12).toUpperCase();
 if (admin) {
   process.env.S3_BUCKET = test.TEST_S3_BUCKET || normal.S3_BUCKET + '-test';
@@ -54,9 +56,14 @@ function flutter(args) {
   });
 }
 async function main() {
-  let smtp, recoveryWorker, recoveryQueue;
+  let smtp, recoveryWorker, recoveryQueue, mailWorker;
   const mails = [];
-  if (recovery) {
+  if (support || (recovery && mailpit)) {
+    const health=await fetch('http://127.0.0.1:8025/livez',{signal:AbortSignal.timeout(2000)});
+    if(!health.ok)throw Error('Start native Mailpit first');
+    Object.assign(process.env,{LOCAL_MAIL_ENABLED:support?'true':'false',PASSWORD_RECOVERY_ENABLED:recovery?'true':'false',SMTP_HOST:'127.0.0.1',SMTP_PORT:'1025',SMTP_SECURE:'false',SMTP_ALLOW_INSECURE_LOCAL:'true',SMTP_FROM:'store@example.test',SMTP_USER:'',SMTP_PASSWORD:'',PASSWORD_RESET_WEB_URL:'http://127.0.0.1:4183/#/reset-password'});
+  }
+  if (recovery && !mailpit) {
     const { SMTPServer } = requireBackend('smtp-server');
     smtp = new SMTPServer({ authOptional: true, disabledCommands: ['AUTH', 'STARTTLS'], logger: false,
       onData(stream, _session, callback) {
@@ -131,6 +138,14 @@ async function main() {
       await require('./verify-recovery-browser.cjs')({ root, email, password, url, nextPassword: 'Browser-replaced-Password-2026',
         getLink: async () => {
           for (let i = 0; i < 100; i++) {
+            if(mailpit) {
+              const result=await (await fetch('http://127.0.0.1:8025/api/v1/search?query='+encodeURIComponent('to:'+email))).json();
+              for(const item of result.messages??[]) {
+                const message=await (await fetch('http://127.0.0.1:8025/api/v1/message/'+item.ID)).json();
+                const match=message.Text?.match(/http:\/\/127\.0\.0\.1:4183\/#\/reset-password\?token=[A-Za-z0-9_-]{43}/);
+                if(match)return match[0];
+              }
+            }
             for (const mail of mails) {
               const split = mail.indexOf('\r\n\r\n'), headers = mail.slice(0, split), body = mail.slice(split + 4);
               const decoded = /Content-Transfer-Encoding: base64/i.test(headers)
@@ -149,6 +164,24 @@ async function main() {
       if (await db.passwordResetToken.count({ where: { userId: account.user.id, consumedAt: null } }) !== 0)
         throw new Error('Unconsumed reset token remained');
       console.log('PASS recovery database: token consumed and original session revoked.');
+    } else if(support) {
+      const {MailService}=requireBackend('./dist/modules/mail/mail.service');
+      const {MailWorker}=requireBackend('./dist/worker/mail.worker');
+      mailWorker=new MailWorker(app.get(MailService));mailWorker.onModuleInit();
+      const email='admin-'+fixture+'@example.com',customerEmail=fixture+'@example.com',password='Browser-only-Password-2026';
+      for(const [who,name,role] of [[email,'Support admin','ADMIN'],[customerEmail,'Support customer','CUSTOMER']]) {
+        const r=await fetch(url+'/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email:who,password})});
+        if(r.status!==201)throw Error('Support account fixture failed');const a=await r.json();await db.user.update({where:{id:a.user.id},data:{role}});
+      }
+      const user=await db.user.findUniqueOrThrow({where:{email:customerEmail}}),variant=await db.productVariant.findFirstOrThrow({where:{productId:product.id}});
+      const order=await db.order.create({data:{userId:user.id,idempotencyKey:randomUUID(),requestHash:'support-fixture',addressSnapshot:{recipient:'Support customer',phone:'0901234567',address:'Test address'},subtotal:'490000',shipping:'30000',total:'520000',payment:{create:{provider:'cod',status:'PENDING',amount:'520000'}},items:{create:{variantId:variant.id,name:'Support fixture',sku:variant.sku,slug:fixture,size:'M',color:'Trắng',image:'assets/images/shirt.jpg',unitPrice:'490000',quantity:1}}}});
+      await flutter(['build','web','--release','--dart-define=USE_REMOTE_API=true','--dart-define=API_BASE_URL='+url]);
+      const ticketId=await require('./verify-support-browser.cjs')({root,email,customerEmail,password,orderId:order.id});
+      const ticket=await db.supportTicket.findUniqueOrThrow({where:{id:ticketId},include:{replies:{include:{mail:true}}}});
+      if(ticket.status!=='ANSWERED'||ticket.replies.length!==1||ticket.replies[0].mail.status!=='SENT')throw Error('Support persistence/delivery failed');
+      const orderMail=await db.mailOutbox.findUniqueOrThrow({where:{eventKey:`order:${order.id}:1`}});
+      if(orderMail.status!=='SENT')throw Error('Order notification not sent');
+      console.log('PASS support receipt, staff reply and order notification persisted and delivered to native local inbox.');
     } else if (returns || refunds) {
       const password = 'Browser-only-Password-2026', email = 'admin-' + fixture + '@example.com', customerEmail = 'browser-' + fixture + '@example.com';
       const send = async (method, endpoint, body, token, headers = {}) => {
@@ -328,6 +361,7 @@ async function main() {
     }
     console.log('PASS real PostgreSQL shopping; normal development database untouched.');
   } finally {
+    await mailWorker?.onModuleDestroy();
     await recoveryWorker?.onModuleDestroy();
     if (recoveryQueue) { await recoveryQueue.obliterate({ force: true }); await recoveryQueue.close(); }
     // Restrict every cleanup to this run's exact account emails/product IDs.
@@ -341,6 +375,7 @@ async function main() {
         await db.catalogAsset.deleteMany({ where: { id: { in: assets.map(asset => asset.id) } } });
       }
       await db.$transaction(async tx => {
+        if(support)await tx.supportTicket.deleteMany({where:{email:fixture+'@example.com'}});
         const contentEvents = await tx.adminAuditEvent.findMany({
           where: { actorId: owner.userId, action: 'CONTENT_DRAFT_SAVED' }, select: { targetId: true },
         });

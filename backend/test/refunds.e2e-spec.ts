@@ -237,6 +237,12 @@ describe('Explicit source-scoped refunds', () => {
     expect(result.map((r) => r.status)).toEqual([201, 201]);
     expect(result[0].body.id).toBe(result[1].body.id);
     expect(result[0].body.status).toBe('SUCCEEDED');
+    const notices = await db.mailOutbox.findMany({
+      where: { orderId: row.id },
+    });
+    expect(notices).toHaveLength(1);
+    expect(notices[0].eventKey).toBe('refund:' + result[0].body.id);
+    expect(notices[0].body).toContain('230 VND');
     await create(row.id, { ...body, reference: 'changed' }).expect(409);
     await create(row.id, payload(row, { expectedVersion: 1 })).expect(409);
     expect(
@@ -325,6 +331,11 @@ describe('Explicit source-scoped refunds', () => {
     expect(send).toHaveBeenCalledTimes(1);
     const s = (await state(row.id).expect(200)).body;
     expect(s.refunds[0].status).toBe('REVIEW');
+    expect(
+      await db.mailOutbox.count({
+        where: { orderId: row.id, eventKey: { startsWith: 'refund:' } },
+      }),
+    ).toBe(0);
     expect(s.sources[0].available).toBe('0');
     await create(row.id, body).expect(201);
     expect(send).toHaveBeenCalledTimes(1);

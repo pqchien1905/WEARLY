@@ -5,14 +5,24 @@ import '../../app/api_providers.dart';
 import '../../app/config.dart';
 import '../../core/design/tokens.dart';
 import '../../core/widgets/primitives.dart';
+import 'remote_contact_page.dart';
 
-class ContactPage extends StatefulWidget {
+class ContactPage extends ConsumerWidget {
   const ContactPage({super.key});
   @override
-  State<ContactPage> createState() => _ContactPageState();
+  Widget build(BuildContext context, WidgetRef ref) =>
+      ref.watch(remoteApiProvider)
+      ? const RemoteContactPage()
+      : const _DemoContactPage();
 }
 
-class _ContactPageState extends State<ContactPage> {
+class _DemoContactPage extends StatefulWidget {
+  const _DemoContactPage();
+  @override
+  State<_DemoContactPage> createState() => _ContactPageState();
+}
+
+class _ContactPageState extends State<_DemoContactPage> {
   final form = GlobalKey<FormState>();
   final name = TextEditingController(),
       email = TextEditingController(),

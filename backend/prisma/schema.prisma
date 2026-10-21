@@ -56,6 +56,8 @@ enum AIJobStatus {
   FAILED
 }
 enum AdminAuditAction {
+  SUPPORT_REPLIED
+  SUPPORT_STATUS_CHANGED
   PRODUCT_CREATED
   PRODUCT_UPDATED
   SKU_CREATED
@@ -319,6 +321,7 @@ model CartItem {
   @@unique([cartId, variantId])
 }
 model Order {
+  mail MailOutbox[]
   id String @id @default(uuid()) @db.Uuid
   userId String @db.Uuid
   user User @relation(fields: [userId], references: [id])
@@ -604,4 +607,69 @@ model OutboxEvent {
   publishedAt DateTime?
   createdAt DateTime @default(now())
   @@index([publishedAt, createdAt])
+}
+enum SupportStatus {
+  OPEN
+  ANSWERED
+  CLOSED
+}
+enum MailStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+}
+model SupportTicket {
+  id String @id @default(uuid()) @db.Uuid
+  requestKey String @unique @db.Uuid
+  payloadHash String @db.Char(64)
+  name String @db.VarChar(100)
+  email String @db.VarChar(254)
+  message String @db.VarChar(3000)
+  status SupportStatus @default(OPEN)
+  version Int @default(0)
+  replies SupportReply[]
+  mail MailOutbox[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, createdAt, id])
+}
+model SupportReply {
+  id String @id @default(uuid()) @db.Uuid
+  ticketId String @db.Uuid
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  actorId String @db.Uuid
+  requestKey String @db.Uuid
+  payloadHash String @db.Char(64)
+  message String @db.VarChar(3000)
+  mail MailOutbox?
+  createdAt DateTime @default(now())
+  @@unique([ticketId, requestKey])
+  @@index([ticketId, createdAt, id])
+}
+model MailOutbox {
+  id String @id @default(uuid()) @db.Uuid
+  eventKey String @unique @db.VarChar(160)
+  recipient String @db.VarChar(254)
+  subject String @db.VarChar(200)
+  body String @db.Text
+  orderId String? @db.Uuid
+  order Order? @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  supportId String? @db.Uuid
+  support SupportTicket? @relation(fields: [supportId], references: [id], onDelete: Cascade)
+  replyId String? @unique @db.Uuid
+  reply SupportReply? @relation(fields: [replyId], references: [id], onDelete: Cascade)
+  status MailStatus @default(PENDING)
+  attempts Int @default(0)
+  leaseToken String? @db.Uuid
+  leaseUntil DateTime?
+  nextAttemptAt DateTime @default(now())
+  sentAt DateTime?
+  lastError String? @db.VarChar(40)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, nextAttemptAt])
+  @@index([status, leaseUntil])
+  @@index([orderId, createdAt])
+  @@index([supportId, createdAt])
 }

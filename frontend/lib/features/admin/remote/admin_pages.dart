@@ -17,6 +17,7 @@ import 'taxonomy_page.dart';
 import 'admin_activity.dart';
 import 'content_page.dart';
 import 'promotions_page.dart';
+import 'support_page.dart';
 
 class RemoteAdminRoute extends StatelessWidget {
   const RemoteAdminRoute({super.key, required this.path});
@@ -27,6 +28,11 @@ class RemoteAdminRoute extends StatelessWidget {
     if (path == '/admin') return const RemoteAdminDashboard();
     if (path == '/admin/content') return const RemoteContentPage();
     if (path == '/admin/promotions') return const RemotePromotionsPage();
+    if (path == '/admin/support') return const RemoteSupportPage();
+    if (path == '/admin/mail') return const RemoteMailPage();
+    if (parts.length == 4 && parts[2] == 'support') {
+      return RemoteSupportDetail(id: parts[3]);
+    }
     if (path == '/admin/categories' || path == '/admin/brands') {
       return RemoteTaxonomyPage(key: ValueKey(path), kind: parts[2]);
     }

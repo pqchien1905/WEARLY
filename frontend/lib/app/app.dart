@@ -149,6 +149,18 @@ GoRouter createRouter({String initialLocation = '/'}) {
             path: '/admin/content',
             builder: (_, _) => const AdminContentPage(),
           ),
+          for (final path in [
+            '/admin/support',
+            '/admin/support/:id',
+            '/admin/mail',
+          ])
+            appRoute(
+              path: path,
+              builder: (_, _) => const StatePanel(
+                title: 'Hỗ trợ khách hàng',
+                message: 'Chức năng này có trong chế độ kết nối API.',
+              ),
+            ),
           appRoute(
             path: '/admin/ai-monitoring',
             builder: (_, _) => const AdminMonitoringPage(),

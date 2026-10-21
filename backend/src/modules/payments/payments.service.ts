@@ -6,6 +6,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
 import { transaction } from '../../common/transaction';
 import { fail } from '../../common/errors';
+import { queueOrderMail } from '../mail/outbox';
 import {
   VnpayProvider,
   VnpayEvent,
@@ -246,6 +247,13 @@ export class PaymentsService {
           where: { id: payment.orderId },
           data: { version: { increment: 1 } },
         });
+        await queueOrderMail(
+          tx,
+          payment.orderId,
+          'vnpay-paid:' + attempt.id,
+          'Đã ghi nhận thanh toán VNPay',
+          `VNPay sandbox xác nhận thu ${attempt.amount.toFixed(0)} VND. Giao dịch: ${event.transactionNo}.${alreadyPaid || payment.order.status === 'CANCELLED' ? ' Khoản thu cần được quản trị viên đối soát; trạng thái giao hàng không thay đổi.' : ''}`,
+        );
       } else if (
         event.status === 'FAILED' ||
         (event.status === 'NOT_FOUND' &&

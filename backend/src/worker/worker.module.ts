@@ -13,6 +13,8 @@ import { RetentionWorker } from './retention.worker';
 import { RecoveryModule } from '../modules/recovery/recovery.module';
 import { RecoveryWorker } from './recovery.worker';
 import { CatalogMediaModule } from '../modules/catalog-media/catalog-media.module';
+import { MailModule } from '../modules/mail/mail.module';
+import { MailWorker } from './mail.worker';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
@@ -20,12 +22,14 @@ import { CatalogMediaModule } from '../modules/catalog-media/catalog-media.modul
     StorageModule,
     RecoveryModule,
     CatalogMediaModule,
+    MailModule,
   ],
   providers: [
     AiProcessor,
     ImageLifecycleService,
     RetentionWorker,
     RecoveryWorker,
+    MailWorker,
     { provide: TryOnProvider, useClass: DisabledTryOnProvider },
   ],
 })

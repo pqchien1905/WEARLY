@@ -1,0 +1,58 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
+import {
+  IsEmail,
+  IsIn,
+  IsInt,
+  IsString,
+  IsUUID,
+  MaxLength,
+  Min,
+  MinLength,
+  ValidateIf,
+} from 'class-validator';
+const trim = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim() : value;
+const lower = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim().toLowerCase() : value;
+export class CreateSupportDto {
+  @ApiProperty() @Transform(lower) @IsUUID() requestKey!: string;
+  @ApiProperty()
+  @Transform(trim)
+  @IsString()
+  @MinLength(2)
+  @MaxLength(100)
+  name!: string;
+  @ApiProperty() @Transform(lower) @IsEmail() @MaxLength(254) email!: string;
+  @ApiProperty()
+  @Transform(trim)
+  @IsString()
+  @MinLength(10)
+  @MaxLength(3000)
+  message!: string;
+}
+export class ReplySupportDto {
+  @ApiProperty() @Transform(lower) @IsUUID() requestKey!: string;
+  @ApiProperty() @IsInt() @Min(0) expectedVersion!: number;
+  @ApiProperty()
+  @Transform(trim)
+  @IsString()
+  @MinLength(3)
+  @MaxLength(3000)
+  message!: string;
+}
+export class StatusSupportDto {
+  @ApiProperty() @IsInt() @Min(0) expectedVersion!: number;
+  @ApiProperty({ enum: ['OPEN', 'CLOSED'] }) @IsIn(['OPEN', 'CLOSED']) status!:
+    'OPEN' | 'CLOSED';
+}
+export class ListSupportDto {
+  @ApiPropertyOptional()
+  @ValidateIf((_o, v) => v !== undefined)
+  @IsUUID()
+  cursor?: string;
+  @ApiPropertyOptional({ enum: ['OPEN', 'ANSWERED', 'CLOSED'] })
+  @ValidateIf((_o, v) => v !== undefined)
+  @IsIn(['OPEN', 'ANSWERED', 'CLOSED'])
+  status?: 'OPEN' | 'ANSWERED' | 'CLOSED';
+}

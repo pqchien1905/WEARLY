@@ -6,6 +6,7 @@ import { recordAdminActivity } from '../admin/audit';
 import { adminOrderInclude } from '../orders/order-includes';
 import { appendShipmentEvent } from './shipment-transitions';
 import { ShipmentEventDto } from './shipments.dto';
+import { queueOrderStatus } from '../mail/outbox';
 @Injectable()
 export class ShipmentsService {
   constructor(private readonly db: PrismaService) {}
@@ -98,6 +99,13 @@ export class ShipmentsService {
           });
       }
       await recordAdminActivity(tx, actorId, 'SHIPMENT_UPDATED', id);
+      if (terminal)
+        await queueOrderStatus(
+          tx,
+          id,
+          dto.status as 'DELIVERED' | 'RETURNED',
+          version,
+        );
       return tx.order.findUniqueOrThrow({
         where: { id },
         include: adminOrderInclude,

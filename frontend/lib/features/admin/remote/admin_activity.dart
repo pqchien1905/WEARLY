@@ -6,6 +6,8 @@ import 'admin_providers.dart';
 import 'admin_widgets.dart';
 
 const _actions = {
+  'SUPPORT_REPLIED': 'Trả lời yêu cầu hỗ trợ',
+  'SUPPORT_STATUS_CHANGED': 'Đổi trạng thái yêu cầu hỗ trợ',
   'PRODUCT_CREATED': 'Tạo sản phẩm',
   'PRODUCT_UPDATED': 'Cập nhật sản phẩm',
   'PRODUCT_IMAGE_UPLOADED': 'Tải ảnh sản phẩm',

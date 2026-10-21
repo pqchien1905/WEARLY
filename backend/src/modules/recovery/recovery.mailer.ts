@@ -1,32 +1,16 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import { mailTransportOptions } from '../mail/mail-transport';
 @Injectable()
 export class RecoveryMailer implements OnModuleDestroy {
   private transport?: nodemailer.Transporter;
   constructor(private readonly config: ConfigService) {}
   async send(to: string, token?: string) {
     if (!this.transport) {
-      const insecure =
-        this.config.get<string>('SMTP_ALLOW_INSECURE_LOCAL') === 'true';
-      const user = this.config.get<string>('SMTP_USER');
-      this.transport = nodemailer.createTransport({
-        host: this.config.getOrThrow<string>('SMTP_HOST'),
-        port: this.config.getOrThrow<number>('SMTP_PORT'),
-        secure: this.config.get<string>('SMTP_SECURE') === 'true',
-        requireTLS: !insecure,
-        ignoreTLS: insecure,
-        auth: user
-          ? { user, pass: this.config.getOrThrow<string>('SMTP_PASSWORD') }
-          : undefined,
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 15000,
-        logger: false,
-        debug: false,
-        disableFileAccess: true,
-        disableUrlAccess: true,
-      });
+      this.transport = nodemailer.createTransport(
+        mailTransportOptions(this.config),
+      );
     }
     const link = token
       ? this.config.getOrThrow<string>('PASSWORD_RESET_WEB_URL') +

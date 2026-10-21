@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Prisma, ShipmentStatus } from '../../generated/prisma/client';
 import { fail } from '../../common/errors';
+import { queueOrderStatus } from '../mail/outbox';
 
 const allowed: Record<ShipmentStatus, ShipmentStatus[]> = {
   IN_TRANSIT: ['OUT_FOR_DELIVERY', 'DELIVERY_FAILED', 'DELIVERED'],
@@ -64,4 +65,5 @@ export async function recordFulfillment(
       });
   }
   await tx.orderEvent.create({ data: { orderId, status, version, actorId } });
+  await queueOrderStatus(tx, orderId, status, version);
 }

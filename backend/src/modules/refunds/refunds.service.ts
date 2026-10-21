@@ -5,6 +5,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { transaction } from '../../common/transaction';
 import { fail } from '../../common/errors';
 import { recordAdminActivity } from '../admin/audit';
+import { queueOrderMail } from '../mail/outbox';
 import {
   VnpayProvider,
   VnpayRefund,
@@ -187,6 +188,14 @@ export class RefundsService {
           data: { version: { increment: 1 } },
         });
         await recordAdminActivity(tx, actorId, 'REFUND_CREATED', row.id);
+        if (row.status === 'SUCCEEDED')
+          await queueOrderMail(
+            tx,
+            id,
+            'refund:' + row.id,
+            'Đã ghi nhận hoàn tiền',
+            `Đã xác nhận hoàn ${row.amount.toFixed(0)} VND. Mã hoàn tiền: ${row.id}.`,
+          );
         return {
           row,
           ...(p.provider === 'vnpay'
@@ -342,6 +351,14 @@ export class RefundsService {
         data: { version: { increment: 1 } },
       });
       await recordAdminActivity(tx, actorId, 'REFUND_UPDATED', row.id);
+      if (event.status === 'SUCCEEDED')
+        await queueOrderMail(
+          tx,
+          id,
+          'refund:' + row.id,
+          'Đã ghi nhận hoàn tiền',
+          `VNPay sandbox xác nhận hoàn ${row.amount.toFixed(0)} VND. Mã hoàn tiền: ${row.id}.`,
+        );
     });
   }
 }

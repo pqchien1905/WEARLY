@@ -19,6 +19,8 @@ import { WishlistModule } from './modules/wishlist/wishlist.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { ContentModule } from './modules/content/content.module';
 import { CatalogMediaModule } from './modules/catalog-media/catalog-media.module';
+import { SupportModule } from './modules/support/support.module';
+import { MailModule } from './modules/mail/mail.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
@@ -38,6 +40,8 @@ import { CatalogMediaModule } from './modules/catalog-media/catalog-media.module
     ReviewsModule,
     ContentModule,
     CatalogMediaModule,
+    SupportModule,
+    MailModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

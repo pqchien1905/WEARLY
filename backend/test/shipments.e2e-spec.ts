@@ -184,6 +184,16 @@ describe('Persistent local shipment tracking', () => {
       'CANCELLED',
     ]);
     expect(cancelled.shipment).toBeNull();
+    const notices = await db.mailOutbox.findMany({
+      where: { orderId: row.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(notices.map((m) => m.eventKey)).toEqual([
+      `order:${row.id}:0`,
+      `order:${row.id}:1`,
+    ]);
+    expect(notices[0].body).toContain('tiếp nhận');
+    expect(notices[1].body).toContain('hủy');
     const legacy = await fixture();
     await db.order.update({
       where: { id: legacy.id },
@@ -243,6 +253,12 @@ describe('Persistent local shipment tracking', () => {
     ).toEqual(['IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED']);
     expect(row.payment.status).toBe('PENDING');
     expect(row.payment.settlement).toBeNull();
+    const deliveredMail = await db.mailOutbox.findUnique({
+      where: { eventKey: `order:${row.id}:${row.version}` },
+    });
+    expect(deliveredMail?.body).toContain(
+      'Thu tiền và hoàn tiền được xác nhận riêng',
+    );
     await event(row.id, 'IN_TRANSIT', row.version).expect(409);
   });
   it('retries failed delivery and rejects skipped transitions or stale versions', async () => {
@@ -271,7 +287,10 @@ describe('Persistent local shipment tracking', () => {
     const quantity = (
       await db.inventory.findUniqueOrThrow({ where: { variantId } })
     ).quantity;
-    const patch = { eventKey: randomUUID().toUpperCase(), note: 'Returned sealed parcel' };
+    const patch = {
+      eventKey: randomUUID().toUpperCase(),
+      note: 'Returned sealed parcel',
+    };
     const results = await Promise.all([
       event(row.id, 'RETURNED', row.version, patch),
       event(row.id, 'RETURNED', row.version, patch),

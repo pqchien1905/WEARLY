@@ -1,5 +1,6 @@
 import { Prisma } from '../../generated/prisma/client';
 import { fail } from '../../common/errors';
+import { queueOrderStatus } from '../mail/outbox';
 type Order = Prisma.OrderGetPayload<{
   include: { items: true; payment: true };
 }>;
@@ -48,7 +49,9 @@ export async function cancelOrder(
   if (
     order.payment &&
     (order.payment.amount.eq(0) ||
-      !['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(order.payment.status))
+      !['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(
+        order.payment.status,
+      ))
   )
     await tx.payment.update({
       where: { id: order.payment.id },
@@ -67,4 +70,5 @@ export async function cancelOrder(
       note,
     },
   });
+  await queueOrderStatus(tx, order.id, 'CANCELLED', order.version + 1);
 }

@@ -5,6 +5,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { transaction } from '../../common/transaction';
 import { fail } from '../../common/errors';
 import { recordAdminActivity } from '../admin/audit';
+import { queueOrderMail } from '../mail/outbox';
 import { cancelOrder } from '../orders/cancel-order';
 import { adminOrderInclude } from '../orders/order-includes';
 import {
@@ -225,6 +226,13 @@ export class ReturnsService {
         data: { version: { increment: 1 } },
       });
       await recordAdminActivity(tx, actorId, 'RETURN_DECIDED', id);
+      await queueOrderMail(
+        tx,
+        id,
+        `return:${returnId}:decision`,
+        'Kết quả yêu cầu trả hàng',
+        `Yêu cầu ${returnId}: ${dto.status === 'APPROVED' ? 'đã được chấp nhận' : 'đã bị từ chối'}.\n${dto.note}`,
+      );
       return saved;
     });
   }
@@ -307,6 +315,13 @@ export class ReturnsService {
           },
         });
       await recordAdminActivity(tx, actorId, 'RETURN_RECEIVED', id);
+      await queueOrderMail(
+        tx,
+        id,
+        `return:${returnId}:received`,
+        'Đã nhận hàng khách trả',
+        `Đã nhận hàng của yêu cầu ${returnId}. Hoàn tiền được xác nhận riêng.`,
+      );
       return saved;
     });
   }

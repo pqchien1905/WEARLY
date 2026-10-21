@@ -266,6 +266,16 @@ describe('Returns and authorized cancellation', () => {
       ]);
       expect(received.map((r) => r.status)).toEqual([201, 201]);
       expect(received[0].body.status).toBe('RECEIVED');
+      const mail = await db.mailOutbox.findMany({
+        where: {
+          orderId: row.id,
+          eventKey: { startsWith: 'return:' + r.id + ':' },
+        },
+      });
+      expect(mail).toHaveLength(2);
+      expect(
+        mail.find((m) => m.eventKey.endsWith(':received'))?.body,
+      ).toContain('Hoàn tiền được xác nhận riêng');
       const order = await db.order.findUniqueOrThrow({
         where: { id: row.id },
         include: { payment: true },

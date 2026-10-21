@@ -47,7 +47,16 @@ class AdminShell extends ConsumerWidget {
             children: [
               for (final item
                   in remote
-                      ? [...adminNav.take(5), ...taxonomyNav, adminNav[6]]
+                      ? [
+                          ...adminNav.take(7),
+                          ...taxonomyNav,
+                          (
+                            'Hỗ trợ khách hàng',
+                            '/admin/support',
+                            Icons.support_agent,
+                          ),
+                          ('Theo dõi thư', '/admin/mail', Icons.mail_outline),
+                        ]
                       : adminNav)
                 Padding(
                   padding: const EdgeInsets.symmetric(
