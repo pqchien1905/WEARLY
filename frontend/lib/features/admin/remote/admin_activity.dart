@@ -166,6 +166,21 @@ Iterable<String> auditChanges(Object? details) sync* {
       ? (item ? 'Có' : 'Không')
       : staffRoleNames[item] ?? '$item';
   for (final field in _fields.entries) {
+    if (field.key == 'amount' &&
+        (const ['FIXED', 'PERCENT'].contains(before['kind']) ||
+            const ['FIXED', 'PERCENT'].contains(after['kind']))) {
+      String discount(Map snapshot) {
+        final amount = snapshot['amount'];
+        if (amount == null) return value(null);
+        return snapshot['kind'] == 'PERCENT' ? '$amount%' : '$amount VND';
+      }
+
+      if (before['amount'] != after['amount'] ||
+          before['kind'] != after['kind']) {
+        yield 'Giá trị giảm: ${discount(before)} → ${discount(after)}';
+      }
+      continue;
+    }
     if ((before.containsKey(field.key) || after.containsKey(field.key)) &&
         before[field.key] != after[field.key]) {
       yield '${field.value}: ${value(before[field.key])} → ${value(after[field.key])}';

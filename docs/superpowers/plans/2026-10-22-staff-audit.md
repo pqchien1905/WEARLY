@@ -123,7 +123,7 @@ Audit view renders translated field labels with old/new scalar values, not raw J
   admin grants roles, warehouse inventory/order read + denied money, support ticket
   handling + denied staff, demotion invalidates session, reload/persistence,375/1440.
   Expected PASS; never change business staff accounts to test.
-- [ ] One independent review; important fixes RED->GREEN with green required suites.
+- [x] One independent review; important fixes RED->GREEN with green required suites.
   Verified business backup, migration, original-table fingerprints and compiled
   read-only smoke. Update guide/ledger, commit and remove only this plan's scratch.
 

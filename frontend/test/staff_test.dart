@@ -9,6 +9,7 @@ import 'package:nep_storefront/app/account_state.dart';
 import 'package:nep_storefront/app/api_providers.dart';
 import 'package:nep_storefront/core/network/api_client.dart';
 import 'package:nep_storefront/data/remote_account.dart';
+import 'package:nep_storefront/features/admin/remote/admin_activity.dart';
 import 'remote_account_test.dart' show sessionJson;
 import 'remote_commerce_test.dart' show orderJson;
 import 'remote_session_test.dart' show jsonResponse;
@@ -30,6 +31,28 @@ Map<String, Object?> staff({String id = 'staff-1'}) => {
   'createdAt': '2026-10-22T00:00:00Z',
 };
 void main() {
+  test('promotion audit values retain their before and after units', () {
+    for (final entry in [
+      ('PERCENT', '10', 'PERCENT', '20', 'Giá trị giảm: 10% → 20%'),
+      (
+        'FIXED',
+        '10000',
+        'FIXED',
+        '20000',
+        'Giá trị giảm: 10000 VND → 20000 VND',
+      ),
+      ('FIXED', '10', 'PERCENT', '10', 'Giá trị giảm: 10 VND → 10%'),
+      ('PERCENT', '20', 'FIXED', '10000', 'Giá trị giảm: 20% → 10000 VND'),
+    ]) {
+      expect(
+        auditChanges({
+          'before': {'kind': entry.$1, 'amount': entry.$2},
+          'after': {'kind': entry.$3, 'amount': entry.$4},
+        }),
+        contains(entry.$5),
+      );
+    }
+  });
   Future<ProviderContainer> setup(
     WidgetTester tester,
     String role,

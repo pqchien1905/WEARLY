@@ -294,7 +294,7 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
 - Full A-Z goal remains ACTIVE: staff permissions/audit, persistent sessions, Gemini,
   operations/CI/recovery/SEO, configured providers and final integration remain.
 
-## Staff and audit — in progress, 22 October 2026
+## Staff and audit — completed, 22 October 2026
 
 - Task1 backend: explicit role/capability matrix and default ADMIN-only guard,
   versioned staff lookup/change, current-actor recheck, session revocation, atomic
@@ -325,3 +325,17 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   revokes current access. 375/1440 screenshots visually inspected. Fixture-only
   data cleanup; no business account changed. Browser selector corrected to actual
   Flutter accessibility button label; no product workaround. Review/migration pending.
+- Final review bfbef9c..77c3d34: no critical/important reported; one minor promotion
+  amount-unit issue regraded important because percentages shown as VND misstate
+  financial history. One tested fix pass: PERCENT/FIXED changes and same-number
+  unit changes RED->GREEN. Full368 Flutter pass/2 skips, analyzer clean. Backend
+  unchanged since163 E2E/46unit/lint/build PASS. No deferred minor or re-review.
+- Backup before-staff-audit-1792609176819.dump verified; business migrations22->23.
+  All40 original tables retain exact counts/original-column fingerprints; no new
+  staff roles assigned. Compiled readiness/catalog/content200 and private401.
+  Guide: docs/STAFF_LOCAL.md. Persistent browser sessions are next; full goal ACTIVE.
+- Ruling: preserve the existing ADMIN-only unavailable settings/monitoring routes
+  until their assigned milestones, and use a standalone unknown-route fallback.
+  Cost: the fallback intentionally has no store chrome. No unimplemented screen
+  is claimed complete. Schema isolation replaces unavailable CREATEDB for tests;
+  cost: fixture migrations run once per owned schema, never change business users.
