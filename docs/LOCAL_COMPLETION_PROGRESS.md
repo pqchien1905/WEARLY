@@ -420,3 +420,13 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   Live Gemini acceptance still requires configured key and observed provider reply.
   Private image try-on, local operations/SEO/provider acceptance/final integration
   remain required; full A-Z goal ACTIVE.
+
+## Private Gemini try-on — in progress, 22 October 2026
+
+- Plan docs/superpowers/plans/2026-10-22-gemini-tryon.md. Bounded Gemini image
+  adapter and verified local/managed garment reader implemented; shared text/image
+  transport uses stateless interactions and sanitized errors. RED missing modules
+  ->30focused tests;77fullunit,lint/build PASS. No live provider call or schema
+  mutation. Worker remains disabled until durable quota/idempotent jobs are ready.
+- Backend jobs/uploads/deletion, remote photo/history UI, browser acceptance,
+  independent milestone review and business migration remain pending.

@@ -103,12 +103,12 @@ TryOnOutput {bytes,contentType,inputTokens?,outputTokens?}. GarmentReader resolv
 eligible reference metadata then read(ref,productId):Promise<NormalizedImage>.
 Shared transport returns parsed bounded interaction JSON, using injected GEMINI_HTTP.
 
-- [ ] Write failing tests for fixed URL/inline2images/storefalse, completed image,
+- [x] Write failing tests for fixed URL/inline2images/storefalse, completed image,
   abort/90s body timeout,16MiB envelope,8MiB image, badbase64/redirect/remote output,
   sanitized auth/rate-limit errors; garment seed/managed and escape/owner/deleted.
-- [ ] Run focused Jest; expected missing adapter failures. Implement adapter,
+- [x] Run focused Jest; expected missing adapter failures. Implement adapter,
   transport extraction and strict environment defaults, keeping Stylist tests green.
-- [ ] Run npm test,lint/build; expected all pass. Commit deliverable.
+- [x] Run npm test,lint/build;77unit PASS, lint/build clean. Commit deliverable.
 
 ## Task 2: private idempotent jobs, uploads and worker lifecycle
 
@@ -116,7 +116,7 @@ Files: schema.prisma and migration20261022060000_private_gemini_tryon;
 modules/ai/{ai-usage.service,ai.service,ai.controller,ai.module}.ts;
 modules/uploads/{uploads.service,uploads.controller,image-lifecycle.service}.ts;
 worker/{ai.processor,worker.module}.ts;queues/ai.queue.ts; storage service as needed;
-tests gemini-tryon.e2e-spec.ts,worker.e2e-spec.ts,storage.e2e-spec.ts and AI fixtures.
+tests gemini-tryon.e2e-spec.ts,worker.e2e-spec.ts,uploads.e2e-spec.ts and AI fixtures.
 
 Interfaces: Task1 provider/reader; reserveTx accepts STYLIST|TRY_ON, returns row/new;
 existing Stylist reserve/status contract remains. Try-on status exposes configured,

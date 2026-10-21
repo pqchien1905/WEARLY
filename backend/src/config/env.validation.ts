@@ -72,6 +72,28 @@ const schema = z
       .string()
       .regex(/^gemini-[a-z0-9.-]{1,70}$/)
       .default('gemini-3.5-flash-lite'),
+    GEMINI_TRYON_MODEL: z
+      .string()
+      .regex(/^gemini-[a-z0-9.-]{1,70}$/)
+      .default('gemini-nano-banana-2.1'),
+    AI_TRYON_USER_DAILY_LIMIT: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(1000)
+      .default(3),
+    AI_TRYON_GLOBAL_DAILY_LIMIT: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(10000)
+      .default(20),
+    AI_TRYON_ESTIMATE_VND: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(1000000)
+      .default(3000),
     AI_STYLIST_USER_DAILY_LIMIT: z.coerce
       .number()
       .int()
