@@ -16,7 +16,8 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
 - [x] Gemini Stylist and private asynchronous try-on with frontend integration.
 - [x] Local tooling/CI/monitoring/recovery and store content/SEO.
 - [x] Local customer/admin/browser acceptance.
-- [ ] Configured Gemini/VNPay external-provider verification (credentials pending).
+- [ ] External-provider acceptance: Gemini key pending; VNPay supplied credentials
+  tested live, but merchant approval is required (response 02, Website not approved).
 - [x] Final integration into root workspace and root runtime verification.
 
 Final root acceptance (22 October): 204 E2E, 86 unit, 53 tool and 428 Flutter
@@ -28,6 +29,11 @@ and unchanged source data. See [final integration](FINAL_LOCAL_INTEGRATION.md)
 for evidence and the remaining configured-provider/Mailpit-restart limitations.
 
 ## Evidence and rulings
+
+- 22 October live VNPay check: user-supplied credentials saved only to private
+  backend configuration. Checkout and querydr both report website not approved;
+  no successful payment or signed reply, so checksum validity remains unproven.
+  VNPay remains disabled until approval. See [live check](VNPAY_LIVE_CHECK_2026-10-22.md).
 
 - Baseline branch dd16a3c; audit found native business DB 8/12 migrations and
   login/content500 while readiness200. Backend17 unit, Flutter317 pass;
