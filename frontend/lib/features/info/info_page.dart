@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/providers.dart';
 import '../../app/api_providers.dart';
+import '../../app/store_details.dart';
 import '../../core/design/tokens.dart';
 import '../../core/widgets/primitives.dart';
 import '../../core/widgets/product_card.dart';
@@ -26,12 +27,20 @@ class InfoPage extends ConsumerWidget {
             ? 'Dữ liệu khi kết nối cửa hàng'
             : 'Quyền riêng tư trong bản demo',
         remote
-            ? 'Tài khoản, địa chỉ, giỏ hàng, đơn hàng, yêu thích, đánh giá và hồ sơ phong cách được lưu trên máy chủ. Tải lại trang không xóa các dữ liệu này. Phiên đăng nhập chỉ được giữ trong bộ nhớ của tab; sau khi tải lại, bạn cần đăng nhập lại. Quản trị viên được phân quyền có thể xem thông tin cần thiết để quản lý tài khoản và xử lý đơn hàng. Phòng thử AI chưa được kết nối trong chế độ trực tuyến hiện tại.'
+            ? StoreDetails.defaults['privacy']!
             : 'Ảnh bạn chọn chỉ được giữ trong bộ nhớ của tab hiện tại, không được tải lên máy chủ hoặc lưu vào browser storage. Xóa ảnh hoặc rời phòng thử để giải phóng ảnh. Tài khoản, giỏ hàng và đơn hàng là dữ liệu mô phỏng, mất khi tải lại ứng dụng. Không nhập thông tin cá nhân thật nếu không cần thiết.',
       ),
       '/shipping-returns' => (
         'Giao hàng & đổi trả',
-        'Chính sách demo: giao tiêu chuẩn 30.000đ trong 3–5 ngày; miễn phí từ 1.500.000đ. Giao nhanh 50.000đ. Đổi size trong 7 ngày khi chưa sử dụng. Bản demo không tạo vận đơn, giao hàng hoặc thu tiền. Chính sách thật sẽ được xác nhận trước khi mở bán.',
+        remote
+            ? StoreDetails.shipping
+            : 'Checkout demo hiển thị phí minh họa và không giao hàng hoặc thu tiền. Chưa có chính sách đổi trả thực tế.',
+      ),
+      '/terms' => (
+        'Điều khoản sử dụng',
+        remote
+            ? StoreDetails.defaults['terms']!
+            : 'Bản demo chỉ mô phỏng chức năng. Không thu tiền, giao hàng hoặc gọi AI thật.',
       ),
       '/size-guide' => (
         'Một lựa chọn vừa vặn hơn',
@@ -39,7 +48,9 @@ class InfoPage extends ConsumerWidget {
       ),
       _ => (
         'Ít hơn, nhưng đúng với bạn.',
-        '${BrandConfig.displayName} là ý tưởng về một tủ đồ đương đại: những phom dáng dễ kết hợp, chất liệu dễ chịu và màu sắc có chiều sâu. Đây là thương hiệu placeholder cho bản trình diễn, cùng catalog và ảnh minh họa. Không đại diện cho cửa hàng đang bán hàng thực tế.',
+        remote
+            ? StoreDetails.defaults['about']!
+            : '${BrandConfig.displayName} là ý tưởng về một tủ đồ đương đại: những phom dáng dễ kết hợp, chất liệu dễ chịu và màu sắc có chiều sâu. Đây là thương hiệu placeholder cho bản trình diễn, cùng catalog và ảnh minh họa. Không đại diện cho cửa hàng đang bán hàng thực tế.',
       ),
     };
     return PageBody(
@@ -59,15 +70,24 @@ class InfoPage extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 32),
-                if (path == '/shipping-returns')
+                if (path == '/shipping-returns' ||
+                    (remote && ['/privacy', '/about', '/terms'].contains(path)))
                   StoreContentText(
-                    field: 'policy',
+                    field: path == '/shipping-returns'
+                        ? 'policy'
+                        : path.substring(1),
                     fallback: content.$2,
                     style: T.body.copyWith(fontSize: 16),
                   )
                 else
                   Text(content.$2, style: T.body.copyWith(fontSize: 16)),
                 const SizedBox(height: 32),
+                if (remote)
+                  const Text(
+                    'Bản demo chạy local · Chưa bán hàng thực tế.',
+                    style: T.small,
+                  ),
+                const SizedBox(height: 16),
                 if (path == '/size-guide')
                   AppButton(
                     'Mở bảng số đo',

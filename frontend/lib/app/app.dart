@@ -292,6 +292,7 @@ GoRouter createRouter({String initialLocation = '/'}) {
             '/about',
             '/shipping-returns',
             '/privacy',
+            '/terms',
             '/size-guide',
           ])
             appRoute(

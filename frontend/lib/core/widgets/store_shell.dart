@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/config.dart';
+import '../../app/content_provider.dart';
+import 'store_content.dart';
 import '../../app/api_providers.dart';
 import '../../app/providers.dart';
 import '../design/tokens.dart';
@@ -253,27 +255,38 @@ bool _navSelected(String path, String target) =>
     path.startsWith('$target/') ||
     (target == '/shop' && (path.startsWith('/products/') || path == '/search'));
 
-class BrandMark extends StatelessWidget {
+class BrandMark extends ConsumerWidget {
   const BrandMark({super.key});
   @override
-  Widget build(BuildContext context) => Semantics(
-    label: BrandConfig.title,
-    child: FittedBox(
-      fit: BoxFit.scaleDown,
-      alignment: Alignment.centerLeft,
-      child: Text(
-        BrandConfig.name,
-        style: const TextStyle(
-          fontFamily: 'Manrope',
-          fontSize: 38,
-          fontWeight: FontWeight.w700,
-          height: 1.2,
-          letterSpacing: -2,
-          color: T.ink,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final name = ref.watch(remoteApiProvider)
+        ? (ref
+                  .watch(publishedContentProvider)
+                  .asData
+                  ?.value
+                  ?.details?['name'] ??
+              'WEARLY')
+        : BrandConfig.name;
+    return Semantics(
+      label: name,
+      excludeSemantics: true,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Text(
+          name,
+          style: const TextStyle(
+            fontFamily: 'Manrope',
+            fontSize: 38,
+            fontWeight: FontWeight.w700,
+            height: 1.2,
+            letterSpacing: -2,
+            color: T.ink,
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 void showSearchPanel(BuildContext context) =>
@@ -432,12 +445,13 @@ class _StoreFooterState extends ConsumerState<StoreFooter> {
                     children: [
                       const BrandMark(),
                       const SizedBox(height: 16),
-                      const Text(
-                        'Ít hơn, nhưng đúng với bạn.\nNhững món đồ ở lại cùng phong cách.',
+                      const StoreContentText(
+                        field: 'tagline',
+                        fallback: 'Bản demo chạy local',
                         style: T.body,
                       ),
                       const SizedBox(height: 16),
-                      Text(BrandConfig.email, style: T.small),
+                      const StoreContactDetails(),
                     ],
                   ),
                 ),
@@ -456,7 +470,8 @@ class _StoreFooterState extends ConsumerState<StoreFooter> {
                         ('Liên hệ hỗ trợ', '/contact'),
                         ('Giao hàng & đổi trả', '/shipping-returns'),
                         ('Quyền riêng tư', '/privacy'),
-                        ('Câu chuyện ${BrandConfig.displayName}', '/about'),
+                        ('Điều khoản sử dụng', '/terms'),
+                        ('Câu chuyện cửa hàng', '/about'),
                       ])
                         TextButton(
                           onPressed: () => context.go(link.$2),
@@ -518,10 +533,7 @@ class _StoreFooterState extends ConsumerState<StoreFooter> {
             spacing: 24,
             runSpacing: 12,
             children: [
-              const Text(
-                '© 2026 ${BrandConfig.displayName} · Thương hiệu minh họa',
-                style: T.small,
-              ),
+              const Text('© 2026 · Bản demo chạy local', style: T.small),
               const Text(
                 'Catalog & ảnh minh họa. Chưa bán hàng thực tế.',
                 style: T.small,

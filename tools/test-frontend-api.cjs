@@ -429,7 +429,7 @@ async function main() {
       await require('./verify-admin-browser.cjs')({ root, fixture, email, customerEmail, password, orderId: order.id });
       const saved = await db.product.findUniqueOrThrow({ where: { slug: fixture + '-admin' }, include: { variants: { include: { inventory: true } }, images: true, category: true, brand: true } });
       if (!saved.active || saved.variants.length !== 1 || saved.variants[0].inventory.quantity !== 8 || saved.variants[0].price.toString() !== '700000' || saved.images.length !== 1) throw new Error('Persisted admin product does not match browser operations');
-      if (saved.category.slug !== fixture + '-taxonomy' || saved.category.name !== 'BST thu đông kiểm thử' || saved.brand.slug !== fixture + '-taxonomy' || saved.brand.name !== 'Studio thu đông kiểm thử') throw new Error('Product taxonomy assignment did not persist');
+      if (saved.category.slug !== fixture + '-taxonomy' || saved.category.name !== 'BST thu đông kiểm thử' || saved.brand.slug !== fixture + '-taxonomy' || saved.brand.name !== 'AAA Studio thu đông kiểm thử') throw new Error('Product taxonomy assignment did not persist');
       const delivered = await db.order.findUniqueOrThrow({ where: { id: order.id }, include: { payment: { include: { settlement: true } } } });
       if (delivered.status !== 'DELIVERED' || delivered.shippingMethod !== 'standard' || delivered.payment.status !== 'PAID') throw new Error('Persisted order/COD state mismatch');
       if (delivered.payment.settlement?.reference !== 'COD-BROWSER-001' || delivered.payment.settlement?.actorId !== adminUser.user.id || delivered.payment.settlement?.amount.toString() !== '520000') throw new Error('Persisted COD receipt mismatch');

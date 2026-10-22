@@ -4,6 +4,7 @@ import '../../app/support_providers.dart';
 import '../../core/design/tokens.dart';
 import '../../core/network/api_client.dart';
 import '../../core/widgets/primitives.dart';
+import '../../core/widgets/store_content.dart';
 import '../../data/remote_support.dart';
 
 class RemoteContactPage extends ConsumerStatefulWidget {
@@ -41,7 +42,8 @@ class _RemoteContactPageState extends ConsumerState<RemoteContactPage> {
 
   Future<void> send() async {
     final repo = ref.read(supportRepositoryProvider);
-    if (busy || (repo.pendingContact == null && !form.currentState!.validate())) {
+    if (busy ||
+        (repo.pendingContact == null && !form.currentState!.validate())) {
       return;
     }
     setState(() {
@@ -90,10 +92,11 @@ class _RemoteContactPageState extends ConsumerState<RemoteContactPage> {
                 'Cần chọn size, xem đơn hay tìm hiểu phòng thử? Gửi nội dung để cửa hàng hỗ trợ.',
               ),
               const SizedBox(height: 24),
+              const StoreContactDetails(),
               if (receipt != null)
                 StatePanel(
                   title: 'Đã lưu yêu cầu hỗ trợ',
-                icon: Icons.check_circle_outline,
+                  icon: Icons.check_circle_outline,
                   message:
                       'Mã tiếp nhận: ${receipt!.id}\nYêu cầu đã được lưu. Phản hồi sẽ có trong hộp thư local sau khi quản trị viên trả lời.',
                   action: AppButton(

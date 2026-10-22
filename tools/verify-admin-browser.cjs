@@ -68,7 +68,7 @@ module.exports = async function verify({ root, fixture, email, customerEmail, pa
     assert(!requests.some(r => r.path.endsWith('/auth/browser/customer/login') || r.path.endsWith('/cart') || r.path.includes('/users/me')), 'Admin login must not initialize shopper data');
     for (const [kind, label, initial, renamed] of [
       ['categories', 'danh mục', 'BST mới kiểm thử', 'BST thu đông kiểm thử'],
-      ['brands', 'thương hiệu', 'Studio mới kiểm thử', 'Studio thu đông kiểm thử'],
+      ['brands', 'thương hiệu', 'AAA Studio mới kiểm thử', 'AAA Studio thu đông kiểm thử'],
     ]) {
       await route('/admin/' + kind);
       await button('Thêm ' + label);
@@ -97,7 +97,7 @@ module.exports = async function verify({ root, fixture, email, customerEmail, pa
     await page.getByRole('menuitem', { name: 'BST thu đông kiểm thử', exact: true }).click();
     await page.waitForTimeout(300);
     await page.getByText('Thương hiệu', { exact: true }).last().click();
-    await page.getByRole('menuitem', { name: 'Studio thu đông kiểm thử', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'AAA Studio thu đông kiểm thử', exact: true }).click();
     await page.waitForTimeout(300);
     await fill('Mô tả', 'Sản phẩm kiểm thử quản trị.');
     await fill('Chất liệu', 'Cotton');
@@ -177,6 +177,8 @@ module.exports = async function verify({ root, fixture, email, customerEmail, pa
     await route('/admin/content');
     await fill('Tiêu đề campaign', 'Campaign kiểm thử');
     await fill('Nội dung chính sách', 'Chính sách kiểm thử đã xuất bản.');
+    await fill('Tên cửa hàng', 'WEARLY kiểm thử');
+    await fill('Điều khoản sử dụng', 'Điều khoản local kiểm thử.');
     const firstContentSave = page.waitForResponse(r => r.url().endsWith('/api/v1/admin/content') && r.request().method() === 'PUT' && r.status() === 200);
     await button('Lưu bản nháp');
     await firstContentSave;
@@ -184,6 +186,7 @@ module.exports = async function verify({ root, fixture, email, customerEmail, pa
     await route('/');
     await page.getByText('Mặc theo\ncách bạn.', { exact: true }).waitFor();
     assert.equal(await page.getByText('Campaign kiểm thử', { exact: true }).count(), 0);
+    assert.equal(await page.getByText('WEARLY kiểm thử', { exact: true }).count(), 0);
     await route('/admin/content');
     await button('Xuất bản nội dung');
     await page.getByText('Chính sách kiểm thử đã xuất bản.', { exact: true }).first().waitFor();
@@ -193,6 +196,13 @@ module.exports = async function verify({ root, fixture, email, customerEmail, pa
     await route('/shipping-returns');
     await page.getByText('Chính sách kiểm thử đã xuất bản.', { exact: true }).waitFor();
     await page.screenshot({ path: path.join(output, 'published-policy-mobile.png') });
+    await route('/terms');
+    await page.getByText('Điều khoản local kiểm thử.',{exact:true}).waitFor();
+    await page.screenshot({path:path.join(output,'published-terms-mobile.png')});
+    await page.setViewportSize({width:1440,height:900});await page.waitForTimeout(400);
+    await page.getByRole('button',{name:'WEARLY kiểm thử',exact:true}).waitFor();
+    await page.screenshot({path:path.join(output,'published-terms-desktop.png')});
+    await page.setViewportSize({width:375,height:812});await page.waitForTimeout(400);
     await route('/admin/content');
     await fill('Tiêu đề campaign', 'Bản nháp tiếp theo');
     const nextContentSave = page.waitForResponse(r => r.url().endsWith('/api/v1/admin/content') && r.request().method() === 'PUT' && r.status() === 200);
@@ -210,9 +220,10 @@ module.exports = async function verify({ root, fixture, email, customerEmail, pa
     await button('Tải lại lịch sử');
     await page.getByText('Chuyển trạng thái đơn hàng', { exact: true }).first().waitFor();
     console.log('Chrome admin: persistent activity history and refresh on mobile.');
-    await route('/admin/customers'); await page.getByText('Khách hàng & tài khoản', { exact: true }).waitFor();
+    await route('/admin/customers'); await page.getByText('Khách hàng', { exact: true }).last().waitFor();
     await page.waitForTimeout(500);
-    assert((await page.locator('body').ariaSnapshot()).includes('Quản trị kiểm thử'));
+    assert((await page.locator('body').ariaSnapshot()).includes('Khách kiểm thử'));
+    assert(!(await page.locator('body').ariaSnapshot()).includes('Quản trị kiểm thử'));
     await button('Đăng xuất quản trị');
     await page.getByRole('button', { name: 'Đăng nhập quản trị', exact: true }).waitFor();
     await page.setViewportSize({ width: 1440, height: 900 });
@@ -225,16 +236,16 @@ module.exports = async function verify({ root, fixture, email, customerEmail, pa
     await route('/admin/customers');
     await page.getByRole('button', { name: 'Đăng nhập quản trị', exact: true }).waitFor();
     await login(email);
-    await page.getByText('Khách hàng & tài khoản', { exact: true }).waitFor();
+    await page.getByText('Khách hàng', { exact: true }).last().waitFor();
     await button('Đăng xuất quản trị');
     await route('/account');
     await page.getByText('Chào Khách kiểm thử.', { exact: true }).waitFor();
     await route('/admin/customers'); await login(email);
-    await page.getByText('Khách hàng & tài khoản', { exact: true }).waitFor();
+    await page.getByText('Khách hàng', { exact: true }).last().waitFor();
     await route('/account'); await button('Đăng xuất');
     await page.getByText('Đăng nhập để tiếp tục', { exact: true }).waitFor();
     await route('/admin/customers');
-    await page.getByText('Khách hàng & tài khoản', { exact: true }).waitFor();
+    await page.getByText('Khách hàng', { exact: true }).last().waitFor();
     console.log('Chrome admin: independent shopper/staff identities, both logout directions and safe return paths.');
     assert.deepEqual(errors, []);
     assert(requests.some(r => r.path.endsWith('/status') && r.status === 200));

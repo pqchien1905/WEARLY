@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/content_provider.dart';
+import '../../../app/store_details.dart';
 import '../../../core/design/tokens.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/widgets/primitives.dart';
@@ -53,16 +54,25 @@ class _ContentEditorState extends ConsumerState<_ContentEditor> {
   final form = GlobalKey<FormState>();
   late final banner = TextEditingController(text: widget.data['banner']);
   late final policy = TextEditingController(text: widget.data['policy']);
+  late final initialDetails = StoreDetails.fromJson(widget.data['details']);
+  late final details = {
+    for (final field in StoreDetails.fields)
+      field.key: TextEditingController(text: initialDetails[field.key]),
+  };
   bool saving = false, needsReload = false;
   String? error;
   bool get dirty =>
       banner.text.trim() != widget.data['banner'] ||
-      policy.text.trim() != widget.data['policy'];
+      policy.text.trim() != widget.data['policy'] ||
+      details.entries.any((e) => e.value.text.trim() != initialDetails[e.key]);
 
   @override
   void dispose() {
     banner.dispose();
     policy.dispose();
+    for (final controller in details.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -85,6 +95,9 @@ class _ContentEditorState extends ConsumerState<_ContentEditor> {
           'banner': banner.text.trim(),
           'policy': policy.text.trim(),
           'expectedVersion': widget.data['version'],
+          'details': {
+            for (final e in details.entries) e.key: e.value.text.trim(),
+          },
         });
       }
       if (!mounted) return;
@@ -150,6 +163,40 @@ class _ContentEditorState extends ConsumerState<_ContentEditor> {
                   validator: (v) => requiredText(v, max: 5000),
                 ),
                 const SizedBox(height: 16),
+                Text('Thông tin và chính sách', style: T.display(22)),
+                const Text(
+                  'Liên hệ để trống sẽ không hiển thị. Bản local luôn ghi rõ chế độ demo.',
+                  style: T.small,
+                ),
+                const SizedBox(height: 16),
+                for (final field in StoreDetails.fields) ...[
+                  TextFormField(
+                    controller: details[field.key],
+                    enabled: !saving && !needsReload,
+                    maxLength: field.max,
+                    minLines: field.lines,
+                    maxLines: field.lines == 1 ? 1 : 8,
+                    decoration: InputDecoration(labelText: field.label),
+                    validator: (v) {
+                      final value = v?.trim() ?? '';
+                      if (field.key == 'name') {
+                        return requiredText(value, max: field.max);
+                      }
+                      if (value.length > field.max) {
+                        return 'Tối đa ${field.max} ký tự.';
+                      }
+                      if (field.key == 'email' &&
+                          value.isNotEmpty &&
+                          !RegExp(
+                            r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
+                          ).hasMatch(value)) {
+                        return 'Email không hợp lệ.';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 const Text(
                   'Tiêu đề xuất hiện ở trang chủ; chính sách ở trang Giao hàng & đổi trả. Nội dung chỉ là văn bản, không thay đổi cách tính phí đơn hàng.',
                   style: T.small,
@@ -212,6 +259,19 @@ class _ContentEditorState extends ConsumerState<_ContentEditor> {
                   Text(published['banner'] as String, style: T.body),
                   const SizedBox(height: 12),
                   Text(published['policy'] as String, style: T.body),
+                  for (final field in StoreDetails.fields) ...[
+                    const SizedBox(height: 12),
+                    Text(field.label, style: T.small),
+                    Text(
+                      StoreDetails.fromJson(
+                            published['details'],
+                          )[field.key].isEmpty
+                          ? 'Chưa cung cấp'
+                          : StoreDetails.fromJson(
+                              published['details'],
+                            )[field.key],
+                    ),
+                  ],
                 ],
               ],
             ),

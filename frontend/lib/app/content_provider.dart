@@ -1,10 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/commerce_json.dart';
 import 'api_providers.dart';
+import 'store_details.dart';
 
 class PublishedContent {
-  const PublishedContent({required this.banner, required this.policy});
+  const PublishedContent({
+    required this.banner,
+    required this.policy,
+    this.details,
+  });
   final String banner, policy;
+  final StoreDetails? details;
 }
 
 final contentRevisionProvider = NotifierProvider<ContentRevision, int>(
@@ -34,5 +40,6 @@ final publishedContentProvider = FutureProvider.autoDispose<PublishedContent?>((
   return PublishedContent(
     banner: content['banner'] as String,
     policy: content['policy'] as String,
+    details: StoreDetails.fromJson(content['details']),
   );
 });

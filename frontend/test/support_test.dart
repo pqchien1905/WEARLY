@@ -167,6 +167,9 @@ void main() {
       final api = ApiClient(
         baseUrl: 'http://localhost/api/v1',
         client: MockClient((r) async {
+          if (r.method == 'GET' && r.url.path == '/api/v1/content') {
+            return response({'content': null});
+          }
           writes.add(jsonDecode(r.body));
           return writes.length == 1
               ? response({}, 503)

@@ -9,6 +9,7 @@ import 'package:nep_storefront/app/api_providers.dart';
 import 'package:nep_storefront/app/content_provider.dart';
 import 'package:nep_storefront/core/network/api_client.dart';
 import 'package:nep_storefront/core/widgets/store_content.dart';
+import 'package:nep_storefront/core/widgets/store_shell.dart';
 import 'package:nep_storefront/features/admin/remote/admin_providers.dart';
 import 'package:nep_storefront/features/admin/remote/content_page.dart';
 import 'package:nep_storefront/features/info/info_page.dart';
@@ -62,6 +63,22 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('brand has one accessible published name', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await mount(
+      tester,
+      const BrandMark(),
+      (r) async => jsonResponse({
+        'content': {
+          'banner': 'B',
+          'policy': 'P',
+          'details': {'name': 'Local Shop'},
+        },
+      }),
+    );
+    expect(tester.getSemantics(find.byType(BrandMark)).label, 'Local Shop');
+    semantics.dispose();
+  });
   testWidgets(
     'saved drafts remain separate and publish only the observed saved revision',
     (tester) async {
@@ -88,6 +105,7 @@ void main() {
               'id': 'content-1',
               'banner': body['banner'],
               'policy': body['policy'],
+              'details': body['details'],
               'version': (state['version'] as int) + 1,
             };
           } else {
@@ -98,6 +116,7 @@ void main() {
               'published': {
                 'banner': state['banner'],
                 'policy': state['policy'],
+                'details': state['details'],
                 'version': 2,
               },
             };
@@ -108,6 +127,10 @@ void main() {
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Tiêu đề campaign'),
         'Campaign <plain>',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Tên cửa hàng'),
+        'New local name',
       );
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Nội dung chính sách'),
@@ -126,6 +149,10 @@ void main() {
       expect(writes.length, 1);
       expect(writes.single.method, 'PUT');
       expect(
+        (jsonDecode(writes.single.body) as Map)['details'],
+        containsPair('name', 'New local name'),
+      );
+      expect(
         find.textContaining('Bản nháp chỉ quản trị viên nhìn thấy.'),
         findsOneWidget,
       );
@@ -133,6 +160,7 @@ void main() {
       expect(writes.length, 2);
       expect(writes.last.url.path, '/api/v1/admin/content/publish');
       expect(find.text('Published policy text'), findsWidgets);
+      expect(find.text('New local name'), findsWidgets);
       expect(tester.takeException(), isNull);
     },
   );
@@ -286,6 +314,54 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('được lưu trên máy chủ'), findsOneWidget);
       expect(find.text('Xem chính sách cửa hàng'), findsOneWidget);
+    },
+  );
+  testWidgets(
+    'published identity and terms render without exposing draft or empty contacts',
+    (tester) async {
+      await mount(
+        tester,
+        const Column(
+          children: [
+            StoreContentText(field: 'name', fallback: 'Fallback'),
+            StoreContentText(field: 'terms', fallback: 'Default terms'),
+          ],
+        ),
+        (r) async => jsonResponse({
+          'content': {
+            'banner': 'B',
+            'policy': 'P',
+            'details': {'name': 'Published shop', 'terms': 'Published terms'},
+          },
+          'details': {'name': 'PRIVATE'},
+        }),
+      );
+      expect(find.text('Published shop'), findsOneWidget);
+      expect(find.text('Published terms'), findsOneWidget);
+      expect(find.text('PRIVATE'), findsNothing);
+    },
+  );
+  testWidgets(
+    'blank published contacts stay hidden and nonblank contacts render',
+    (tester) async {
+      var phone = '';
+      final (_, container) = await mount(
+        tester,
+        const StoreContactDetails(),
+        (r) async => jsonResponse({
+          'content': {
+            'banner': 'B',
+            'policy': 'P',
+            'details': {'email': '', 'phone': phone, 'address': ''},
+          },
+        }),
+      );
+      expect(find.textContaining('@wearly'), findsNothing);
+      expect(find.byType(Text), findsNothing);
+      phone = '0123 fixture';
+      container.invalidate(publishedContentProvider);
+      await tester.pumpAndSettle();
+      expect(find.text(phone), findsOneWidget);
     },
   );
 }

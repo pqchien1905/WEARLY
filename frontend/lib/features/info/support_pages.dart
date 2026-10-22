@@ -167,26 +167,26 @@ class FaqPage extends ConsumerWidget {
                     ? 'Đặt hàng ở đây được xử lý thế nào?'
                     : 'Đặt hàng ở đây có bị tính tiền không?',
                 remote
-                    ? 'Đơn COD được lưu trên máy chủ và có thể xem lại sau khi đăng nhập. Hiện chưa có thanh toán trực tuyến. Trạng thái giao hàng không đồng nghĩa đã xác nhận thu tiền.'
+                    ? 'Đơn hàng được lưu trên máy chủ local và có thể xem lại sau khi đăng nhập. VNPay sử dụng sandbox khi được cấu hình; vận chuyển được mô phỏng. Với COD, trạng thái đã giao không đồng nghĩa đã xác nhận thu tiền: cần đối soát có phân quyền.'
                     : 'Không. Checkout chỉ tạo đơn trong phiên demo, không thu tiền và không gửi hàng. Tải lại trang sẽ xóa đơn.',
               ),
               (
                 'Ảnh của tôi có được tải lên mạng không?',
                 remote
-                    ? 'Phòng thử AI chưa được kết nối trong chế độ trực tuyến. Trang phòng thử hiện tại không gửi ảnh của bạn lên máy chủ.'
+                    ? 'Ảnh được lưu riêng tư trên máy chủ sau khi bạn đồng ý. Khi thử đồ, hệ thống chỉ gửi ảnh người và trang phục tới Google Gemini sau bước đồng ý riêng. Bạn có thể xóa ảnh; xem trang Quyền riêng tư để biết cách lưu và xử lý dữ liệu.'
                     : 'Không. Ảnh nằm trong bộ nhớ của tab. Xóa ảnh hoặc rời phòng thử sẽ giải phóng ảnh; trang kết quả chỉ giữ thông tin mô phỏng, không chứa ảnh cá nhân.',
               ),
               (
                 'Stylist và thử đồ có dùng AI thật không?',
                 remote
-                    ? 'Chưa. Các trang Stylist và thử đồ trực tuyến thông báo chưa khả dụng; không tạo hoặc hiển thị kết quả AI giả.'
+                    ? 'Có thể dùng Google Gemini khi đã cấu hình khóa và còn hạn mức. Chưa cấu hình thì chức năng thông báo chưa khả dụng. Mỗi lần gửi cần thao tác và đồng ý của bạn; tải lại trang không tự tạo lượt AI mới. Kết quả chỉ mang tính tham khảo.'
                     : 'Chưa. Stylist chọn sản phẩm từ catalog theo lựa chọn của bạn. Phòng thử hiển thị tiến trình và kết quả minh họa, không tạo ảnh mặc thử thực tế.',
               ),
               (
                 'Có thể đổi size hoặc trả hàng không?',
                 remote
                     ? 'Xem trang Giao hàng & đổi trả để đọc chính sách cửa hàng đã xuất bản. Khi chưa có chính sách được xác nhận, trang sẽ ghi rõ nội dung demo.'
-                    : 'Chính sách demo cho phép đổi size trong 7 ngày khi chưa sử dụng. Chưa có dịch vụ đổi trả thực tế; chính sách sẽ được xác nhận trước khi mở bán.',
+                    : 'Chưa có dịch vụ đổi trả thực tế trong bản demo. Chính sách cần được xác nhận trước khi mở bán.',
               ),
               (
                 'Vì sao ảnh không đổi khi chọn một số màu?',

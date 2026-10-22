@@ -103,6 +103,9 @@ void main() {
       final api = ApiClient(
         baseUrl: 'http://localhost/api/v1',
         client: MockClient((r) async {
+          if (r.method == 'GET' && r.url.path == '/api/v1/content') {
+            return http.Response('{"content":null}', 200);
+          }
           writes.add(r);
           return http.Response('{"changed":true}', 200);
         }),

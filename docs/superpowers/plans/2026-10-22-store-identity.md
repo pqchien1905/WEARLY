@@ -43,11 +43,11 @@ Files: frontend/lib/features/admin/remote/content_page.dart; core/widgets/
 remote_contact_page}.dart; app routes; test identity widget/provider tests.
 Consumes API details; produces public name/contact/policies and admin editing.
 
-- [ ] Add failing widget/provider tests for details, blank-contact hiding, public
+- [x] Add failing widget/provider tests for details, blank-contact hiding, public
   defaults, policy/terms rendering, editor request and no draft leak.
-- [ ] Implement details model/editor/public consumers, accurate FAQ and terms route,
+- [x] Implement details model/editor/public consumers, accurate FAQ and terms route,
   retaining existing layout/loading/errors/version checks. Tests GREEN.
-- [ ] Flutter analyze/tests, responsive browser acceptance; commit.
+- [x] Flutter analyze/tests, responsive browser acceptance; commit.
 
 ### Task3: HTML previews, migration and final acceptance
 
