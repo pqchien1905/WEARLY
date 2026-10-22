@@ -493,3 +493,14 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   start/stop, unavailable Redis with healthy DB, recovery, private/no-store response,
   ADMIN-only deep link and customer403.375/1440 screenshots inspected. No external
   provider calls. Owned local process lifecycle and CI/review still pending.
+- Native tools/local.ps1 build|start|status|stop implemented. Hidden API/worker/web
+  children authenticate workspace/run/role/secret through loopback control; no PID
+  killing. Unverified state is retained for inspection, foreign ports refused,
+  partial starts cleaned, no status writes. Artifact hashes bind build to API URL.
+  Backend HOST defaults127.0.0.1; Compose explicitly0.0.0.0. Static server refuses
+  traversal/outside junctions; runtime logs rotate and accept only known event codes.
+- Native compiled acceptance PASS on dedicated testDB/testbucket/UUID queue/ports:
+  unavailable Redis blocks startup, healthy API/worker/web start, authenticated
+  status/stop and heartbeat removal, ports freed, services still available and
+  backend/.env bytes unchanged.200E2E,84unit,29tool tests,lint/build PASS. Runtime
+  build commands prioritize the selected Node24 path. CI/guide/final review remain.

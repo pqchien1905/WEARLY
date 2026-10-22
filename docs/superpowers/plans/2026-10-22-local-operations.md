@@ -128,12 +128,12 @@ Interfaces: runtime build/start/status/stop accept workspace/ports in validated 
 config; child control GET status/POST stop requires per-run secret +workspace/role
 identity. Parent receives only health/state/exit results, not environment contents.
 
-- [ ] RED tests for stale/forged state, PID reuse, foreign port, path escape,
+- [x] RED tests for stale/forged state, PID reuse, foreign port, path escape,
   startup rollback, failed health, zero writes on status and nonzero native exit.
-- [ ] Implement hidden children with control authentication, bounded start/stop,
+- [x] Implement hidden children with control authentication, bounded start/stop,
   log containment/rotation and matching local CORS/recovery origin. Existing native
   services are prerequisites, not stop targets. Build never migrates or seeds.
-- [ ] Verify real start/status/stop on isolated test DB/prefix/ports; test worker
+- [x] Verify real start/status/stop on isolated test DB/prefix/ports; test worker
   heartbeat and API readiness plus static web. Keep normal services untouched.
   Run relevant backend/tool/Flutter checks; commit.
 

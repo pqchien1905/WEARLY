@@ -6,6 +6,21 @@ const good = {
   CORS_ORIGINS: 'http://localhost:5173',
 };
 describe('configuration', () => {
+  it('defaults to loopback binding and accepts only supported explicit addresses', () => {
+    expect(validateEnv(good)).toHaveProperty('HOST', '127.0.0.1');
+    expect(validateEnv({ ...good, HOST: '0.0.0.0' })).toHaveProperty(
+      'HOST',
+      '0.0.0.0',
+    );
+    for (const host of [
+      'example.test',
+      'http://127.0.0.1',
+      '127.0.0.1:3000',
+      '',
+    ]) {
+      expect(() => validateEnv({ ...good, HOST: host })).toThrow();
+    }
+  });
   it('requires loopback non-production SMTP for local transaction mail', () => {
     expect(validateEnv(good)).toHaveProperty('LOCAL_MAIL_ENABLED', 'false');
     const local = {
