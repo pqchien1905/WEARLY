@@ -313,3 +313,8 @@ Dashboard hiển thị tiền đã thu và COD đã giao chờ đối soát riê
 VNPay sandbox, vận chuyển mô phỏng local, đổi trả và hoàn tiền đã có luồng local;
 GHN chỉ là tùy chọn tương lai, chưa tích hợp. Kết nối provider thật cần nghiệm thu
 với cấu hình của chủ máy. Xem [tiến độ hiện tại](LOCAL_COMPLETION_PROGRESS.md).
+
+Thông tin cửa hàng/chính sách dùng bản nháp và xuất bản trong quản trị; xem
+[STORE_INFORMATION.md](STORE_INFORMATION.md). Migration27 thêm hai cột nullable,
+đã có sao lưu native và đối chiếu dữ liệu cũ. HTML preview dùng
+`LOCAL_API_ORIGIN` và `LOCAL_STORE_ORIGIN`; đặt đúng cổng loopback khi đổi cổng chạy.

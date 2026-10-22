@@ -560,3 +560,29 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
 - Review/rulings: [recovery implementation log](RECOVERY_IMPLEMENTATION_LOG.md).
   Identity/policies/SEO, configured provider acceptance and final root integration
   remain; A-Z goal ACTIVE.
+
+## Store identity/policies/local HTML — acceptance and review in progress,22October2026
+
+- User explicitly chose WEARLY and a local-demo label; contacts blank. Commits
+  db84626(plan),cf2ea4f(typed publication),79d6a96(Flutter surfaces). Nullable JSON
+  migration27; legacy saves preserve details, null/malformed nested DTOs rejected,
+  draft/private publication/version guards retained.5PG content tests PASS.
+- Editor/header/footer/contact/about/privacy/terms now consume published fields;
+  blank contacts hidden, no invented7day return promise. FAQ updated for Gemini,
+  sandbox payments, simulator and COD reconciliation.8 focused widgets PASS;
+  full427+2existing skips before final accessibility fix; analyze clean.
+- Chrome1440/375 full-admin PASS: persisted identity/terms, draft isolation,
+  product/catalog/stock/COD/activity, independent shopper/admin sessions. Harness
+  repaired for existing paginated brands/customer-only list; no business data edits.
+- Native business26->27 PASS after archive1792634251621-62861a61-2e56-4280-8a59-897d48270a4e.
+  All41 business-table hashes preserved excluding new nullable columns, old migration
+  rows/schema/env unchanged; private archive/identity-migration.json evidence.
+- HTML previews/sitemap/robots use configured loopback origins, escaped text,
+  published identity, active catalog and noindex/no-store.7 targetedPG tests PASS,
+  origin validation covered. Full acceptance and sole milestone review pending.
+  Guide [STORE_INFORMATION.md](STORE_INFORMATION.md). Root Gemini/VNPay key fields
+  still empty at last read-only check; no real-provider acceptance claimed.
+- Full acceptance PASS204E2E,86unit,53tool,428Flutter+2existing opt-in skips,
+  lint/build/analyze. Read-only business smoke confirms HTML/sitemap/robots200 with
+  noindex/no-store, catalog/content/readiness200 and private401. Runtime and final
+  independent review remain; native services/env preserved.

@@ -1,4 +1,16 @@
 import { z } from 'zod';
+const localOrigin = z.string().refine((value) => {
+  try {
+    const url = new URL(value);
+    return (
+      ['http:', 'https:'].includes(url.protocol) &&
+      ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) &&
+      url.origin === value
+    );
+  } catch {
+    return false;
+  }
+}, 'Use a loopback HTTP(S) origin without path or credentials');
 const secret = z
   .string()
   .min(32)
@@ -10,6 +22,8 @@ const schema = z
       .default('development'),
     PORT: z.coerce.number().int().min(1).max(65535).default(3000),
     HOST: z.enum(['127.0.0.1', '0.0.0.0', '::1']).default('127.0.0.1'),
+    LOCAL_API_ORIGIN: localOrigin.default('http://127.0.0.1:3000'),
+    LOCAL_STORE_ORIGIN: localOrigin.default('http://localhost:8080'),
     DATABASE_URL: z
       .string()
       .url()

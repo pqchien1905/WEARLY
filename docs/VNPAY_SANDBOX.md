@@ -39,7 +39,9 @@ For a publicly reachable test API, configure the merchant IPN URL as
 reference, amount and transaction status. Duplicate notifications are idempotent.
 Late success on a cancelled order and a second successful attempt are retained
 and flagged **CẦN KIỂM TRA** in admin order details. They never deduct or restore
-stock again. Refund operations are a subsequent implementation milestone.
+stock again. Authorized return/refund workflows now retain refund receipts and
+reconcile sandbox results; see the return/refund guides before retrying an
+unresolved refund. They do not create real-money transfers.
 
 Verification: `node tools/test-frontend-api.cjs --payments` runs real Chrome and
 PostgreSQL with a dedicated `_test` database and independently signed local

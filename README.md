@@ -65,3 +65,8 @@ Hai khu vực có giao diện và phiên đăng nhập riêng; đăng xuất m�
 Chạy `.\tools\frontend.ps1 run` để xem demo độc lập. Khôi phục mật khẩu đã có API/worker/SMTP, cần bật và cấu hình gửi thư; xem [hướng dẫn](docs/password-recovery.md). Gemini Stylist/Try-On, VNPay sandbox, giao hàng mô phỏng và đối soát COD đã có luồng local. Kết nối provider thật còn cần khóa và nghiệm thu riêng; xem [tiến độ hiện tại](docs/LOCAL_COMPLETION_PROGRESS.md).
 
 Cấp ADMIN cho một tài khoản đã đăng ký, từ thư mục gốc: `node tools/grant-admin.cjs email-cua-ban@example.com`. Công cụ chỉ đổi quyền tài khoản hiện có và thu hồi các phiên cũ; không tạo mật khẩu mặc định. Đăng nhập lại sau khi được cấp quyền. Chi tiết: [Quản trị trực tuyến](docs/admin.md).
+
+**Quản trị → Nội dung** cho phép sửa và xuất bản tên, liên hệ, giới thiệu và chính
+sách cửa hàng. Mặc định giữ **WEARLY · Bản demo chạy local**, không có liên hệ thật.
+HTML sản phẩm và sitemap kiểm tra trên local vẫn giữ noindex.
+[Hướng dẫn thông tin cửa hàng](docs/STORE_INFORMATION.md).

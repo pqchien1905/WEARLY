@@ -4,9 +4,17 @@ import {
   ContentController,
 } from './content.controller';
 import { ContentService } from './content.service';
+import { StorefrontController } from './storefront.controller';
+import { StorefrontService } from './storefront.service';
+import { ProductsModule } from '../products/products.module';
 
 @Module({
-  controllers: [ContentController, AdminContentController],
-  providers: [ContentService],
+  imports: [ProductsModule],
+  controllers: [
+    ContentController,
+    AdminContentController,
+    StorefrontController,
+  ],
+  providers: [ContentService, StorefrontService],
 })
 export class ContentModule {}

@@ -9,6 +9,13 @@ export function configureApp(app: INestApplication) {
   const config = app.get(ConfigService);
   app.setGlobalPrefix('api/v1');
   app.use(helmet());
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.path.startsWith('/api/v1/storefront/')) {
+      res.setHeader('X-Robots-Tag', 'noindex,nofollow');
+      res.setHeader('Cache-Control', 'no-store');
+    }
+    next();
+  });
   app.enableCors({
     origin: config
       .getOrThrow<string>('CORS_ORIGINS')

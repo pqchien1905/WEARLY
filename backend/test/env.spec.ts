@@ -6,6 +6,25 @@ const good = {
   CORS_ORIGINS: 'http://localhost:5173',
 };
 describe('configuration', () => {
+  it('accepts only explicit loopback origins for local metadata links', () => {
+    expect(validateEnv(good)).toHaveProperty(
+      'LOCAL_API_ORIGIN',
+      'http://127.0.0.1:3000',
+    );
+    for (const value of [
+      'https://evil.example',
+      'http://localhost:3000/path',
+      'http://localhost:3000/',
+      'http://user:password@localhost:3000',
+      'http://localhost:3000?q=1',
+      'http://localhost:3000/#hash',
+    ]) {
+      expect(() => validateEnv({ ...good, LOCAL_API_ORIGIN: value })).toThrow();
+      expect(() =>
+        validateEnv({ ...good, LOCAL_STORE_ORIGIN: value }),
+      ).toThrow();
+    }
+  });
   it('defaults to loopback binding and accepts only supported explicit addresses', () => {
     expect(validateEnv(good)).toHaveProperty('HOST', '127.0.0.1');
     expect(validateEnv({ ...good, HOST: '0.0.0.0' })).toHaveProperty(

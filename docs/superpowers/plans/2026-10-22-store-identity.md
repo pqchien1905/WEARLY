@@ -57,9 +57,9 @@ frontend/web/index.html; tools acceptance/browser as needed; docs guides/progres
 Produces GET /api/v1/storefront/products/:slug,sitemap.xml,robots.txt; explicit
 noindex/no-store. Configured loopback origins only, trusted published content.
 
-- [ ] Add failing HTML tests for escaped values, trusted origins, unpublished name,
+- [x] Add failing HTML tests for escaped values, trusted origins, unpublished name,
   inactive/missing404, sitemap active-only/absolute URLs and noindex headers.
-- [ ] Implement rendering/routes/config; use ProductsService, bounded50000 sitemap,
+- [x] Implement rendering/routes/config; use ProductsService, bounded50000 sitemap,
   escaped plain text and no scripts. Targeted tests GREEN; commit.
 - [ ] Fresh native business backup, apply additive migration27 without seed; compare
   preexisting data/columns and env hashes. Run full acceptance and native browser

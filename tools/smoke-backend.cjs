@@ -20,6 +20,14 @@ async function main() {
       if (response.status !== expected) throw new Error('Unexpected response for ' + route);
       console.log(route + ': ' + response.status);
     }
+    const catalog=await (await fetch(base+'/api/v1/products',{signal:AbortSignal.timeout(10000)})).json();
+    const paths=['/api/v1/storefront/sitemap.xml','/api/v1/storefront/robots.txt'];
+    if(catalog.items?.length) paths.push('/api/v1/storefront/products/'+encodeURIComponent(catalog.items[0].slug));
+    for(const route of paths){
+      const response=await fetch(base+route,{signal:AbortSignal.timeout(10000)});
+      if(response.status!==200||response.headers.get('x-robots-tag')!=='noindex,nofollow'||response.headers.get('cache-control')!=='no-store') throw Error('Local HTML preview verification failed');
+    }
+    console.log('Local HTML/sitemap/robots200 with noindex/no-store verified. Product HTML checked: '+Boolean(catalog.items?.length));
     const response = await fetch(base + '/api/docs-json', { signal: AbortSignal.timeout(10000) });
     if (!response.ok) throw new Error('Development Swagger is required for this smoke test');
     const schema = await response.json();
