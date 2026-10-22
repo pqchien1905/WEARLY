@@ -13,9 +13,11 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
 - [x] Authorized cancellation, customer returns and refunds.
 - [x] Local email inbox, order notifications and persistent customer support.
 - [x] Staff roles/audit detail and persistent safe sessions.
-- [ ] Gemini Stylist and private asynchronous try-on with frontend integration.
-- [ ] Local tooling/CI/monitoring/recovery and store content/SEO.
-- [ ] Customer/admin/browser acceptance and configured provider verification.
+- [x] Gemini Stylist and private asynchronous try-on with frontend integration.
+- [x] Local tooling/CI/monitoring/recovery and store content/SEO.
+- [x] Local customer/admin/browser acceptance.
+- [ ] Configured Gemini/VNPay external-provider verification (credentials pending).
+- [ ] Final integration into root workspace and root runtime verification.
 
 ## Evidence and rulings
 
@@ -561,7 +563,7 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   Identity/policies/SEO, configured provider acceptance and final root integration
   remain; A-Z goal ACTIVE.
 
-## Store identity/policies/local HTML — acceptance and review in progress,22October2026
+## Store identity/policies/local HTML — complete,22October2026
 
 - User explicitly chose WEARLY and a local-demo label; contacts blank. Commits
   db84626(plan),cf2ea4f(typed publication),79d6a96(Flutter surfaces). Nullable JSON
@@ -586,3 +588,8 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   lint/build/analyze. Read-only business smoke confirms HTML/sitemap/robots200 with
   noindex/no-store, catalog/content/readiness200 and private401. Runtime and final
   independent review remain; native services/env preserved.
+- Final runtime start/status/stop PASS; one independent review had no Critical or
+  Important findings. Minor mixed-case URL header gap fixed with real HTTP RED->
+  GREEN; lint/build and final native business smoke PASS. No deferred findings.
+  [Identity implementation log](STORE_IDENTITY_IMPLEMENTATION_LOG.md) preserves
+  decisions/evidence. Product code complete; provider keys and root integration remain.

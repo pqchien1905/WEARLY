@@ -128,6 +128,11 @@ describe('Local product HTML previews', () => {
     expect(published.text).not.toContain('PRIVATE');
   });
   it('lists only active product previews in absolute XML and refuses hidden products', async () => {
+    const alias = await request(app.getHttpServer())
+      .get('/API/V1/STOREFRONT/sitemap.xml')
+      .expect(200);
+    expect(alias.headers['x-robots-tag']).toBe('noindex,nofollow');
+    expect(alias.headers['cache-control']).toBe('no-store');
     const sitemap = () =>
       request(app.getHttpServer())
         .get('/api/v1/storefront/sitemap.xml')

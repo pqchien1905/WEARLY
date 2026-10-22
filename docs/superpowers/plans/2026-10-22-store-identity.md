@@ -61,10 +61,10 @@ noindex/no-store. Configured loopback origins only, trusted published content.
   inactive/missing404, sitemap active-only/absolute URLs and noindex headers.
 - [x] Implement rendering/routes/config; use ProductsService, bounded50000 sitemap,
   escaped plain text and no scripts. Targeted tests GREEN; commit.
-- [ ] Fresh native business backup, apply additive migration27 without seed; compare
+- [x] Fresh native business backup, apply additive migration27 without seed; compare
   preexisting data/columns and env hashes. Run full acceptance and native browser
  375/1440, record precise provider/CI limitations and operator guide.
-- [ ] One fresh strongest-model review of whole milestone with Review Focus,
+- [x] One fresh strongest-model review of whole milestone with Review Focus,
   regrade by user effect, one RED->GREEN fix pass; preserve ledger, cleanup only
   own scratch and commit. Continue configured-provider acceptance/root integration.
 
