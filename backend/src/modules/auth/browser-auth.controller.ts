@@ -16,7 +16,7 @@ import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { Public } from '../../common/decorators/auth';
 import { AuthService, BrowserScope, browserLifetime } from './auth.service';
-import { LoginDto, RegisterDto } from './dto/auth.dto';
+import { LoginDto, RegisterDto, AdminLoginDto } from './dto/auth.dto';
 
 const loopback = (host: string) =>
   ['localhost', '127.0.0.1', '[::1]', '::1'].includes(host);
@@ -130,7 +130,7 @@ export class BrowserAuthController {
   }
   @Post('admin/login')
   async adminLogin(
-    @Body() dto: LoginDto,
+    @Body() dto: AdminLoginDto,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {

@@ -15,7 +15,7 @@ async function main() {
   await db.connect();
   try {
     await db.query('BEGIN');
-    const { rows } = await db.query('SELECT id, role, active FROM "User" WHERE email = $1 FOR UPDATE', [email]);
+    const { rows } = await db.query('SELECT id, username, role, active FROM "User" WHERE email = $1 FOR UPDATE', [email]);
     if (!rows[0]) throw new Error('Account does not exist. Register in WEARLY first, then run this command again.');
     if (!rows[0].active) throw new Error('Account is disabled. No changes made.');
     if (rows[0].role !== 'ADMIN') {
@@ -23,7 +23,7 @@ async function main() {
       await db.query('UPDATE "RefreshToken" SET "revokedAt" = NOW(), "updatedAt" = NOW() WHERE "userId" = $1 AND "revokedAt" IS NULL', [rows[0].id]);
     }
     await db.query('COMMIT');
-    console.log('ADMIN ready for ' + email + '. Sign in again in WEARLY.');
+    console.log('ADMIN ready. Username: ' + rows[0].username + '. Sign in again with the existing password.');
   } catch (error) {
     await db.query('ROLLBACK');
     throw error;

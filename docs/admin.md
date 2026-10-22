@@ -2,11 +2,13 @@
 
 Chạy backend bằng `npm run start:dev` trong `backend`. Từ thư mục gốc chạy `.\tools\frontend.ps1 api`; nếu đang đứng trong `frontend`, dùng `..\tools\frontend.ps1 api`.
 
-Mở `http://localhost:8080/#/admin/login` để đăng nhập quản trị. Trang này có giao diện riêng, không có menu mua sắm, giỏ hàng hay đăng ký công khai. Truy cập trực tiếp một trang quản trị khi chưa đăng nhập sẽ chuyển tới form này, rồi trở lại đúng trang sau khi xác thực. Liên kết **Quản trị** cuối cửa hàng cũng mở form quản trị.
+Mở `http://localhost:8080/#/admin/login` để đăng nhập quản trị bằng **Tên đăng nhập** và mật khẩu. Tài khoản chủ máy local dùng tên `admin`; mật khẩu do chủ máy yêu cầu được đặt trực tiếp ở máy, không hardcode trong ứng dụng. Form quản trị không nhận email. Tên đăng nhập được chuẩn hóa chữ thường, gồm 3–64 ký tự chữ, số, dấu chấm, gạch dưới hoặc gạch ngang. Trang này không có đăng ký công khai; khách hàng vẫn đăng nhập bằng email.
+
+Migration `20261022190000_admin_username` bổ sung tên đăng nhập duy nhất cho mỗi tài khoản. Các tài khoản cũ/đăng ký mới được cấp mã tự sinh; quản trị viên xem tên này ở **Nhân sự & quyền** để cung cấp cho nhân viên. Lệnh cấp quyền bên dưới cũng in tên đăng nhập. Email vẫn được lưu để liên hệ/khôi phục tài khoản, không dùng trong yêu cầu đăng nhập quản trị.
 
 Khách hàng dùng `http://localhost:8080/#/login`. Hai khu vực giữ phiên độc lập: đăng nhập, hết phiên hoặc đăng xuất ở một khu vực không thay đổi phiên còn lại. ADMIN vẫn có thể đăng nhập riêng ở cửa hàng để mua sắm. Tài khoản CUSTOMER bị từ chối ngay tại API đăng nhập quản trị; backend tiếp tục kiểm tra quyền trên mọi yêu cầu quản trị.
 
-Các phiên chỉ ở RAM, vì vậy reload trình duyệt cần đăng nhập lại. Dữ liệu vẫn được giữ trên PostgreSQL. Chế độ demo (`run`) hiển thị rõ dữ liệu minh họa và không yêu cầu tài khoản quản trị thật.
+Phiên quản trị giữ qua tải lại bằng cookie HttpOnly; access token ở RAM. Dữ liệu vẫn được giữ trên PostgreSQL. Chế độ demo (`run`) hiển thị rõ dữ liệu minh họa và không yêu cầu tài khoản quản trị thật.
 
 Tại máy phát triển, cấp quyền cho email đã đăng ký bằng:
 

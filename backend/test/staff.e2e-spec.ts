@@ -84,7 +84,7 @@ describe('Staff authorization and atomic administration', () => {
         .send({ name: 'Staff fixture', email, password })
         .expect(201)
     ).body as {
-      user: { id: string; email: string };
+      user: { id: string; email: string; username: string };
       accessToken: string;
       refreshToken: string;
     };
@@ -108,7 +108,7 @@ describe('Staff authorization and atomic administration', () => {
     (
       await request(app.getHttpServer())
         .post('/api/v1/auth/admin/login')
-        .send({ email, password })
+        .send({ username: (await db.user.findUniqueOrThrow({ where: { email } })).username, password })
         .expect(201)
     ).body.accessToken as string;
 
@@ -134,6 +134,7 @@ describe('Staff authorization and atomic administration', () => {
       'name',
       'role',
       'staffVersion',
+      'username',
     ]);
     await request(app.getHttpServer())
       .post('/api/v1/auth/register')
@@ -146,7 +147,7 @@ describe('Staff authorization and atomic administration', () => {
       .expect(400);
     await request(app.getHttpServer())
       .post('/api/v1/auth/admin/login')
-      .send({ email: customer.user.email, password })
+      .send({ username: customer.user.username, password })
       .expect(403);
   });
   it('validates all staff mutation fields and requires administrator authority', async () => {

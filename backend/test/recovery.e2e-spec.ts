@@ -185,14 +185,15 @@ redisDescribe('Password recovery with PostgreSQL, Redis and SMTP', () => {
     const first = mailToken(mails[0]);
     const other = await issue();
     await db.user.update({ where: { id: users[0] }, data: { role: 'ADMIN' } });
+    const { username } = await db.user.findUniqueOrThrow({ where: { email } });
     const adminSession = await call('admin/login')
-      .send({ email, password })
+      .send({ username, password })
       .expect(201);
     const browserSessions = [];
     for (const scope of ['customer', 'admin']) {
       const response = await call('browser/' + scope + '/login')
         .set('Origin', 'http://localhost:4183').set('X-Wearly-Browser', '1')
-        .send({ email, password }).expect(201);
+        .send(scope === 'admin' ? { username, password } : { email, password }).expect(201);
       browserSessions.push({ scope, access: response.body.accessToken as string,
         cookie: (response.headers['set-cookie'] as unknown as string[])[0].split(';')[0] });
     }

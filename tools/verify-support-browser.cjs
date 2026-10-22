@@ -21,7 +21,7 @@ module.exports=async function verify({root,email,customerEmail,password,orderId}
     async function reveal(node){await node.waitFor({state:'attached'});for(let i=0;i<36;i++){const box=await node.boundingBox(),vp=page.viewportSize();if(box&&box.y>=125&&box.y+box.height<=vp.height-35)return;await page.mouse.move(vp.width*.75,vp.height*.7);await page.mouse.wheel(0,box&&box.y<125?-280:280);await page.waitForTimeout(150);}throw Error('Cannot reveal support control');}
     async function button(name){const n=page.getByRole('button',{name,exact:true}).last();await reveal(n);await n.click();await page.mouse.move(10,125);await page.waitForTimeout(300);}
     async function fill(name,value){const n=page.getByRole('textbox',{name,exact:true});await reveal(n);await n.click();await page.waitForTimeout(100);await n.fill(value);await page.waitForTimeout(150);}
-    async function login(){await fill('Email',email);await fill('Mật khẩu',password);await button('Đăng nhập quản trị');}
+    async function login(){await fill('Tên đăng nhập',email.split('@')[0]);await fill('Mật khẩu',password);await button('Đăng nhập quản trị');}
     async function captured(needle){
       for(let i=0;i<60;i++){
         const data=await(await fetch('http://127.0.0.1:8025/api/v1/search?query='+encodeURIComponent('to:'+customerEmail))).json();

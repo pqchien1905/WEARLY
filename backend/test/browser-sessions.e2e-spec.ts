@@ -29,7 +29,7 @@ describe('Persistent browser sessions with real PostgreSQL', () => {
       .send({ email, password, name: 'Browser fixture' })
       .expect(201);
     ids.push(r.body.user.id);
-    return { r, email, id: r.body.user.id as string, cookie: cookie(r) };
+    return { r, email, username: r.body.user.username as string, id: r.body.user.id as string, cookie: cookie(r) };
   }
   beforeAll(async () => {
     if (
@@ -146,7 +146,7 @@ describe('Persistent browser sessions with real PostgreSQL', () => {
     const c = await register();
     await db.user.update({ where: { id: c.id }, data: { role: 'ADMIN' } });
     const a = await call('login', 'admin')
-      .send({ email: c.email, password })
+      .send({ username: c.username, password })
       .expect(201);
     const staffCookie = cookie(a);
     expect(staffCookie).toMatch(/^wearly_admin_session=/);
@@ -234,10 +234,10 @@ describe('Persistent browser sessions with real PostgreSQL', () => {
 
   it('checks current staff role, account activation and revoked session on renewal', async () => {
     const c = await register();
-    await call('login', 'admin').send({ email: c.email, password }).expect(403);
+    await call('login', 'admin').send({ username: c.username, password }).expect(403);
     await db.user.update({ where: { id: c.id }, data: { role: 'SUPPORT' } });
     const a = await call('login', 'admin')
-      .send({ email: c.email, password })
+      .send({ username: c.username, password })
       .expect(201);
     await db.user.update({ where: { id: c.id }, data: { role: 'CUSTOMER' } });
     await call('refresh', 'admin').set('Cookie', cookie(a)).expect(401);
@@ -279,7 +279,7 @@ describe('Persistent browser sessions with real PostgreSQL', () => {
       data: { role: 'SUPPORT' },
     });
     const staff = await call('login', 'admin')
-      .send({ email: target.email, password })
+      .send({ username: target.username, password })
       .expect(201);
     await request(app.getHttpServer())
       .patch('/api/v1/admin/staff/' + target.id)

@@ -48,7 +48,7 @@ module.exports = async function verify({ root, fixture, email, customerEmail, pa
       await field.fill(value); await page.waitForTimeout(200);
       assert.equal(await field.inputValue(), value);
     }
-    async function login(account, admin = true) { await fill('Email', account); await fill('Mật khẩu', password); await button(admin ? 'Đăng nhập quản trị' : 'Đăng nhập'); }
+    async function login(account, admin = true) { await fill(admin ? 'Tên đăng nhập' : 'Email', admin ? account.split('@')[0] : account); await fill('Mật khẩu', password); await button(admin ? 'Đăng nhập quản trị' : 'Đăng nhập'); }
     await page.goto('http://127.0.0.1:4183/#/admin'); await semantics();
     await page.getByRole('button', { name: 'Đăng nhập quản trị', exact: true }).waitFor();
     assert(page.url().includes('/admin/login?next='));

@@ -8,6 +8,7 @@ const select = {
   id: true,
   name: true,
   email: true,
+  username: true,
   role: true,
   active: true,
   staffVersion: true,

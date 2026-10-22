@@ -6,8 +6,9 @@ class UserProfile {
     this.address = '',
     this.id = '',
     this.role = 'CUSTOMER',
+    this.username = '',
   });
-  final String name, email, phone, address, id, role;
+  final String name, email, phone, address, id, role, username;
 }
 
 abstract interface class AccountRepository {

@@ -17,7 +17,7 @@ class AdminLoginPage extends ConsumerStatefulWidget {
 
 class _AdminLoginPageState extends ConsumerState<AdminLoginPage> {
   final form = GlobalKey<FormState>();
-  final email = TextEditingController(), password = TextEditingController();
+  final username = TextEditingController(), password = TextEditingController();
   bool busy = false, obscure = true;
   String? error;
 
@@ -44,7 +44,7 @@ class _AdminLoginPageState extends ConsumerState<AdminLoginPage> {
     try {
       await ref
           .read(adminAccountProvider.notifier)
-          .signIn('', email.text.trim(), password.text);
+          .signIn('', username.text.trim(), password.text);
       if (mounted) {
         password.clear();
         enter();
@@ -78,7 +78,7 @@ class _AdminLoginPageState extends ConsumerState<AdminLoginPage> {
 
   @override
   void dispose() {
-    email.dispose();
+    username.dispose();
     password.dispose();
     super.dispose();
   }
@@ -108,7 +108,10 @@ class _AdminLoginPageState extends ConsumerState<AdminLoginPage> {
           if (!remote)
             AppButton('Mở quản trị demo', onPressed: () => context.go('/admin'))
           else if (account != null) ...[
-            Text('Bạn đang đăng nhập với ${account.email}.', style: T.body),
+            Text(
+              'Bạn đang đăng nhập với ${account.username.isNotEmpty ? account.username : account.name}.',
+              style: T.body,
+            ),
             const SizedBox(height: 24),
             AppButton('Vào trang quản trị', onPressed: enter),
             TextButton(
@@ -122,14 +125,21 @@ class _AdminLoginPageState extends ConsumerState<AdminLoginPage> {
                 child: Column(
                   children: [
                     TextFormField(
-                      controller: email,
-                      validator: emailValidator,
+                      controller: username,
+                      validator: (value) =>
+                          RegExp(
+                            r'^[a-z0-9][a-z0-9_.-]{2,63}$',
+                          ).hasMatch(value?.trim().toLowerCase() ?? '')
+                          ? null
+                          : 'Tên đăng nhập cần 3–64 ký tự: chữ, số, dấu chấm, gạch dưới hoặc gạch ngang.',
                       enabled: !busy,
-                      keyboardType: TextInputType.emailAddress,
+                      keyboardType: TextInputType.text,
                       autofillHints: const [AutofillHints.username],
                       textInputAction: TextInputAction.next,
                       autocorrect: false,
-                      decoration: const InputDecoration(labelText: 'Email'),
+                      decoration: const InputDecoration(
+                        labelText: 'Tên đăng nhập',
+                      ),
                     ),
                     const SizedBox(height: 20),
                     TextFormField(
@@ -140,9 +150,9 @@ class _AdminLoginPageState extends ConsumerState<AdminLoginPage> {
                       textInputAction: TextInputAction.done,
                       onFieldSubmitted: (_) => submit(),
                       validator: (v) =>
-                          (v?.length ?? 0) >= 12 && (v?.length ?? 0) <= 128
+                          (v?.length ?? 0) >= 1 && (v?.length ?? 0) <= 128
                           ? null
-                          : 'Mật khẩu cần từ 12 đến 128 ký tự.',
+                          : 'Nhập mật khẩu từ 1 đến 128 ký tự.',
                       decoration: InputDecoration(
                         labelText: 'Mật khẩu',
                         suffixIcon: IconButton(

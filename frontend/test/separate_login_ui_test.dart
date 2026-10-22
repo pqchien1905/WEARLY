@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -31,6 +32,9 @@ void main() {
       baseUrl: 'http://localhost/api/v1',
       client: MockClient((r) async {
         if (r.url.path.endsWith('/auth/admin/login')) {
+          final body = jsonDecode(r.body) as Map<String, dynamic>;
+          expect(body.containsKey('email'), isFalse);
+          expect(body['username'], isNotEmpty);
           return reject
               ? jsonResponse({
                   'error': {'code': 'FORBIDDEN', 'message': 'Denied'},
@@ -98,13 +102,14 @@ void main() {
         expect(find.byType(StoreFooter), findsNothing);
         expect(find.byType(AdminShell), findsNothing);
         expect(find.text('Đăng nhập khách hàng'), findsOneWidget);
+        expect(find.widgetWithText(TextFormField, 'Email'), findsNothing);
         await tester.enterText(
-          find.widgetWithText(TextFormField, 'Email'),
-          'administrator.with.a.long.email@example.com',
+          find.widgetWithText(TextFormField, 'Tên đăng nhập'),
+          'admin',
         );
         await tester.enterText(
           find.widgetWithText(TextFormField, 'Mật khẩu'),
-          'valid-password',
+          '123456789',
         );
         await tester.tap(find.byTooltip('Hiện mật khẩu'));
         await tester.pump();
@@ -148,7 +153,9 @@ void main() {
       await tester.tap(submit);
       await tester.pumpAndSettle();
       expect(
-        find.text('Nhập email hợp lệ, ví dụ ban@example.com.'),
+        find.text(
+          'Tên đăng nhập cần 3–64 ký tự: chữ, số, dấu chấm, gạch dưới hoặc gạch ngang.',
+        ),
         findsOneWidget,
       );
       expect(c.read(adminAccountProvider), isNull);
@@ -164,12 +171,12 @@ void main() {
     (tester) async {
       final (c, router) = await mount(tester, '/admin/login', reject: true);
       await tester.enterText(
-        find.widgetWithText(TextFormField, 'Email'),
-        'customer@example.com',
+        find.widgetWithText(TextFormField, 'Tên đăng nhập'),
+        'customer',
       );
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Mật khẩu'),
-        'valid-password',
+        '123456789',
       );
       final submit = find.widgetWithText(FilledButton, 'Đăng nhập quản trị');
       await tester.ensureVisible(submit);

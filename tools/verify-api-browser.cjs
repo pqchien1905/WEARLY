@@ -61,7 +61,7 @@ module.exports = async function verify({ root, fixture, payments=false, promotio
     }
     if(promotion) {
       await page.goto('http://127.0.0.1:4183/#/admin/login'); await semantics();
-      await fill('Email',promotion.adminEmail);await fill('Mật khẩu',promotion.password);await button('Đăng nhập quản trị');
+      await fill('Tên đăng nhập',promotion.adminEmail.split('@')[0]);await fill('Mật khẩu',promotion.password);await button('Đăng nhập quản trị');
       await page.getByText('Một góc nhìn toàn cảnh.',{exact:true}).waitFor();
       await route('/admin/promotions');await button('Thêm mã khuyến mãi');
       async function dialogReveal(node) {

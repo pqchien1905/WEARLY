@@ -166,6 +166,11 @@ class _RemoteStaffPageState extends ConsumerState<RemoteStaffPage> {
                     children: [
                       Text(row['name'], style: T.body),
                       SelectableText(row['email'], style: T.body),
+                      if (row['username'] is String)
+                        SelectableText(
+                          'Tên đăng nhập: ${row['username']}',
+                          style: T.body,
+                        ),
                       Text(
                         '${staffRoleNames[row['role']] ?? row['role']} · ${row['active'] == true ? 'Đang hoạt động' : 'Đã vô hiệu hóa'}',
                         style: T.small,

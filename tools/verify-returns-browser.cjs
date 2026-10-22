@@ -34,7 +34,7 @@ module.exports = async function verify({ root, email, customerEmail, password, o
     }
     async function button(name) { const node = page.getByRole('button', { name, exact: true }).last(); await reveal(node); await node.click(); await page.mouse.move(10, 125); await page.waitForTimeout(300); }
     async function fill(name, value) { const field = page.getByRole('textbox', { name, exact: typeof name === 'string' }); await reveal(field); await field.click(); await page.waitForTimeout(100); await field.fill(value); await page.waitForTimeout(200); }
-    async function login(account, staff) { await fill('Email', account); await fill('Mật khẩu', password); await button(staff ? 'Đăng nhập quản trị' : 'Đăng nhập'); }
+    async function login(account, staff) { await fill(staff ? 'Tên đăng nhập' : 'Email', staff ? account.split('@')[0] : account); await fill('Mật khẩu', password); await button(staff ? 'Đăng nhập quản trị' : 'Đăng nhập'); }
     async function action(name, field, note) { await button(name); await fill(field, note); const response = page.waitForResponse(r => /\/(decision|receive|cancel)$/.test(new URL(r.url()).pathname) && r.request().method() === 'POST'); await button('Lưu thay đổi'); assert((await response).ok()); await page.waitForTimeout(400); }
     await page.goto('http://127.0.0.1:4183/#/login?next=' + encodeURIComponent('/account/orders/' + orderId)); await semantics(); await login(customerEmail, false);
     await fill(/^Số lượng trả:/, '1'); await fill('Lý do trả hàng', 'Không vừa kích thước');

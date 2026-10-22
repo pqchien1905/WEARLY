@@ -8,6 +8,7 @@ UserProfile userFromJson(Object? value) {
     id: user['id'] as String,
     name: user['name'] as String,
     email: user['email'] as String,
+    username: user['username'] as String? ?? '',
     phone: user['phone'] as String? ?? '',
     role: user['role'] as String,
   );
@@ -39,7 +40,10 @@ class RemoteAccountRepository implements AccountRepository {
     final generation = api.tokens.generation;
     final body = {
       if (register) 'name': name.trim(),
-      'email': email.trim(),
+      if (admin)
+        'username': email.trim().toLowerCase()
+      else
+        'email': email.trim(),
       'password': password,
     };
     final value =

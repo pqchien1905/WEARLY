@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser, Identity, Public } from '../../common/decorators/auth';
 import { AuthService } from './auth.service';
-import { LoginDto, RegisterDto, RefreshDto } from './dto/auth.dto';
+import { LoginDto, RegisterDto, RefreshDto, AdminLoginDto } from './dto/auth.dto';
 @ApiTags('auth')
 @Controller('auth')
 @Throttle({ default: { limit: 30, ttl: 60000 } })
@@ -15,7 +15,7 @@ export class AuthController {
   @Public() @Post('login') login(@Body() dto: LoginDto) {
     return this.service.login(dto);
   }
-  @Public() @Post('admin/login') adminLogin(@Body() dto: LoginDto) {
+  @Public() @Post('admin/login') adminLogin(@Body() dto: AdminLoginDto) {
     return this.service.login(dto, true);
   }
   @Public() @Post('refresh') refresh(@Body() dto: RefreshDto) {

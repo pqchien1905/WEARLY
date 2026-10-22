@@ -269,12 +269,12 @@ describe('Administration with PostgreSQL', () => {
   });
   it('separates staff login and keeps independent sessions alive after counterpart logout', async () => {
     const credentials = {
-      email: `admin-${suffix}@example.test`,
+      username: (await db.user.findUniqueOrThrow({ where: { id: users[0] } })).username,
       password: 'Wearly-admin-test-2026',
     };
     const before = await db.refreshToken.count({ where: { userId: users[1] } });
     await call('post', 'auth/admin/login')
-      .send({ ...credentials, email: `customer-${suffix}@example.test` })
+      .send({ ...credentials, username: (await db.user.findUniqueOrThrow({ where: { id: users[1] } })).username })
       .expect(403);
     expect(await db.refreshToken.count({ where: { userId: users[1] } })).toBe(
       before,
@@ -286,7 +286,7 @@ describe('Administration with PostgreSQL', () => {
       .send(credentials)
       .expect(201);
     const shopper = await call('post', 'auth/login')
-      .send(credentials)
+      .send({ email: `admin-${suffix}@example.test`, password: credentials.password })
       .expect(201);
     expect(staff.body.user.role).toBe('ADMIN');
     expect(staff.body.refreshToken).not.toBe(shopper.body.refreshToken);

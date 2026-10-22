@@ -147,6 +147,12 @@ async function main() {
     ? (await requireBackend('@nestjs/testing').Test.createTestingModule({imports:[AppModule]}).overrideProvider('VNPAY_HTTP').useValue(fixtureHttp).compile()).createNestApplication({logger:false})
     : await NestFactory.create(AppModule, { logger: false });
   const db = app.get(PrismaService);
+  async function verifyBrowser(modulePath, input) {
+    // Only accounts belonging to this isolated test run receive readable aliases.
+    const users = await db.user.findMany({ where: { email: { contains: fixture } }, select: { id: true, email: true } });
+    for (const user of users) await db.user.update({ where: { id: user.id }, data: { username: user.email.split('@')[0].toLowerCase() } });
+    return require(modulePath)(input);
+  }
   let category, brand, product;
   try {
     configureApp(app);
@@ -174,7 +180,7 @@ async function main() {
       }
       await flutter(['build','web','--release','--dart-define=USE_REMOTE_API=true','--dart-define=API_BASE_URL='+url]);
       const read=(endpoint,account=1)=>fetch(url+'/'+endpoint,{headers:{Authorization:'Bearer '+accounts[account].accessToken}});
-      await require('./verify-tryon-browser.cjs')({root,url,email,password,fixture,photo:fixturePhoto,callCount:()=>fixtureAiCalls,
+      await verifyBrowser('./verify-tryon-browser.cjs', {root,url,email,password,fixture,photo:fixturePhoto,callCount:()=>fixtureAiCalls,
         pauseUpload:()=>{
           let release,entered;const gate=new Promise(r=>{release=r}),started=new Promise(r=>{entered=r}),original=storage.putImage.bind(storage);
           storage.putImage=async(...args)=>{storage.putImage=original;entered();await gate;return original(...args);};
@@ -216,7 +222,7 @@ async function main() {
       if (registered.status !== 201) throw new Error('Recovery fixture registration failed');
       const account = await registered.json();
       await flutter(['build', 'web', '--release', '--dart-define=USE_REMOTE_API=true', '--dart-define=API_BASE_URL=' + url]);
-      await require('./verify-recovery-browser.cjs')({ root, email, password, url, nextPassword: 'Browser-replaced-Password-2026',
+      await verifyBrowser('./verify-recovery-browser.cjs', { root, email, password, url, nextPassword: 'Browser-replaced-Password-2026',
         getLink: async () => {
           for (let i = 0; i < 100; i++) {
             if(mailpit) {
@@ -253,7 +259,7 @@ async function main() {
         if(r.status!==201)throw Error('Stylist fixture registration failed');accounts.push(await r.json());
       }
       await flutter(['build','web','--release','--dart-define=USE_REMOTE_API=true','--dart-define=API_BASE_URL='+url]);
-      await require('./verify-stylist-browser.cjs')({root,url,email,password,callCount:()=>fixtureAiCalls,
+      await verifyBrowser('./verify-stylist-browser.cjs', {root,url,email,password,callCount:()=>fixtureAiCalls,
         foreignRead:async key=>(await fetch(url+'/ai/stylist/requests/'+key,{headers:{Authorization:'Bearer '+accounts[1].accessToken}})).status,
         disable:()=>app.get(requireBackend('@nestjs/config').ConfigService).set('GEMINI_API_KEY',''),
       });
@@ -280,7 +286,7 @@ async function main() {
       await operationsQueue.add('synthetic-monitor',{private:'private-fixture-payload'},{jobId:randomUUID()});
       operationsHeartbeat=new WorkerHeartbeat(config,operationsResources);
       await flutter(['build','web','--release','--dart-define=USE_REMOTE_API=true','--dart-define=API_BASE_URL='+url]);
-      await require('./verify-operations-browser.cjs')({root,url,email,managerEmail,password,
+      await verifyBrowser('./verify-operations-browser.cjs', {root,url,email,managerEmail,password,
         startWorker:()=>operationsHeartbeat.onModuleInit(),stopWorker:()=>operationsHeartbeat.onModuleDestroy(),
         redisUnavailable:(disabled)=>config.set('REDIS_PORT',disabled?1:redisPort),
         customerDenied:async()=>{const r=await fetch(url+'/admin/operations',{headers:{Authorization:'Bearer '+accounts[customerEmail].accessToken}});if(r.status!==403)throw Error('Customer can access operations');},
@@ -294,7 +300,7 @@ async function main() {
         accounts[who]=await response.json();await db.user.update({where:{id:accounts[who].user.id},data:{role}});
       }
       await flutter(['build','web','--release','--dart-define=USE_REMOTE_API=true','--dart-define=API_BASE_URL='+url]);
-      await require('./verify-sessions-browser.cjs')({root,url,email,otherEmail,adminEmail,password,
+      await verifyBrowser('./verify-sessions-browser.cjs', {root,url,email,otherEmail,adminEmail,password,
         expiredAccess:async token=>{
           const {JwtService}=requireBackend('@nestjs/jwt'),jwt=app.get(JwtService),claims=jwt.decode(token);
           if(claims.sub!==accounts[email].user.id)throw Error('Unexpected fixture identity');
@@ -318,7 +324,7 @@ async function main() {
       const ticketResponse=await fetch(url+'/support',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestKey:randomUUID(),name:'Khách thử quyền',email:supportEmail,message:'Cần hỗ trợ chọn kích cỡ phù hợp.'})});
       if(ticketResponse.status!==201)throw Error('Staff support fixture failed');const ticket=await ticketResponse.json();
       await flutter(['build','web','--release','--dart-define=USE_REMOTE_API=true','--dart-define=API_BASE_URL='+url]);
-      await require('./verify-staff-browser.cjs')({root,url,email,warehouseEmail,supportEmail,password,orderId:order.id,ticketId:ticket.id,demote:async()=>{
+      await verifyBrowser('./verify-staff-browser.cjs', {root,url,email,warehouseEmail,supportEmail,password,orderId:order.id,ticketId:ticket.id,demote:async()=>{
         const response=await fetch(url+'/admin/staff/'+accounts[supportEmail].user.id,{method:'PATCH',headers:{'Content-Type':'application/json',Authorization:'Bearer '+accounts[email].accessToken},body:JSON.stringify({expectedVersion:1,role:'CUSTOMER',active:true})});
         if(response.status!==200)throw Error('Staff demotion failed');
       }});
@@ -339,7 +345,7 @@ async function main() {
       const user=await db.user.findUniqueOrThrow({where:{email:customerEmail}}),variant=await db.productVariant.findFirstOrThrow({where:{productId:product.id}});
       const order=await db.order.create({data:{userId:user.id,idempotencyKey:randomUUID(),requestHash:'support-fixture',addressSnapshot:{recipient:'Support customer',phone:'0901234567',address:'Test address'},subtotal:'490000',shipping:'30000',total:'520000',payment:{create:{provider:'cod',status:'PENDING',amount:'520000'}},items:{create:{variantId:variant.id,name:'Support fixture',sku:variant.sku,slug:fixture,size:'M',color:'Trắng',image:'assets/images/shirt.jpg',unitPrice:'490000',quantity:1}}}});
       await flutter(['build','web','--release','--dart-define=USE_REMOTE_API=true','--dart-define=API_BASE_URL='+url]);
-      const ticketId=await require('./verify-support-browser.cjs')({root,email,customerEmail,password,orderId:order.id});
+      const ticketId=await verifyBrowser('./verify-support-browser.cjs', {root,email,customerEmail,password,orderId:order.id});
       const ticket=await db.supportTicket.findUniqueOrThrow({where:{id:ticketId},include:{replies:{include:{mail:true}}}});
       if(ticket.status!=='ANSWERED'||ticket.replies.length!==1||ticket.replies[0].mail.status!=='SENT')throw Error('Support persistence/delivery failed');
       const orderMail=await db.mailOutbox.findUniqueOrThrow({where:{eventKey:`order:${order.id}:1`}});
@@ -369,7 +375,7 @@ async function main() {
         ...(refunds?{attempts:{create:{reference:randomUUID().replaceAll('-',''),amount:'520000',status:'PAID',transactionNo:paymentNumber,ipAddress:'127.0.0.1',expiresAt:new Date(Date.now()+900000)}}}:{}) } });
       cancelled = await send('PATCH', 'admin/orders/' + cancelled.id + '/status', { status: 'CONFIRMED', expectedVersion: cancelled.version }, staff.accessToken);
       await flutter(['build', 'web', '--release', '--dart-define=USE_REMOTE_API=true', '--dart-define=API_BASE_URL=' + url]);
-      await require('./verify-returns-browser.cjs')({ root, email, customerEmail, password, orderId: order.id, cancelId: cancelled.id, refunds });
+      await verifyBrowser('./verify-returns-browser.cjs', { root, email, customerEmail, password, orderId: order.id, cancelId: cancelled.id, refunds });
       const returned = await db.order.findUniqueOrThrow({ where: { id: order.id }, include: { returns: { include: { items: true } }, payment: {include:{refunds:true}} } });
       if (returned.status !== 'DELIVERED' || returned.payment.status !== (refunds?'PARTIALLY_REFUNDED':'PAID') || returned.returns.length !== 1 || returned.returns[0].status !== 'RECEIVED' || returned.returns[0].amount.toString() !== '465000' || returned.returns[0].items[0].quantity !== 1) throw Error('Partial return entitlement/state mismatch');
       const stopped = await db.order.findUniqueOrThrow({ where: { id: cancelled.id }, include: { payment: {include:{refunds:true}} } });
@@ -399,7 +405,7 @@ async function main() {
         orders.push(await post('orders', { addressId: address.id, expectedSubtotal: '490000', shippingMethod: 'standard' }, customer.accessToken, { 'Idempotency-Key': randomUUID() }));
       }
       await flutter(['build', 'web', '--release', '--dart-define=USE_REMOTE_API=true', '--dart-define=API_BASE_URL=' + url]);
-      await require('./verify-shipment-browser.cjs')({ root, email, customerEmail, password, returnedId: orders[0].id, deliveredId: orders[1].id });
+      await verifyBrowser('./verify-shipment-browser.cjs', { root, email, customerEmail, password, returnedId: orders[0].id, deliveredId: orders[1].id });
       for (const [index, expected] of [[0, 'RETURNED'], [1, 'DELIVERED']]) {
         const row = await db.order.findUniqueOrThrow({ where: { id: orders[index].id }, include: { shipment: { include: { events: true } }, payment: true, history: true } });
         if (row.status !== expected || row.shipment?.status !== expected || row.shipment.carrier !== 'local_simulator') throw Error('Persisted shipment mismatch');
@@ -426,7 +432,7 @@ async function main() {
       await post('cart/items', { sku: fixture, quantity: 1 }, customer.accessToken);
       const order = await post('orders', { addressId: address.id, shippingMethod: 'standard', expectedSubtotal: '490000' }, customer.accessToken, { 'Idempotency-Key': randomUUID() });
       await flutter(['build', 'web', '--release', '--dart-define=USE_REMOTE_API=true', '--dart-define=API_BASE_URL=' + url]);
-      await require('./verify-admin-browser.cjs')({ root, fixture, email, customerEmail, password, orderId: order.id });
+      await verifyBrowser('./verify-admin-browser.cjs', { root, fixture, email, customerEmail, password, orderId: order.id });
       const saved = await db.product.findUniqueOrThrow({ where: { slug: fixture + '-admin' }, include: { variants: { include: { inventory: true } }, images: true, category: true, brand: true } });
       if (!saved.active || saved.variants.length !== 1 || saved.variants[0].inventory.quantity !== 8 || saved.variants[0].price.toString() !== '700000' || saved.images.length !== 1) throw new Error('Persisted admin product does not match browser operations');
       if (saved.category.slug !== fixture + '-taxonomy' || saved.category.name !== 'BST thu đông kiểm thử' || saved.brand.slug !== fixture + '-taxonomy' || saved.brand.name !== 'AAA Studio thu đông kiểm thử') throw new Error('Product taxonomy assignment did not persist');
@@ -457,7 +463,7 @@ async function main() {
       const other = await send('POST', 'auth/register', { name: 'Khách hồ sơ mới', email: otherEmail, password });
       const address = await send('POST', 'users/me/addresses', { recipient: 'Khách kiểm thử', phone: '0901234567', address: '12 Nguyễn Huệ, TP.HCM', label: 'Nhà' }, buyer.accessToken);
       await flutter(['build', 'web', '--release', '--dart-define=USE_REMOTE_API=true', '--dart-define=API_BASE_URL=' + url]);
-      await require('./verify-style-browser.cjs')({ root, email, otherEmail, password,
+      await verifyBrowser('./verify-style-browser.cjs', { root, email, otherEmail, password,
         changeStyle: async () => {
           const before = await send('GET', 'users/me/style', null, buyer.accessToken);
           await send('PUT', 'users/me/style', { size: 'XS', style: 'Thanh lịch', color: 'Đen', budget: '2500000', expectedVersion: before.version }, buyer.accessToken);
@@ -484,7 +490,7 @@ async function main() {
       // Synthetic fixture only: delivery is the eligibility precondition under test.
       await db.order.update({ where: { id: order.id }, data: { status: 'DELIVERED' } });
       await flutter(['build', 'web', '--release', '--dart-define=USE_REMOTE_API=true', '--dart-define=API_BASE_URL=' + url]);
-      await require('./verify-reviews-browser.cjs')({ root, fixture, buyerEmail, otherEmail, password,
+      await verifyBrowser('./verify-reviews-browser.cjs', { root, fixture, buyerEmail, otherEmail, password,
         // Only this run's synthetic product can be hidden/restored by the browser scenario.
         setProductAvailable: active => db.product.update({ where: { id: product.id }, data: { active } }),
       });
@@ -493,7 +499,7 @@ async function main() {
       console.log('PASS database assertions: one verified buyer review, exact edited content and rating.');
     } else if (wishlist) {
       await flutter(['build', 'web', '--release', '--dart-define=USE_REMOTE_API=true', '--dart-define=API_BASE_URL=' + url]);
-      await require('./verify-wishlist-browser.cjs')({ root, fixture });
+      await verifyBrowser('./verify-wishlist-browser.cjs', { root, fixture });
       const saved = await db.wishlistItem.findMany({ where: { user: { email: 'browser-' + fixture + '@example.com' } } });
       if (saved.length !== 1 || saved[0].productId !== product.id) throw new Error('Wishlist was not persisted for first customer');
       if (await db.wishlistItem.count({ where: { user: { email: fixture + '@example.com' } } }) !== 0) throw new Error('Wishlist crossed customer accounts');
@@ -506,7 +512,7 @@ async function main() {
         const account=await response.json();await db.user.update({where:{id:account.user.id},data:{role:'ADMIN'}});
       }
       await flutter(['build', 'web', '--release', '--dart-define=USE_REMOTE_API=true', '--dart-define=API_BASE_URL=' + url]);
-      await require('./verify-api-browser.cjs')({ root, url, fixture, payments, promotion, markFixturePaid:()=>{fixturePaid=true;} });
+      await verifyBrowser('./verify-api-browser.cjs', { root, url, fixture, payments, promotion, markFixturePaid:()=>{fixturePaid=true;} });
       if(promotions) {
         const order=await db.order.findFirstOrThrow({where:{user:{email:'browser-'+fixture+'@example.com'}},include:{payment:true,redemption:true}});
         if(order.total.toString()!=='470000'||order.discount.toString()!=='50000'||order.couponCode!==promotionCode||order.status!=='CANCELLED'||!order.redemption?.releasedAt)throw Error('Promotion snapshot or release mismatch');

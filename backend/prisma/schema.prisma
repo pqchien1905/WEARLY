@@ -114,6 +114,7 @@ model StoreContent {
 model User {
   id String @id @default(uuid()) @db.Uuid
   email String @unique
+  username String @unique @default(dbgenerated("gen_random_uuid()::text")) @db.VarChar(64)
   passwordHash String
   passwordChangedAt DateTime?
   name String

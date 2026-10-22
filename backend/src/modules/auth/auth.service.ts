@@ -9,12 +9,13 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import * as argon2 from 'argon2';
 import { PrismaService } from '../../database/prisma.service';
 import { Prisma, User } from '../../generated/prisma/client';
-import { RegisterDto, LoginDto } from './dto/auth.dto';
+import { RegisterDto, LoginDto, AdminLoginDto } from './dto/auth.dto';
 import { transaction, lockUser } from '../../common/transaction';
 import { isStaff } from '../../common/permissions';
 export const publicUser = (u: User) => ({
   id: u.id,
   email: u.email,
+  username: u.username,
   name: u.name,
   phone: u.phone,
   role: u.role,
@@ -46,25 +47,31 @@ export class AuthService {
     });
   }
   async login(
-    dto: LoginDto,
+    dto: LoginDto | AdminLoginDto,
     adminOnly = false,
     scope?: BrowserScope,
     previous?: string,
   ) {
-    const user = await this.db.user.findUnique({ where: { email: dto.email } });
+    if ((adminOnly && !('username' in dto)) || (!adminOnly && !('email' in dto)))
+      throw new UnauthorizedException('Invalid credentials');
+    const user = await this.db.user.findUnique({
+      where: 'username' in dto
+        ? { username: dto.username }
+        : { email: dto.email },
+    });
     if (
       !user ||
       !user.active ||
       !(await argon2.verify(user.passwordHash, dto.password))
     )
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException('Invalid credentials');
     if (adminOnly && !isStaff(user.role))
       throw new ForbiddenException('Administrator access is required');
     return transaction(this.db, async (tx) => {
       await lockUser(tx, user.id);
       const current = await tx.user.findUnique({ where: { id: user.id } });
       if (!current?.active || current.passwordHash !== user.passwordHash)
-        throw new UnauthorizedException('Invalid email or password');
+        throw new UnauthorizedException('Invalid credentials');
       if (adminOnly && !isStaff(current.role))
         throw new ForbiddenException('Administrator access is required');
       return this.issue(tx, current, randomUUID(), scope, previous);
