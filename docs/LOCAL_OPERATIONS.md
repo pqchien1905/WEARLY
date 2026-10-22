@@ -7,7 +7,7 @@ chạy tại thư mục chứa phiên bản code muốn dùng; mỗi worktree c�
 ## Khởi động và dừng
 
 Node24, Flutter3.47.7 tại `.tools/flutter`, dependencies backend đã cài và schema
-đã migrate là điều kiện trước khi chạy. Bản native hiện có27 migrations. Với bản
+đã migrate là điều kiện trước khi chạy. Bản native hiện có28 migrations. Với bản
 nâng cấp có migration mới, sao lưu trước, kiểm tra đúng database rồi chạy migration
 theo hướng dẫn bản nâng cấp. Lệnh runtime không migrate, seed hoặc sửa `.env`.
 

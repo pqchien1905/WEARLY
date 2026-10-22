@@ -6,7 +6,7 @@ Mở `http://localhost:8080/#/admin/login` để đăng nhập quản trị bằ
 
 Migration `20261022190000_admin_username` bổ sung tên đăng nhập duy nhất cho mỗi tài khoản. Các tài khoản cũ/đăng ký mới được cấp mã tự sinh; quản trị viên xem tên này ở **Nhân sự & quyền** để cung cấp cho nhân viên. Lệnh cấp quyền bên dưới cũng in tên đăng nhập. Email vẫn được lưu để liên hệ/khôi phục tài khoản, không dùng trong yêu cầu đăng nhập quản trị.
 
-Khách hàng dùng `http://localhost:8080/#/login`. Hai khu vực giữ phiên độc lập: đăng nhập, hết phiên hoặc đăng xuất ở một khu vực không thay đổi phiên còn lại. ADMIN vẫn có thể đăng nhập riêng ở cửa hàng để mua sắm. Tài khoản CUSTOMER bị từ chối ngay tại API đăng nhập quản trị; backend tiếp tục kiểm tra quyền trên mọi yêu cầu quản trị.
+Khách hàng dùng `http://localhost:8080/#/login`. Hai khu vực giữ phiên độc lập: đăng nhập, hết phiên hoặc đăng xuất ở một khu vực không thay đổi phiên còn lại. ADMIN có thể đăng nhập riêng ở cửa hàng bằng email nếu mật khẩu đáp ứng yêu cầu tối thiểu 12 ký tự của khu vực khách hàng; mật khẩu 9 ký tự được chủ máy chọn cho `admin` chỉ dùng được tại trang quản trị. Tài khoản CUSTOMER bị từ chối ngay tại API đăng nhập quản trị; backend tiếp tục kiểm tra quyền trên mọi yêu cầu quản trị.
 
 Phiên quản trị giữ qua tải lại bằng cookie HttpOnly; access token ở RAM. Dữ liệu vẫn được giữ trên PostgreSQL. Chế độ demo (`run`) hiển thị rõ dữ liệu minh họa và không yêu cầu tài khoản quản trị thật.
 
