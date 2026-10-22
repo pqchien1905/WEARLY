@@ -17,7 +17,15 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
 - [x] Local tooling/CI/monitoring/recovery and store content/SEO.
 - [x] Local customer/admin/browser acceptance.
 - [ ] Configured Gemini/VNPay external-provider verification (credentials pending).
-- [ ] Final integration into root workspace and root runtime verification.
+- [x] Final integration into root workspace and root runtime verification.
+
+Final root acceptance (22 October): 204 E2E, 86 unit, 53 tool and 428 Flutter
+tests pass (2 intentional opt-in skips); lint/build/analyze pass. Root API,
+worker and web report ready; read-only Chrome checks pass at 1440/375 pixels.
+WEARLY and the local-demo notice match the user's confirmed choice. A fresh
+27-migration, 42-table business backup restores with verified assets/schema/API
+and unchanged source data. See [final integration](FINAL_LOCAL_INTEGRATION.md)
+for evidence and the remaining configured-provider/Mailpit-restart limitations.
 
 ## Evidence and rulings
 
