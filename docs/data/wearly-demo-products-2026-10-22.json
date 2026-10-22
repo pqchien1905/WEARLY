@@ -1,0 +1,708 @@
+{
+  "status": "imported",
+  "at": "2026-10-22T12:11:41.034Z",
+  "database": "wearly",
+  "products": [
+    {
+      "id": "e02f2f3a-c5f0-4940-8002-b196231d679d",
+      "slug": "wearly-demo-so-mi-caro-xanh-trang",
+      "name": "Sơ mi nam caro xanh trắng",
+      "category": "Áo",
+      "brand": "Fashion Trends",
+      "priceVnd": 449000,
+      "color": "Xanh trắng",
+      "sizes": [
+        "S",
+        "M",
+        "L",
+        "XL"
+      ],
+      "initialStock": [
+        8,
+        12,
+        10,
+        6
+      ],
+      "source": "https://dummyjson.com/products/83",
+      "imageSources": [
+        "https://cdn.dummyjson.com/product-images/mens-shirts/blue-&-black-check-shirt/1.webp",
+        "https://cdn.dummyjson.com/product-images/mens-shirts/blue-&-black-check-shirt/2.webp"
+      ],
+      "images": [
+        "catalog/images/212397d5-f018-4fbd-a3a3-86b9ef68de1e",
+        "catalog/images/6e099412-b236-43b1-90f1-9d61ee373785"
+      ]
+    },
+    {
+      "id": "ef655d6c-e46b-4b9f-b0a8-49f0328639dd",
+      "slug": "wearly-demo-so-mi-caro-do-den",
+      "name": "Sơ mi nam caro đỏ đen",
+      "category": "Áo",
+      "brand": "Classic Wear",
+      "priceVnd": 429000,
+      "color": "Đỏ đen",
+      "sizes": [
+        "S",
+        "M",
+        "L",
+        "XL"
+      ],
+      "initialStock": [
+        8,
+        12,
+        10,
+        6
+      ],
+      "source": "https://dummyjson.com/products/85",
+      "imageSources": [
+        "https://cdn.dummyjson.com/product-images/mens-shirts/man-plaid-shirt/1.webp",
+        "https://cdn.dummyjson.com/product-images/mens-shirts/man-plaid-shirt/2.webp"
+      ],
+      "images": [
+        "catalog/images/4fa82e14-ae51-469d-8488-552a391f9534",
+        "catalog/images/821f4627-3d39-4d6a-8d19-662f5eb9152c"
+      ]
+    },
+    {
+      "id": "f02b22a1-188a-4834-89ff-5b3f0a185880",
+      "slug": "wearly-demo-so-mi-la-nhiet-doi",
+      "name": "Sơ mi nam họa tiết nhiệt đới",
+      "category": "Áo",
+      "brand": "Casual Comfort",
+      "priceVnd": 399000,
+      "color": "Xanh biển",
+      "sizes": [
+        "S",
+        "M",
+        "L",
+        "XL"
+      ],
+      "initialStock": [
+        8,
+        12,
+        10,
+        6
+      ],
+      "source": "https://dummyjson.com/products/86",
+      "imageSources": [
+        "https://cdn.dummyjson.com/product-images/mens-shirts/man-short-sleeve-shirt/1.webp",
+        "https://cdn.dummyjson.com/product-images/mens-shirts/man-short-sleeve-shirt/2.webp"
+      ],
+      "images": [
+        "catalog/images/712a86c7-760a-4d7d-9315-4b11fd5eb247",
+        "catalog/images/e9a59490-6b42-4c71-a0ab-3d6bc68ddfe7"
+      ]
+    },
+    {
+      "id": "22a77a06-be5a-41c0-8a03-0ad89aa2cf97",
+      "slug": "wearly-demo-so-mi-caro-xanh-reu",
+      "name": "Sơ mi nam caro xanh rêu",
+      "category": "Áo",
+      "brand": "Urban Chic",
+      "priceVnd": 459000,
+      "color": "Xanh rêu",
+      "sizes": [
+        "S",
+        "M",
+        "L",
+        "XL"
+      ],
+      "initialStock": [
+        8,
+        12,
+        10,
+        6
+      ],
+      "source": "https://dummyjson.com/products/87",
+      "imageSources": [
+        "https://cdn.dummyjson.com/product-images/mens-shirts/men-check-shirt/1.webp",
+        "https://cdn.dummyjson.com/product-images/mens-shirts/men-check-shirt/2.webp"
+      ],
+      "images": [
+        "catalog/images/c99a4452-91c3-4e50-82e5-07c2e0efca2a",
+        "catalog/images/84c1fc0c-c225-49dd-b27f-5af016238040"
+      ]
+    },
+    {
+      "id": "ba27be8f-24a6-4780-b236-507de0f33937",
+      "slug": "wearly-demo-dam-maxi-hoa-nen-den",
+      "name": "Đầm maxi hoa nền đen",
+      "category": "Váy & đầm",
+      "brand": "WEARLY",
+      "priceVnd": 1190000,
+      "color": "Hoa nền đen",
+      "sizes": [
+        "S",
+        "M",
+        "L",
+        "XL"
+      ],
+      "initialStock": [
+        8,
+        12,
+        10,
+        6
+      ],
+      "source": "https://dummyjson.com/products/177",
+      "imageSources": [
+        "https://cdn.dummyjson.com/product-images/womens-dresses/black-women's-gown/1.webp",
+        "https://cdn.dummyjson.com/product-images/womens-dresses/black-women's-gown/2.webp"
+      ],
+      "images": [
+        "catalog/images/f5dbee1e-5581-4172-891b-3a7f9de8d15f",
+        "catalog/images/ebf5fa45-78c1-43b0-9441-541baa3b1d7c"
+      ]
+    },
+    {
+      "id": "1910e5b1-3552-4cc9-856b-6653c5e7e083",
+      "slug": "wearly-demo-dam-xoe-cham-bi-do",
+      "name": "Đầm xòe chấm bi đỏ",
+      "category": "Váy & đầm",
+      "brand": "WEARLY",
+      "priceVnd": 749000,
+      "color": "Trắng chấm đỏ",
+      "sizes": [
+        "S",
+        "M",
+        "L",
+        "XL"
+      ],
+      "initialStock": [
+        8,
+        12,
+        10,
+        6
+      ],
+      "source": "https://dummyjson.com/products/180",
+      "imageSources": [
+        "https://cdn.dummyjson.com/product-images/womens-dresses/dress-pea/1.webp",
+        "https://cdn.dummyjson.com/product-images/womens-dresses/dress-pea/2.webp"
+      ],
+      "images": [
+        "catalog/images/d7a7d32d-3ecd-41ee-a6a9-df3913f8a55d",
+        "catalog/images/572d46ec-bd40-4bc4-8a67-02614819b057"
+      ]
+    },
+    {
+      "id": "88f7d605-2771-40b4-b59a-75c16c2c123a",
+      "slug": "wearly-demo-dam-xoe-cham-tron-xanh",
+      "name": "Đầm xòe họa tiết tròn xanh",
+      "category": "Váy & đầm",
+      "brand": "WEARLY",
+      "priceVnd": 699000,
+      "color": "Trắng xanh",
+      "sizes": [
+        "S",
+        "M",
+        "L",
+        "XL"
+      ],
+      "initialStock": [
+        8,
+        12,
+        10,
+        6
+      ],
+      "source": "https://dummyjson.com/products/162",
+      "imageSources": [
+        "https://cdn.dummyjson.com/product-images/tops/blue-frock/1.webp",
+        "https://cdn.dummyjson.com/product-images/tops/blue-frock/2.webp"
+      ],
+      "images": [
+        "catalog/images/c3648dff-ac4b-46e5-afa3-8bddd16ccfe6",
+        "catalog/images/15ba7cba-cf89-4589-9d30-7a66cc057acf"
+      ]
+    },
+    {
+      "id": "bf149c50-ba95-4616-b946-cb7960343b95",
+      "slug": "wearly-demo-dam-so-mi-sat-nach-ghi",
+      "name": "Đầm sơ mi sát nách ghi",
+      "category": "Váy & đầm",
+      "brand": "WEARLY",
+      "priceVnd": 799000,
+      "color": "Ghi sáng",
+      "sizes": [
+        "S",
+        "M",
+        "L",
+        "XL"
+      ],
+      "initialStock": [
+        8,
+        12,
+        10,
+        6
+      ],
+      "source": "https://dummyjson.com/products/164",
+      "imageSources": [
+        "https://cdn.dummyjson.com/product-images/tops/gray-dress/1.webp",
+        "https://cdn.dummyjson.com/product-images/tops/gray-dress/2.webp"
+      ],
+      "images": [
+        "catalog/images/979dd449-814c-47eb-8d47-30ba40afdfeb",
+        "catalog/images/262bf80a-1482-4dc0-95d0-773be1b8dc97"
+      ]
+    },
+    {
+      "id": "974e3e14-36b6-45c0-bbaf-0192b56bd008",
+      "slug": "wearly-demo-dam-caro-no-eo",
+      "name": "Đầm caro thắt nơ eo",
+      "category": "Váy & đầm",
+      "brand": "WEARLY",
+      "priceVnd": 829000,
+      "color": "Caro đen trắng",
+      "sizes": [
+        "S",
+        "M",
+        "L",
+        "XL"
+      ],
+      "initialStock": [
+        8,
+        12,
+        10,
+        6
+      ],
+      "source": "https://dummyjson.com/products/166",
+      "imageSources": [
+        "https://cdn.dummyjson.com/product-images/tops/tartan-dress/1.webp",
+        "https://cdn.dummyjson.com/product-images/tops/tartan-dress/2.webp"
+      ],
+      "images": [
+        "catalog/images/6e72f9d4-78a4-492d-b6ea-acb1452ad7b1",
+        "catalog/images/ee738167-8d5e-4a36-81f4-097f139f99b4"
+      ]
+    },
+    {
+      "id": "e9a1612a-060c-444a-b54f-f8f9f071634a",
+      "slug": "wearly-demo-ao-khoac-kaki-nam-be",
+      "name": "Áo khoác kaki nam màu be",
+      "category": "Áo khoác",
+      "brand": "WEARLY",
+      "priceVnd": 949000,
+      "color": "Be",
+      "sizes": [
+        "S",
+        "M",
+        "L",
+        "XL"
+      ],
+      "initialStock": [
+        8,
+        12,
+        10,
+        6
+      ],
+      "source": "https://fakestoreapi.com/products/3",
+      "imageSources": [
+        "https://fakestoreapi.com/img/71li-ujtlUL._AC_UX679_t.png"
+      ],
+      "images": [
+        "catalog/images/0d75e136-e137-4ad8-9f2f-375702625740"
+      ]
+    },
+    {
+      "id": "e8f40a53-14da-4281-b2a0-817a0510401a",
+      "slug": "wearly-demo-ao-khoac-nu-mu-tim",
+      "name": "Áo khoác nữ có mũ màu tím",
+      "category": "Áo khoác",
+      "brand": "BIYLACLESEN",
+      "priceVnd": 1290000,
+      "color": "Tím",
+      "sizes": [
+        "S",
+        "M",
+        "L",
+        "XL"
+      ],
+      "initialStock": [
+        8,
+        12,
+        10,
+        6
+      ],
+      "source": "https://fakestoreapi.com/products/15",
+      "imageSources": [
+        "https://fakestoreapi.com/img/51Y5NI-I5jL._AC_UX679_t.png"
+      ],
+      "images": [
+        "catalog/images/a5fa1ab4-e3a2-420c-9eed-191c72132ee6"
+      ]
+    },
+    {
+      "id": "f98a50ea-c75f-4cdf-a2f8-064b5adfb5d9",
+      "slug": "wearly-demo-ao-khoac-biker-den",
+      "name": "Áo khoác biker nữ màu đen",
+      "category": "Áo khoác",
+      "brand": "Lock and Love",
+      "priceVnd": 1090000,
+      "color": "Đen",
+      "sizes": [
+        "S",
+        "M",
+        "L",
+        "XL"
+      ],
+      "initialStock": [
+        8,
+        12,
+        10,
+        6
+      ],
+      "source": "https://fakestoreapi.com/products/16",
+      "imageSources": [
+        "https://fakestoreapi.com/img/81XH0e8fefL._AC_UY879_t.png"
+      ],
+      "images": [
+        "catalog/images/ee39d53b-1b0b-4de5-a7f8-401d3f333d19"
+      ]
+    },
+    {
+      "id": "020849ff-8e9b-4166-9f70-a804a4b2ff24",
+      "slug": "wearly-demo-quan-jean-ong-loe-xanh",
+      "name": "Quần jean nữ ống loe xanh",
+      "category": "Quần",
+      "brand": "WEARLY",
+      "priceVnd": 679000,
+      "color": "Xanh denim",
+      "sizes": [
+        "S",
+        "M",
+        "L",
+        "XL"
+      ],
+      "initialStock": [
+        8,
+        12,
+        10,
+        6
+      ],
+      "source": "Existing WEARLY demo asset",
+      "imageSources": [
+        "local:shirt.jpg"
+      ],
+      "images": [
+        "catalog/images/b9d572e4-0649-4d64-b28b-9bb275bc69cb"
+      ]
+    },
+    {
+      "id": "f4786638-9c45-4dda-be52-f49fa1d8131f",
+      "slug": "wearly-demo-quan-jogger-hong-dat",
+      "name": "Quần jogger nữ túi hộp hồng đất",
+      "category": "Quần",
+      "brand": "WEARLY",
+      "priceVnd": 549000,
+      "color": "Hồng đất",
+      "sizes": [
+        "S",
+        "M",
+        "L",
+        "XL"
+      ],
+      "initialStock": [
+        8,
+        12,
+        10,
+        6
+      ],
+      "source": "Existing WEARLY demo asset",
+      "imageSources": [
+        "local:trousers.jpg"
+      ],
+      "images": [
+        "catalog/images/74041aba-8888-483f-b421-4cdd6e19e919"
+      ]
+    },
+    {
+      "id": "7f0e2556-a109-4433-8801-7a37925da1bf",
+      "slug": "wearly-demo-tui-xach-xanh-navy",
+      "name": "Túi xách quai đôi xanh navy",
+      "category": "Túi & balo",
+      "brand": "Fashionista",
+      "priceVnd": 599000,
+      "color": "Xanh navy",
+      "sizes": [
+        "Freesize"
+      ],
+      "initialStock": [
+        20
+      ],
+      "source": "https://dummyjson.com/products/172",
+      "imageSources": [
+        "https://cdn.dummyjson.com/product-images/womens-bags/blue-women's-handbag/1.webp",
+        "https://cdn.dummyjson.com/product-images/womens-bags/blue-women's-handbag/2.webp"
+      ],
+      "images": [
+        "catalog/images/1a7b74c6-0ecc-4397-a117-fff2fe0b040b",
+        "catalog/images/ea7cdcda-bdf1-4001-b635-65dc4e2521e4"
+      ]
+    },
+    {
+      "id": "a616276c-15d8-43a5-b5f8-59362659ce9f",
+      "slug": "wearly-demo-tui-heshe-nau",
+      "name": "Túi xách Heshe màu nâu",
+      "category": "Túi & balo",
+      "brand": "Heshe",
+      "priceVnd": 899000,
+      "color": "Nâu",
+      "sizes": [
+        "Freesize"
+      ],
+      "initialStock": [
+        20
+      ],
+      "source": "https://dummyjson.com/products/173",
+      "imageSources": [
+        "https://cdn.dummyjson.com/product-images/womens-bags/heshe-women's-leather-bag/1.webp",
+        "https://cdn.dummyjson.com/product-images/womens-bags/heshe-women's-leather-bag/2.webp"
+      ],
+      "images": [
+        "catalog/images/1f29669e-c87b-4fc2-a0c0-e399f9f22a1c",
+        "catalog/images/3730e4f1-1b8f-4f3a-8e69-8165585114e4"
+      ]
+    },
+    {
+      "id": "a3dd37f5-71e1-4638-bf85-908454389ee8",
+      "slug": "wearly-demo-balo-mini-trang",
+      "name": "Balo mini màu trắng",
+      "category": "Túi & balo",
+      "brand": "Urban Chic",
+      "priceVnd": 459000,
+      "color": "Trắng",
+      "sizes": [
+        "Freesize"
+      ],
+      "initialStock": [
+        20
+      ],
+      "source": "https://dummyjson.com/products/175",
+      "imageSources": [
+        "https://cdn.dummyjson.com/product-images/womens-bags/white-faux-leather-backpack/1.webp",
+        "https://cdn.dummyjson.com/product-images/womens-bags/white-faux-leather-backpack/2.webp"
+      ],
+      "images": [
+        "catalog/images/192348fc-8288-4e21-bbdf-bb4d2bafdeed",
+        "catalog/images/308c6fe1-37df-4450-8091-df14b1806b6b"
+      ]
+    },
+    {
+      "id": "ddcf2071-d53d-4cd0-ab41-1065739a3cf1",
+      "slug": "wearly-demo-tui-xach-den-cong-so",
+      "name": "Túi xách đen dáng công sở",
+      "category": "Túi & balo",
+      "brand": "Elegance Collection",
+      "priceVnd": 649000,
+      "color": "Đen",
+      "sizes": [
+        "Freesize"
+      ],
+      "initialStock": [
+        20
+      ],
+      "source": "https://dummyjson.com/products/176",
+      "imageSources": [
+        "https://cdn.dummyjson.com/product-images/womens-bags/women-handbag-black/1.webp",
+        "https://cdn.dummyjson.com/product-images/womens-bags/women-handbag-black/2.webp"
+      ],
+      "images": [
+        "catalog/images/671f9a04-c644-4d3c-96ea-ca5cfc88ba54",
+        "catalog/images/36570f4b-f658-4293-974d-47d8c9968f77"
+      ]
+    },
+    {
+      "id": "133ba165-d4f5-4760-8505-f2adbbd5be17",
+      "slug": "wearly-demo-giay-cao-got-den-mui-nhon",
+      "name": "Giày cao gót đen mũi nhọn",
+      "category": "Giày",
+      "brand": "Comfort Trends",
+      "priceVnd": 599000,
+      "color": "Đen",
+      "sizes": [
+        "36",
+        "37",
+        "38",
+        "39",
+        "40"
+      ],
+      "initialStock": [
+        8,
+        10,
+        12,
+        10,
+        8
+      ],
+      "source": "https://dummyjson.com/products/185",
+      "imageSources": [
+        "https://cdn.dummyjson.com/product-images/womens-shoes/black-&-brown-slipper/1.webp",
+        "https://cdn.dummyjson.com/product-images/womens-shoes/black-&-brown-slipper/2.webp"
+      ],
+      "images": [
+        "catalog/images/177d4bf8-91f3-478f-a164-1e8e48ab3bf6",
+        "catalog/images/32abe0a9-8f94-48ac-90a6-66f5c60197ba"
+      ]
+    },
+    {
+      "id": "8dd6f3b2-b44d-4c69-80bb-9e46dab34e79",
+      "slug": "wearly-demo-giay-got-nhon-champagne",
+      "name": "Giày gót nhọn màu champagne",
+      "category": "Giày",
+      "brand": "Fashion Diva",
+      "priceVnd": 699000,
+      "color": "Champagne",
+      "sizes": [
+        "36",
+        "37",
+        "38",
+        "39",
+        "40"
+      ],
+      "initialStock": [
+        8,
+        10,
+        12,
+        10,
+        8
+      ],
+      "source": "https://dummyjson.com/products/187",
+      "imageSources": [
+        "https://cdn.dummyjson.com/product-images/womens-shoes/golden-shoes-woman/1.webp",
+        "https://cdn.dummyjson.com/product-images/womens-shoes/golden-shoes-woman/2.webp"
+      ],
+      "images": [
+        "catalog/images/6f535773-90a1-43e2-afd5-301c68f69f02",
+        "catalog/images/3c7b430b-a565-43c7-9667-5b60c36d4ce3"
+      ]
+    },
+    {
+      "id": "facc5ac4-0a63-4070-9e8b-fc4ae8327fdb",
+      "slug": "wearly-demo-giay-pampi-den-co-ban",
+      "name": "Giày cao gót Pampi đen cơ bản",
+      "category": "Giày",
+      "brand": "Pampi",
+      "priceVnd": 549000,
+      "color": "Đen",
+      "sizes": [
+        "36",
+        "37",
+        "38",
+        "39",
+        "40"
+      ],
+      "initialStock": [
+        8,
+        10,
+        12,
+        10,
+        8
+      ],
+      "source": "https://dummyjson.com/products/188",
+      "imageSources": [
+        "https://cdn.dummyjson.com/product-images/womens-shoes/pampi-shoes/1.webp",
+        "https://cdn.dummyjson.com/product-images/womens-shoes/pampi-shoes/2.webp"
+      ],
+      "images": [
+        "catalog/images/09549622-83fc-4dc4-b512-e72c75a938a1",
+        "catalog/images/04344e54-8e1a-432d-965f-d5f5e8835844"
+      ]
+    },
+    {
+      "id": "56172dd8-9152-4a48-8d52-0464e2a34375",
+      "slug": "wearly-demo-giay-cao-got-do",
+      "name": "Giày cao gót đỏ nổi bật",
+      "category": "Giày",
+      "brand": "Fashion Express",
+      "priceVnd": 649000,
+      "color": "Đỏ",
+      "sizes": [
+        "36",
+        "37",
+        "38",
+        "39",
+        "40"
+      ],
+      "initialStock": [
+        8,
+        10,
+        12,
+        10,
+        8
+      ],
+      "source": "https://dummyjson.com/products/189",
+      "imageSources": [
+        "https://cdn.dummyjson.com/product-images/womens-shoes/red-shoes/1.webp",
+        "https://cdn.dummyjson.com/product-images/womens-shoes/red-shoes/2.webp"
+      ],
+      "images": [
+        "catalog/images/18fe51e5-60f1-4d00-9fed-1172631825f9",
+        "catalog/images/a99cd0b0-655f-4320-bac0-aea657a08e97"
+      ]
+    },
+    {
+      "id": "753b9a00-020e-48de-bae4-3e0043f66838",
+      "slug": "wearly-demo-sneaker-off-white-trang-do",
+      "name": "Sneaker Off White trắng đỏ",
+      "category": "Giày",
+      "brand": "Off White",
+      "priceVnd": 1490000,
+      "color": "Trắng đỏ",
+      "sizes": [
+        "40",
+        "41",
+        "42",
+        "43",
+        "44"
+      ],
+      "initialStock": [
+        8,
+        10,
+        12,
+        10,
+        8
+      ],
+      "source": "https://dummyjson.com/products/91",
+      "imageSources": [
+        "https://cdn.dummyjson.com/product-images/mens-shoes/sports-sneakers-off-white-&-red/1.webp",
+        "https://cdn.dummyjson.com/product-images/mens-shoes/sports-sneakers-off-white-&-red/2.webp"
+      ],
+      "images": [
+        "catalog/images/dbf1bf3e-794e-4653-ab30-06c9bdc59825",
+        "catalog/images/52dc12f6-88ef-409b-a582-c41adcf800de"
+      ]
+    },
+    {
+      "id": "ade2971b-5aa4-4ad8-9596-90690c88a63c",
+      "slug": "wearly-demo-sneaker-puma-future-rider",
+      "name": "Sneaker Puma Future Rider phối màu",
+      "category": "Giày",
+      "brand": "Puma",
+      "priceVnd": 1390000,
+      "color": "Xanh vàng",
+      "sizes": [
+        "40",
+        "41",
+        "42",
+        "43",
+        "44"
+      ],
+      "initialStock": [
+        8,
+        10,
+        12,
+        10,
+        8
+      ],
+      "source": "https://dummyjson.com/products/90",
+      "imageSources": [
+        "https://cdn.dummyjson.com/product-images/mens-shoes/puma-future-rider-trainers/1.webp"
+      ],
+      "images": [
+        "catalog/images/61b99a3a-1bec-4ab2-8504-17afebf75eea"
+      ]
+    }
+  ],
+  "variants": 90,
+  "images": 42,
+  "units": 872,
+  "existingRowsPreserved": true,
+  "importActorId": "3f184789-a0ef-4d5d-9086-fb91cc37f62f"
+}
