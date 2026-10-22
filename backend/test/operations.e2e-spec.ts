@@ -180,6 +180,37 @@ redisDescribe(
       );
       for (const id of users) expect(JSON.stringify(after)).not.toContain(id);
     });
+    it('counts terminal failures by completion time and uses creation time only for legacy null completion', async () => {
+      const count = (body: {
+        work: { ai: { failures: { code: string; count: number }[] } };
+      }) =>
+        body.work.ai.failures
+          .filter((f) => f.code === 'AI_OUTCOME_UNKNOWN')
+          .reduce((sum, f) => sum + f.count, 0);
+      const before = count((await get(admin).expect(200)).body);
+      const old = new Date(Date.now() - 48 * 3600000),
+        recent = new Date();
+      await db.aiUsage.createMany({
+        data: [
+          { createdAt: old, finishedAt: recent },
+          { createdAt: old, finishedAt: old },
+          { createdAt: recent, finishedAt: null },
+        ].map((times) => ({
+          ...times,
+          userId: users[0],
+          kind: 'TRY_ON',
+          requestKey: randomUUID(),
+          inputHash: 'c'.repeat(64),
+          model: 'gemini-fixture',
+          estimatedCostVnd: 3000,
+          status: 'UNKNOWN' as const,
+          errorCode: 'AI_OUTCOME_UNKNOWN',
+          deadlineAt: old,
+          expiresAt: new Date(Date.now() + 60000),
+        })),
+      });
+      expect(count((await get(admin).expect(200)).body) - before).toBe(2);
+    });
     it('scopes queue metrics and rejects missing, stale, malformed and foreign heartbeats', async () => {
       await redis.set(
         `${prefix}-foreign:monitor:worker`,

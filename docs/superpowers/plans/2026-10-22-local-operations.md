@@ -149,9 +149,9 @@ docs/LOCAL_COMPLETION_PROGRESS.md.
 - [x] Run local workflow commands and YAML/guard checks. Update operator docs with
   current login persistence, Gemini/VNPay status, runtime commands and monitored
   failure handling; distinguish prepared hosted workflow from an observed hosted run.
-- [ ] One independent whole-milestone reviewer, regrade findings, one tested fix
+- [x] One independent whole-milestone reviewer, regrade findings, one tested fix
   pass, relevant final suites and compiled local smoke. No re-review loop.
-- [ ] Commit final evidence/checklist, remove only this plan's scratch. Goal stays
+- [x] Commit final evidence/checklist, remove only this plan's scratch. Goal stays
   active for native backup/restore, identity/policies/SEO, configured providers and
   final integration into D:/Fashion Shop.
 

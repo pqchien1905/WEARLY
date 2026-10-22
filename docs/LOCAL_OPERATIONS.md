@@ -32,6 +32,12 @@ chạy một browser fixture tạo bản web khác, chạy lại `build`. `start
 build không khớp, cổng đã có người dùng, dịch vụ thiếu hoặc worker khác còn sống
 trong cùng namespace. Không chạy đồng thời worker dev và worker runtime.
 
+Worker bắt đầu xử lý công việc đã được chấp nhận ngay khi khởi động, kể cả trước
+khi lệnh `start` hoàn tất. Nếu Gemini đã cấu hình, công việc này có thể phát sinh
+chi phí. Khi khởi động lỗi, rollback chỉ dừng các tiến trình vừa tạo, không hoàn
+tác thư đã gửi hoặc yêu cầu provider đã thực hiện. Kiểm tra công việc đang chờ
+trước khi bật lại worker; không đổi namespace để bỏ qua chúng.
+
 `stop` chỉ gửi yêu cầu có xác thực đến API/worker/web do chính worktree đã tạo;
 không dừng PostgreSQL, Redis, MinIO, Mailpit hay tiến trình chiếm cổng của người dùng.
 Worker có thể cần khoảng150 giây để kết thúc công việc đang chạy. Đừng đóng cưỡng
@@ -61,6 +67,8 @@ chủ động bấm, không tự tạo lại tác vụ AI.
   còn sống, chưa chứng minh công việc đang tiến triển; xem thêm queue và lỗi.
 - AI: lượt dùng và chi phí **ước tính** từ đầu ngày UTC, reservation/processing
   quá hạn, nhóm mã lỗi. Đây không phải hóa đơn Gemini.
+  Lỗi24 giờ tính theo thời điểm kết thúc; bản ghi cũ thiếu thời điểm này dùng
+  thời điểm tạo làm mốc thay thế.
 - Outbox, email, ảnh cần dọn: số lượng đang chờ hoặc lỗi để xử lý tiếp.
 - Storage: truy cập bucket; SMTP: kết nối socket, chưa xác nhận thư đã được gửi.
 - Gemini/VNPay: có cấu hình hay chưa; chưa chứng minh khóa hợp lệ hoặc đã giao dịch.

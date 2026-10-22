@@ -168,7 +168,7 @@ export class OperationsProbes {
         WITH failures AS (
           SELECT CASE WHEN kind IN ('TRY_ON','STYLIST') THEN kind ELSE 'OTHER' END AS kind,
             CASE WHEN "errorCode" = ANY($1::text[]) THEN "errorCode" ELSE 'OTHER' END AS code, count(*)::int AS count
-          FROM public."AiUsage" WHERE status IN ('FAILED','UNKNOWN') AND "createdAt" >= now() - interval '24 hours'
+          FROM public."AiUsage" WHERE status IN ('FAILED','UNKNOWN') AND COALESCE("finishedAt","createdAt") >= now() - interval '24 hours'
           GROUP BY 1,2
         )
         SELECT (SELECT count(*)::int FROM public._prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL) AS migrations,

@@ -138,6 +138,53 @@ test("an occupied foreign listener is refused and left running", async (t) => {
     "foreign",
   );
 });
+
+test("a recycled control port never receives a destructive request before identity verification", async (t) => {
+  const root = workspace(t);
+  let stops = 0;
+  const server = http.createServer((req, res) => {
+    if (req.method === "POST" && req.url === "/stop") stops++;
+    res.end("{}");
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const state = {
+    ...identity(root),
+    pid: process.pid,
+    host: "127.0.0.1",
+    controlPort: server.address().port,
+  };
+  await assert.rejects(runtime.controlRequest(state, "stop"));
+  assert.equal(stops, 0);
+});
+
+test("stop refuses a new connection after the verified listener closes its socket", async (t) => {
+  const root = workspace(t),
+    id = identity(root);
+  let stops = 0;
+  const server = http.createServer((req, res) => {
+    if (req.method === "POST") stops++;
+    res.setHeader("Connection", "close");
+    res.end(
+      JSON.stringify({
+        ...id,
+        secret: undefined,
+        pid: process.pid,
+        ready: true,
+      }),
+    );
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const state = {
+    ...id,
+    pid: process.pid,
+    host: "127.0.0.1",
+    controlPort: server.address().port,
+  };
+  await assert.rejects(runtime.controlRequest(state, "stop"));
+  assert.equal(stops, 0);
+});
 test("nonzero native command exits fail instead of reporting a successful build", async () => {
   await assert.rejects(
     runtime.runCommand(process.execPath, ["-e", "process.exit(17)"], {

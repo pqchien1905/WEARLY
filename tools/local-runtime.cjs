@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const net = require("node:net");
+const http = require("node:http");
 const { createHash, randomUUID, randomBytes } = require("node:crypto");
 const { spawn } = require("node:child_process");
 const { createRequire } = require("node:module");
@@ -182,53 +183,91 @@ async function locked(root, work) {
 async function controlRequest(child, action) {
   validChild(child);
   if (!["status", "stop"].includes(action)) fail("INVALID_RUNTIME_ACTION");
-  const response = await fetch(
-    `http://127.0.0.1:${child.controlPort}/${action}`,
-    {
-      method: action === "stop" ? "POST" : "GET",
-      redirect: "error",
-      signal: AbortSignal.timeout(2000),
-      headers: {
-        Authorization: `Bearer ${child.secret}`,
-        "X-Wearly-Run": child.runId,
-        "X-Wearly-Role": child.role,
-        "X-Wearly-Workspace": Buffer.from(child.workspace).toString("base64"),
-      },
-    },
-  );
-  if (!response.ok) {
-    await response.body?.cancel();
-    fail("CONTROL_UNVERIFIED");
-  }
-  const reader = response.body.getReader();
-  const chunks = [];
-  let size = 0;
+  const agent = new http.Agent({ keepAlive: true, maxSockets: 1 });
+  const send = (operation, expectedSocket) =>
+    new Promise((resolve, reject) => {
+      let connection;
+      const request = http.request(
+        {
+          hostname: "127.0.0.1",
+          port: child.controlPort,
+          path: `/${operation}`,
+          method: operation === "stop" ? "POST" : "GET",
+          agent,
+          signal: AbortSignal.timeout(2000),
+          headers: {
+            Authorization: `Bearer ${child.secret}`,
+            "X-Wearly-Run": child.runId,
+            "X-Wearly-Role": child.role,
+            "X-Wearly-Workspace": Buffer.from(child.workspace).toString(
+              "base64",
+            ),
+          },
+        },
+        (response) => {
+          if (response.statusCode < 200 || response.statusCode >= 300) {
+            response.destroy();
+            reject(Error("CONTROL_UNVERIFIED"));
+            return;
+          }
+          const chunks = [];
+          let size = 0;
+          response.on("data", (chunk) => {
+            size += chunk.length;
+            if (size > 8192) {
+              response.destroy();
+              reject(Error("CONTROL_UNVERIFIED"));
+            } else chunks.push(chunk);
+          });
+          response.on("error", () => reject(Error("CONTROL_UNVERIFIED")));
+          response.on("aborted", () => reject(Error("CONTROL_UNVERIFIED")));
+          response.on("end", () => {
+            try {
+              const result = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+              if (
+                result.workspace !== child.workspace ||
+                result.runId !== child.runId ||
+                result.role !== child.role ||
+                result.pid !== child.pid ||
+                typeof result.ready !== "boolean"
+              )
+                fail("CONTROL_UNVERIFIED");
+              resolve({
+                result,
+                socket: connection,
+                keepAlive:
+                  response.headers.connection?.toLowerCase() !== "close",
+              });
+            } catch {
+              reject(Error("CONTROL_UNVERIFIED"));
+            }
+          });
+        },
+      );
+      request.on("error", (error) =>
+        reject(Error("CONTROL_UNVERIFIED", { cause: error })),
+      );
+      request.once("socket", (socket) => {
+        connection = socket;
+        // Never transmit a stop to a replacement connection, even if the port is reused.
+        if (expectedSocket && (socket !== expectedSocket || socket.destroyed)) {
+          request.destroy(Error("CONTROL_UNVERIFIED"));
+          return;
+        }
+        request.end();
+      });
+    });
   try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.length;
-      if (size > 8192) fail("CONTROL_UNVERIFIED");
-      chunks.push(Buffer.from(value));
-    }
+    const verified = await send("status");
+    if (action === "status") return verified.result;
+    if (!verified.keepAlive || verified.socket.destroyed)
+      fail("CONTROL_UNVERIFIED");
+    // Let Agent release the completed GET before requesting that exact socket.
+    await new Promise((resolve) => setImmediate(resolve));
+    return (await send("stop", verified.socket)).result;
   } finally {
-    await reader.cancel().catch(() => {});
+    agent.destroy();
   }
-  let result;
-  try {
-    result = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-  } catch {
-    fail("CONTROL_UNVERIFIED");
-  }
-  if (
-    result.workspace !== child.workspace ||
-    result.runId !== child.runId ||
-    result.role !== child.role ||
-    result.pid !== child.pid ||
-    typeof result.ready !== "boolean"
-  )
-    fail("CONTROL_UNVERIFIED");
-  return result;
 }
 async function status(root) {
   const loc = locations(root),

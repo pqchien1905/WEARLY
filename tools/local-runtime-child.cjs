@@ -46,17 +46,15 @@ async function startControl(identity, application) {
       return;
     }
     const state = application.status();
-    response
-      .writeHead(stop ? 202 : 200)
-      .end(
-        JSON.stringify({
-          workspace: identity.workspace,
-          runId: identity.runId,
-          role: identity.role,
-          pid: process.pid,
-          ready: !stopping && !stop && state.ready === true,
-        }),
-      );
+    response.writeHead(stop ? 202 : 200).end(
+      JSON.stringify({
+        workspace: identity.workspace,
+        runId: identity.runId,
+        role: identity.role,
+        pid: process.pid,
+        ready: !stopping && !stop && state.ready === true,
+      }),
+    );
     if (stop && !stopping) {
       stopping = true;
       try {
@@ -69,7 +67,9 @@ async function startControl(identity, application) {
   });
   server.requestTimeout = 3000;
   server.headersTimeout = 3000;
-  server.keepAliveTimeout = 500;
+  // Keep the authenticated GET connection alive for the following same-socket POST.
+  // Sub-second values advertise timeout=0 and Node's client retires the socket.
+  server.keepAliveTimeout = 5000;
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", resolve);

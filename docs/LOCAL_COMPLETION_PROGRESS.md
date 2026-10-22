@@ -467,7 +467,7 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   acceptance, local operations/CI/backup-restore, identity/policies/SEO and final
   root integration remain required. Full A-Z goal ACTIVE.
 
-## Local operations / monitoring / CI — in progress, 22 October 2026
+## Local operations / monitoring / CI — verified, 22 October 2026
 
 - ADMIN-only private operations snapshot and bounded PG/Redis/S3/SMTP probes,
   aggregate queues/AI estimates/failures/mail/cleanup, and worker heartbeat added.
@@ -510,3 +510,18 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   documents runtime ownership, diagnostic limits and test profiles. README/setup
   now describe persistent HttpOnly sessions and avoid routine business seed.
   Independent whole-milestone review remains before closing this milestone.
+- Sole independent reviewer checkedf649201..693707d. Two Important fixes completed
+  with RED->GREEN regressions: stop now verifies identity read-only and sends POST
+  only on that same TCP socket (never reconnects); failure24h uses terminal time,
+  with documented creation-time fallback for legacy null timestamps. Startup
+  provider-cost disclosure was regraded Important and corrected in spec/guide.
+- Final acceptance full PASS:201E2E,84unit,38tool,425Flutter+2 existing opt-in skips,
+  lint/build/analyze. Fresh native build/start/status/stop PASS after transport fix;
+  read-only compiled business smoke readiness/products/content200, private routes401.
+  Logs `.tools/operations-final-{full,runtime,smoke}.log`. Native services and.env
+  preserved, owned children stopped, business/test schema26 unchanged.
+- Decision/review record: [operations implementation log](OPERATIONS_IMPLEMENTATION_LOG.md).
+  No deferred minors after regrading. Hosted CI and live providers not claimed
+  executed; Mailpit persistence restart remains blocked as previously documented.
+  Native recovery is the next required milestone; identity/policies/SEO, configured
+  provider acceptance and root integration remain. A-Z goal ACTIVE.

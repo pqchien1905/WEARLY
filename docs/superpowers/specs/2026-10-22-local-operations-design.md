@@ -23,7 +23,10 @@ PostgreSQL17, Redis/Memurai, MinIO and Mailpit; do not switch platform or deploy
 - Default browser origin is http://localhost:8080 and API localhost:3000. Runtime
   children get matching local CORS/recovery-link settings; secrets remain in
   backend/.env. Environment files are not overwritten. No implicit migrations,
-  seed, provider calls, process-wide kills or external network exposure on start.
+  seed, provider acceptance probes, process-wide kills or external exposure.
+  The ordinary worker resumes previously accepted work on start and may call a
+  configured provider before startup finishes; rollback stops children but cannot
+  undo completed work. Operator documentation must disclose this behavior.
 - CI runs locked dependency installation, lint/build/unit/integration and Flutter
   analysis/tests using dedicated synthetic services and disabled external providers.
   Local acceptance commands remain executable independently. Workflow creation
