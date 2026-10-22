@@ -68,16 +68,16 @@ Interfaces:
   never stores DB URL, credentials or row contents. Status starts incomplete,
   becomes complete only after dump TOC and every file verification pass.
 
-- [ ] Write guards/manifest tests: remote DB/S3, production, unsafe root/linked
+- [x] Write guards/manifest tests: remote DB/S3, production, unsafe root/linked
   child, missing/corrupt object, exceeded bound, unexpected secret in errors.
   Run Node tests; Expected: missing helper/behavior RED before implementation.
-- [ ] Implement private directory protection before writes, native PostgreSQL17
+- [x] Implement private directory protection before writes, native PostgreSQL17
   version checks, exported snapshot and bounded pg_dump -Fc --snapshot with
   credentials in environment only. Validate archive via pg_restore --list.
-- [ ] Test snapshot stability with a concurrent synthetic row change after export;
+- [x] Test snapshot stability with a concurrent synthetic row change after export;
   dump/fingerprints must match the old snapshot. Missing image must retain an
   incomplete archive, never a complete one. Tests use fixtures, not business edits.
-- [ ] Run guards + synthetic backup acceptance; Expected: all pass, source data
+- [x] Run guards + synthetic backup acceptance; Expected: all pass, source data
   preserved, no existing files overwritten. Commit deliverable/evidence.
 
 ## Task 2: fresh restore and quarantine
