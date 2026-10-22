@@ -504,3 +504,9 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   status/stop and heartbeat removal, ports freed, services still available and
   backend/.env bytes unchanged.200E2E,84unit,29tool tests,lint/build PASS. Runtime
   build commands prioritize the selected Node24 path. CI/guide/final review remain.
+- CI helper guards and synthetic Ubuntu workflow added; no hosted run or push
+  claimed. Serial `tools/acceptance.ps1 full` PASS:200E2E,84unit,36tool tests,
+  425Flutter+2 existing opt-in skips,lint/build/analyze. Guide LOCAL_OPERATIONS.md
+  documents runtime ownership, diagnostic limits and test profiles. README/setup
+  now describe persistent HttpOnly sessions and avoid routine business seed.
+  Independent whole-milestone review remains before closing this milestone.

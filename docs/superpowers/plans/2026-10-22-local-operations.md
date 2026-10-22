@@ -143,10 +143,10 @@ Files: .github/workflows/verify.yml,tools/ci-verify.cjs,tools/ci-verify.test.cjs
 tools/acceptance.ps1,docs/LOCAL_OPERATIONS.md,README.md,docs/setup.md,
 docs/LOCAL_COMPLETION_PROGRESS.md.
 
-- [ ] RED environment/command guards; implement locked synthetic CI and serial
+- [x] RED environment/command guards; implement locked synthetic CI and serial
   local acceptance profiles using existing domain-specific browser helpers.
   CI does not overwrite.env, seed business data or obtain real provider keys.
-- [ ] Run local workflow commands and YAML/guard checks. Update operator docs with
+- [x] Run local workflow commands and YAML/guard checks. Update operator docs with
   current login persistence, Gemini/VNPay status, runtime commands and monitored
   failure handling; distinguish prepared hosted workflow from an observed hosted run.
 - [ ] One independent whole-milestone reviewer, regrade findings, one tested fix

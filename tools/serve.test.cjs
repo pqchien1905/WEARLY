@@ -29,7 +29,7 @@ test("static factory serves GET/HEAD and refuses encoded traversal or outside ju
   assert.equal(await (await fetch(url, { method: "HEAD" })).text(), "");
   assert.equal((await fetch(url + "/escape/private.txt")).status, 403);
   assert.equal(
-    (await fetch(url + "/%2e%2e%5coutside%5cprivate.txt")).status,
+    (await fetch(url + "/%2e%2e%2foutside%2fprivate.txt")).status,
     403,
   );
   assert.equal((await fetch(url, { method: "POST" })).status, 405);

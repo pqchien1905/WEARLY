@@ -1,0 +1,71 @@
+name: Verify
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: wearly_ci_test
+          POSTGRES_USER: wearly_ci
+          POSTGRES_PASSWORD: ci-fixture-password-only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U wearly_ci -d wearly_ci_test"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      NODE_ENV: test
+      CI_DATABASE_URL: postgresql://wearly_ci:ci-fixture-password-only@127.0.0.1:5432/wearly_ci_test
+      CI_REDIS_HOST: 127.0.0.1
+      CI_REDIS_PORT: "6379"
+      CI_S3_ENDPOINT: http://127.0.0.1:9000
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install locked backend dependencies
+        run: npm ci --prefix backend
+      - name: Install pinned Flutter SDK
+        run: |
+          git clone --depth 1 --branch 3.47.7 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/flutter/bin/flutter" --version
+      - name: Start synthetic private storage
+        run: >-
+          docker run -d --name wearly-ci-minio -p 127.0.0.1:9000:9000
+          -e MINIO_ROOT_USER=ci-fixture -e MINIO_ROOT_PASSWORD=ci-storage-fixture-only
+          minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
+      - run: node tools/ci-verify.cjs prepare
+      - run: node tools/ci-verify.cjs storage
+      - run: node tools/ci-verify.cjs backend
+      - run: node tools/ci-verify.cjs frontend
+      - run: node tools/ci-verify.cjs tools
+      - name: Stop this job's storage container
+        if: always()
+        run: docker rm -f wearly-ci-minio || true

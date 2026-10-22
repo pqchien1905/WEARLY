@@ -3,6 +3,8 @@
 Ứng dụng Flutter hiện có và backend NestJS/PostgreSQL cho thương mại thời trang.
 
 - [Cài đặt và chạy trên Windows](docs/setup.md)
+- [Vận hành local, giám sát và kiểm thử tự động](docs/LOCAL_OPERATIONS.md)
+- [Tiến độ hoàn thiện local hiện tại](docs/LOCAL_COMPLETION_PROGRESS.md)
 - [Audit và sửa lỗi hệ thống hiện tại](docs/SYSTEM_AUDIT.md)
 - [Tiến độ goal và phần còn thiếu](docs/IMPLEMENTATION_PROGRESS.md)
 - [Bàn giao đợt hoàn thiện hệ thống](docs/SYSTEM_HANDOFF.md)
@@ -30,19 +32,15 @@ Bắt đầu trên máy Windows đã cấu hình PostgreSQL và Memurai:
 ```powershell
 Get-Service postgresql-x64-17,Memurai
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\start-storage.ps1
-cd backend
-npm ci
-npm run prisma:generate
-npm run prisma:deploy
-npm run prisma:seed
-npm run start:dev
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\local.ps1 build
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\local.ps1 start
 ```
 
-Mở terminal riêng trong `backend` và chạy `npm run build` rồi `npm run worker`. pgAdmin nằm trong Start Menu → PostgreSQL 17, với kết nối **WEARLY - PostgreSQL 17 (Windows)** đã đăng ký trên máy này. Máy mới hoặc chạy bằng Docker: làm theo [setup.md](docs/setup.md); không ghi đè các file `.env` đang có.
+Lệnh trên dùng dependencies và schema đã chuẩn bị, khởi động API, worker và web riêng. Nếu bật email, khởi động Mailpit trước theo [hướng dẫn vận hành](docs/LOCAL_OPERATIONS.md). Dùng `local.ps1 status` để xem, `local.ps1 stop` để dừng đúng tiến trình đã tạo; các dịch vụ dữ liệu vẫn chạy. Máy mới hoặc chạy bằng Docker: làm theo [setup.md](docs/setup.md); không ghi đè `.env` hoặc seed lại database nghiệp vụ.
 
 Swagger: http://localhost:3000/api/docs. Catalog API: http://localhost:3000/api/v1/products.
 
-Mở terminal thứ hai tại `D:\Fashion Shop`, chạy giao diện Flutter kết nối API:
+Nếu phát triển giao diện bằng hot reload, dùng API dev và chạy Flutter thay cho web runtime:
 
 ```powershell
 .\tools\frontend.ps1 api
@@ -61,8 +59,8 @@ Khách có đơn **đã giao** có thể chọn **Xem đánh giá** trên trang 
 
 **Tài khoản → Phong cách của tôi** lưu size, phong cách, màu ưu tiên và ngân sách vào PostgreSQL, giữ qua lần đăng nhập sau. [Hướng dẫn hồ sơ phong cách](docs/style-preferences.md).
 
-Hai khu vực có giao diện và phiên đăng nhập riêng; đăng xuất một bên giữ nguyên phiên bên kia. ADMIN có thể đăng nhập riêng ở cửa hàng để mua sắm. Sau khi tải lại trang cần đăng nhập lại; dữ liệu vẫn được lưu trên máy chủ. Yêu thích lưu theo tài khoản trên PostgreSQL: bấm trái tim ở sản phẩm hoặc **Lưu yêu thích** trong giỏ; mở `http://localhost:8080/#/wishlist` để xem/bỏ. Danh sách tối đa200 mục, sản phẩm không còn mở bán được báo rõ và vẫn bỏ được.
+Hai khu vực có giao diện và phiên đăng nhập riêng; đăng xuất một bên giữ nguyên phiên bên kia. ADMIN có thể đăng nhập riêng ở cửa hàng để mua sắm. Phiên giữ qua tải lại trang bằng cookie HttpOnly, JWT chỉ ở bộ nhớ. Yêu thích lưu theo tài khoản trên PostgreSQL: bấm trái tim ở sản phẩm hoặc **Lưu yêu thích** trong giỏ; mở `http://localhost:8080/#/wishlist` để xem/bỏ. Danh sách tối đa200 mục, sản phẩm không còn mở bán được báo rõ và vẫn bỏ được.
 
-Chạy `.\tools\frontend.ps1 run` để xem demo độc lập. Khôi phục mật khẩu đã có API/worker/SMTP, cần bật và cấu hình gửi thư; xem [hướng dẫn](docs/password-recovery.md). AI và thanh toán online đang được hoàn thiện theo phạm vi local, Gemini và VNPay sandbox; xem [tiến độ hiện tại](docs/LOCAL_COMPLETION_PROGRESS.md).
+Chạy `.\tools\frontend.ps1 run` để xem demo độc lập. Khôi phục mật khẩu đã có API/worker/SMTP, cần bật và cấu hình gửi thư; xem [hướng dẫn](docs/password-recovery.md). Gemini Stylist/Try-On, VNPay sandbox, giao hàng mô phỏng và đối soát COD đã có luồng local. Kết nối provider thật còn cần khóa và nghiệm thu riêng; xem [tiến độ hiện tại](docs/LOCAL_COMPLETION_PROGRESS.md).
 
 Cấp ADMIN cho một tài khoản đã đăng ký, từ thư mục gốc: `node tools/grant-admin.cjs email-cua-ban@example.com`. Công cụ chỉ đổi quyền tài khoản hiện có và thu hồi các phiên cũ; không tạo mật khẩu mặc định. Đăng nhập lại sau khi được cấp quyền. Chi tiết: [Quản trị trực tuyến](docs/admin.md).

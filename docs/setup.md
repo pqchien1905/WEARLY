@@ -6,7 +6,7 @@ Phần này dành cho máy mới, dùng PostgreSQL/Redis Docker và backend ch�
 
 1. Cài Git for Windows; cài **Node24 LTS** từ [Node.js](https://nodejs.org/en/download), giữ tùy chọn thêm PATH. Prisma nằm trong dependencies dự án, không cần cài Prisma global.
 2. Cài [Docker Desktop cho Windows](https://docs.docker.com/desktop/setup/install/windows-install/), chọn WSL2/Linux containers, làm theo yêu cầu bật ảo hóa/WSL của bộ cài và Restart khi Windows yêu cầu. Mở Docker Desktop, chờ Engine running rồi kiểm tra `docker info`.
-3. Cài [Flutter SDK](https://docs.flutter.dev/install/manual), thêm thư mục `bin` vào user PATH; cài Chrome để chạy Web. Dùng SDK stable có Dart>=3.10 theo `frontend/pubspec.yaml`, chạy `flutter doctor` để kiểm tra Web toolchain. Không cần cài Android Studio để chạy Web.
+3. Cài [Flutter SDK3.47.7](https://github.com/flutter/flutter/releases/tag/3.47.7), thêm thư mục `bin` vào user PATH; cài Chrome để chạy Web. Chạy `flutter doctor` để kiểm tra Web toolchain. Runtime Windows hiện dùng SDK tại `.tools/flutter`; helper phát triển cũng hỗ trợ Flutter trên PATH. Không cần cài Android Studio để chạy Web.
 4. Mở PowerShell mới. Nếu máy cá nhân chặn `npm.ps1`, đặt `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` rồi mở terminal mới; không đổi chính sách máy do tổ chức quản lý. Máy hiện tại đã dùng RemoteSigned và chạy được `npm`.
 
 Clone vào thư mục mới chưa có repository; không chạy clone đè dự án đang dùng:
@@ -29,7 +29,7 @@ npm run prisma:seed
 npm run start:dev
 ```
 
-`init-env` sinh secrets ngẫu nhiên và tạo root/backend `.env`, từ chối ghi đè. Mặc định máy mới dùng localhost5432/6379; nếu các cổng đó đã bị chiếm, chọn cổng khác rồi cập nhật đồng bộ `POSTGRES_PUBLISHED_PORT`, `REDIS_PUBLISHED_PORT` ở root `.env` và `DATABASE_URL`, `REDIS_PORT` trong backend `.env` trước khi chạy. Chỉ đổi password env không đổi password của volume PostgreSQL đã khởi tạo; không xóa volume để né lỗi kết nối.
+`prisma:seed` ở trên chỉ dành cho database mới trống cần dữ liệu mẫu, không dùng khi vận hành/nâng cấp dữ liệu nghiệp vụ. `init-env` sinh secrets ngẫu nhiên và tạo root/backend `.env`, từ chối ghi đè. Mặc định máy mới dùng localhost5432/6379; nếu các cổng đó đã bị chiếm, chọn cổng khác rồi cập nhật đồng bộ `POSTGRES_PUBLISHED_PORT`, `REDIS_PUBLISHED_PORT` ở root `.env` và `DATABASE_URL`, `REDIS_PORT` trong backend `.env` trước khi chạy. Chỉ đổi password env không đổi password của volume PostgreSQL đã khởi tạo; không xóa volume để né lỗi kết nối.
 
 Terminal thứ hai tại root clone: `.\tools\frontend.ps1 api`. Mở `http://localhost:8080`, Swagger `http://localhost:3000/api/docs`. Từ backend, `npm run prisma:studio` mở giao diện database theo URL CLI in ra. Đăng ký tài khoản, rồi từ root dùng `node tools/grant-admin.cjs email-cua-ban@example.com` để cấp ADMIN cho chính tài khoản cần quản trị; đăng nhập lại tại `/#/admin`.
 
@@ -62,18 +62,14 @@ Get-Service postgresql-x64-17,Memurai
 Máy hiện tại đã có root/.env và backend/.env; không chạy lại `node tools/init-env.cjs`. Script đó chỉ dùng lần đầu trên máy mới để tạo secret ngẫu nhiên, từ chối ghi đè. Database native đã được cấp tài khoản theo `backend/.env`, không cần thay mật khẩu. Nếu service dừng, chạy `Start-Service postgresql-x64-17,Memurai` trong PowerShell Administrator.
 
 ```powershell
-cd backend
-npm ci
-npm run prisma:validate
-npm run prisma:generate
-npm run prisma:deploy
-npm run prisma:seed
-npm run start:dev
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\start-storage.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\local.ps1 build
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\local.ps1 start
 ```
 
-Swagger http://localhost:3000/api/docs, health http://localhost:3000/api/v1/health, readiness /api/v1/health/ready. Backend fail startup nếu DB không kết nối được. `npm run build; npm start` để chạy compiled code.
+Lệnh này dùng dependencies/schema đã có và chạy API/worker/web. Nếu bật email, khởi động Mailpit trước. Dùng `local.ps1 status` và `local.ps1 stop`; xem [hướng dẫn vận hành](LOCAL_OPERATIONS.md). Swagger http://localhost:3000/api/docs khi được bật, health http://localhost:3000/api/v1/health, readiness /api/v1/health/ready.
 
-**Cập nhật 19/10/2026:** có 8 migrations, gồm đánh giá, hồ sơ phong cách và receipt chống tạo địa chỉ trùng. Sau khi lấy code mới, chạy generate/deploy/build trước khi khởi động lại API/worker. PostgreSQL/Memurai là Windows services tự khởi động; MinIO dùng helper bên dưới. `node tools/smoke-backend.cjs` từ root kiểm tra compiled API trên cổng tạm và tự đóng.
+**Cập nhật22/10/2026:** database native nghiệp vụ và test đã ở26 migrations. Khi nâng cấp có schema mới, sao lưu trước rồi migrate đúng database; không seed lại. Runtime không tự migrate. PostgreSQL/Memurai là Windows services; MinIO dùng helper bên dưới. `node tools/smoke-backend.cjs` từ root kiểm tra compiled API trên cổng tạm và tự đóng.
 
 Terminal riêng:
 
@@ -90,7 +86,7 @@ Start Menu → PostgreSQL 17 → **pgAdmin 4**. Kết nối đã được đăng
 
 Đường dẫn cài: `C:\Program Files\PostgreSQL\17`. Dữ liệu service nằm trong thư mục `data` bên trong đường dẫn này; không nằm trong `.tools` và không mất khi đóng Codex. Tài khoản admin `postgres` chỉ dùng cài đặt; thông tin riêng được lưu tại `.tools/postgres-admin.json`.
 
-Worker terminal:
+Worker terminal khi phát triển thủ công (không chạy đồng thời với runtime):
 
 ```powershell
 cd 'D:\Fashion Shop\backend'
@@ -98,7 +94,7 @@ npm run build
 npm run worker
 ```
 
-Redis cần sẵn sàng. Provider mặc định Disabled; AI_PROVIDER_URL/API_KEY chưa tự kích hoạt AI. Phải triển khai TryOnProvider và bind ở API/worker đồng thời.
+Redis cần sẵn sàng. Gemini Stylist và Try-On đã được triển khai, chỉ hoạt động khi cấu hình `GEMINI_API_KEY` và model phù hợp; xem [Gemini local](GEMINI_LOCAL.md). Chưa có khóa thì không gọi provider. `AI_PROVIDER_URL/API_KEY` cũ không kích hoạt Gemini.
 
 `AI_QUEUE_PREFIX` mặc định `wearly`. Nếu đã chạy bản cũ với prefix mặc định của BullMQ (`bull`) và còn job, giữ `AI_QUEUE_PREFIX=bull` cho đến khi xử lý hết; không đổi prefix tùy ý vì mỗi prefix là một hàng đợi riêng.
 
@@ -110,7 +106,7 @@ Từ root dự án, khi backend đã chạy:
 .\tools\frontend.ps1 api
 ```
 
-Lệnh mở Flutter trên Chrome, cổng8080, bật `USE_REMOTE_API=true` và API `http://localhost:3000/api/v1`. CORS hiện tại đã cho phép `http://localhost:8080`. Đăng ký tài khoản mới với mật khẩu12–128 ký tự, thêm địa chỉ, chọn size sản phẩm rồi đặt COD. Lịch sử đơn và giỏ hàng lưu theo tài khoản trong PostgreSQL; tải lại trang cần đăng nhập lại vì token chỉ ở RAM. Không cần Docker cho luồng native này.
+Lệnh mở Flutter trên Chrome, cổng8080, bật `USE_REMOTE_API=true` và API `http://localhost:3000/api/v1`. CORS hiện tại đã cho phép `http://localhost:8080`. Đăng ký tài khoản mới với mật khẩu12–128 ký tự, thêm địa chỉ, chọn size sản phẩm rồi đặt COD. Lịch sử đơn và giỏ hàng lưu theo tài khoản trong PostgreSQL; cookie HttpOnly giữ phiên qua tải lại trang, JWT chỉ ở RAM. Không cần Docker cho luồng native này.
 
 `./tools/frontend.ps1 build-api` tạo Web release cho API mặc định. `-ApiUrl http://host:port/api/v1` đổi đích kết nối; cấu hình CORS của backend phải khớp origin frontend. Nếu cổng8080 đang chạy Flutter cũ, dùng `Ctrl+C` trong terminal đó rồi chạy lại lệnh trên.
 
@@ -238,13 +234,13 @@ PostgreSQL tạm không còn được dùng sau reboot. Backend hiện dùng Pos
 
 ### Khôi phục mật khẩu (cập nhật20/10)
 
-Có12migrations; chạy generate/deploy/build trước khi khởi động lại. SMTP
+Mốc recovery ban đầu có12 migrations; hiện tại đã26 migrations. SMTP
 mặc định tắt; xem [password-recovery.md](password-recovery.md) để cấu hình API
 và worker. `node tools/test-frontend-api.cjs --recovery` chạy Chrome với SMTP
 local, không gửi email ra Internet. `test-backend.ps1` ưu tiên cấu hình hiện
 có trong `backend/.env.test`; override khác file hiện có bị từ chối trước khi
-tạo DB. DB test hiện tại là bản Docker riêng cho lượt recovery, native
-`wearly_test` cũ được giữ nguyên.
+tạo DB. DB test hiện tại là native `wearly_test`; các database Docker của lượt
+kiểm chứng cũ được giữ riêng.
 
 Upload catalog dùng S3 hiện có và worker dọn reservation thất bại. Không mở
 bucket public. Xem [catalog-images.md](catalog-images.md). `-WithStorage`
@@ -309,4 +305,6 @@ không tạo khoản thu thứ hai. Biên nhận hiển thị giờUTC+7 có nh�
 
 Dashboard hiển thị tiền đã thu và COD đã giao chờ đối soát riêng biệt, tính từ đầu
 đến nay, gồm phí giao hàng. Đây chưa phải báo cáo lợi nhuận hay báo cáo kế toán.
-VNPay sandbox, vận chuyển mô phỏng/GHN sandbox và hoàn tiền thuộc các mốc kế tiếp.
+VNPay sandbox, vận chuyển mô phỏng local, đổi trả và hoàn tiền đã có luồng local;
+GHN chỉ là tùy chọn tương lai, chưa tích hợp. Kết nối provider thật cần nghiệm thu
+với cấu hình của chủ máy. Xem [tiến độ hiện tại](LOCAL_COMPLETION_PROGRESS.md).
