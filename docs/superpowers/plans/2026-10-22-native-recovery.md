@@ -102,16 +102,16 @@ Interfaces:
   Save aggregate evidence and inspection.env privately with new JWT secrets,
   disabled providers/mail, new DB/bucket/queue. Never load it into the live app.
 
-- [ ] Write RED tests for target collision, corrupted dump/file, traversal, partial
+- [x] Write RED tests for target collision, corrupted dump/file, traversal, partial
   restore, old session/reset token and pending side effects; Expected: fail before
   implementation. Include an old active staff account and private image metadata.
-- [ ] Implement restore as ordinary app user with single transaction/no-owner/
+- [x] Implement restore as ordinary app user with single transaction/no-owner/
   no-privileges/no-clean/no-create. Compare exact snapshot before quarantine,
   create private unversioned target bucket, restore/get/hash every catalog object.
-- [ ] Implement/test quarantine and private inspection configuration. Assert no
+- [x] Implement/test quarantine and private inspection configuration. Assert no
   active sessions/accounts/pending AI/mail remain, commerce amounts unchanged,
   no private photo bytes archived or restored. No worker start/network providers.
-- [ ] Run synthetic API acceptance: readiness/catalog, managed image bytes, old
+- [x] Run synthetic API acceptance: readiness/catalog, managed image bytes, old
   bearer/session rejected. Verify source snapshot/objects unchanged and retain
   target/report. Expected: all pass; commit.
 

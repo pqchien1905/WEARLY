@@ -18,7 +18,18 @@ async function runNative(binary, args, options = {}) {
   }
 }
 const identifier = (value) => '"' + value.replaceAll('"', '""') + '"';
-async function snapshot(client) {
+function environment(connection, input = process.env) {
+  const result = { ...input };
+  for (const key of Object.keys(result))
+    if (key.toUpperCase().startsWith("PG")) delete result[key];
+  return {
+    ...result,
+    PGPASSWORD: connection.password,
+    PGOPTIONS: "-c timezone=UTC",
+    PGCONNECT_TIMEOUT: "5",
+  };
+}
+async function snapshot(client, expressions = {}) {
   const tables = {};
   const names = (
     await client.query(
@@ -28,8 +39,9 @@ async function snapshot(client) {
   for (const { table_name: name } of names) {
     const hash = createHash("sha256");
     let count = 0;
+    const expression = expressions[name] ?? "to_jsonb(t)";
     await client.query(
-      `DECLARE recovery_rows NO SCROLL CURSOR FOR SELECT to_jsonb(t)::text AS value FROM public.${identifier(name)} t ORDER BY to_jsonb(t)::text COLLATE "C"`,
+      `DECLARE recovery_rows NO SCROLL CURSOR FOR SELECT (${expression})::text AS value FROM public.${identifier(name)} t ORDER BY (${expression})::text COLLATE "C"`,
     );
     try {
       for (;;) {
@@ -70,4 +82,106 @@ async function snapshot(client) {
     schema[key] = (await client.query(sql)).rows;
   return { tables, schema };
 }
-module.exports = { runNative, snapshot };
+async function quarantine(client, target) {
+  const current = (await client.query("SELECT current_database() AS database"))
+    .rows[0].database;
+  if (
+    current !== target ||
+    !/^wearly_recovery_[0-9]{13}_[a-f0-9]{8}$/.test(target)
+  )
+    throw Error("RECOVERY_TARGET_REQUIRED");
+  // Prisma stores TIMESTAMP(3); expected JSON must use the same rounded precision.
+  const time = "((now() AT TIME ZONE 'UTC')::timestamp(3))",
+    active = "status IN ('PENDING','PROCESSING')",
+    usage = "status IN ('RESERVED','PROCESSING')";
+  const transforms = {
+    User: { active: "false" },
+    RefreshToken: { revokedAt: `COALESCE("revokedAt",${time})` },
+    PasswordResetToken: { consumedAt: `COALESCE("consumedAt",${time})` },
+    ImageAsset: {
+      deletedAt: `COALESCE("deletedAt",${time})`,
+      purgedAt: `COALESCE("purgedAt",${time})`,
+      expiresAt: `LEAST("expiresAt",${time})`,
+    },
+    TryOnResult: { expiresAt: `LEAST("expiresAt",${time})` },
+    AIJob: {
+      status: `CASE WHEN ${active} THEN 'FAILED' ELSE status END`,
+      errorCode: `CASE WHEN ${active} THEN 'LOCAL_RECOVERY_REVIEW' ELSE "errorCode" END`,
+    },
+    AiUsage: {
+      status: `CASE WHEN ${usage} THEN 'UNKNOWN' ELSE status END`,
+      errorCode: `CASE WHEN ${usage} THEN 'LOCAL_RECOVERY_REVIEW' ELSE "errorCode" END`,
+      finishedAt: `CASE WHEN ${usage} THEN ${time} ELSE "finishedAt" END`,
+    },
+    OutboxEvent: { publishedAt: `COALESCE("publishedAt",${time})` },
+    MailOutbox: {
+      status: `CASE WHEN ${active} THEN 'FAILED' ELSE status END`,
+      lastError: `CASE WHEN ${active} THEN 'LOCAL_RECOVERY_REVIEW' ELSE "lastError" END`,
+      leaseToken: `CASE WHEN ${active} THEN NULL ELSE "leaseToken" END`,
+      leaseUntil: `CASE WHEN ${active} THEN NULL ELSE "leaseUntil" END`,
+    },
+  };
+  const expressions = {};
+  for (const [table, columns] of Object.entries(transforms))
+    expressions[table] =
+      "to_jsonb(t)||jsonb_build_object(" +
+      Object.entries(columns)
+        .map(([key, value]) => `'${key}',${value}`)
+        .join(",") +
+      ")";
+  await client.query("BEGIN");
+  try {
+    const expected = await snapshot(client, expressions),
+      counts = {};
+    for (const [table, columns] of Object.entries(transforms))
+      counts[table] = (
+        await client.query(
+          `UPDATE public.${identifier(table)} SET ${Object.entries(columns)
+            .map(([key, value]) => `${identifier(key)}=${value}`)
+            .join(",")}`,
+        )
+      ).rowCount;
+    const actual = await snapshot(client);
+    if (JSON.stringify(actual) !== JSON.stringify(expected))
+      throw Error("RECOVERY_QUARANTINE_MISMATCH");
+    await client.query("COMMIT");
+    return { tablesChecked: counts, snapshot: actual };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  }
+}
+function canonicalConstraint(definition) {
+  // pg_dump/parse moves varchar[] -> text[] coercion onto each literal element.
+  // Keep all other casts, literals and operators intact.
+  return definition.replace(
+    /ARRAY\[((?:'(?:[^']|'')*'::character varying)(?:, '(?:[^']|'')*'::character varying)*)\]::text\[\]/g,
+    (_match, items) =>
+      "ARRAY[" +
+      items.replace(
+        /('(?:[^']|'')*')::character varying/g,
+        "$1::character varying::text",
+      ) +
+      "]",
+  );
+}
+function canonicalSnapshot(value) {
+  return {
+    ...value,
+    schema: {
+      ...value.schema,
+      constraints: value.schema.constraints.map((row) => ({
+        ...row,
+        definition: canonicalConstraint(row.definition),
+      })),
+    },
+  };
+}
+module.exports = {
+  environment,
+  runNative,
+  snapshot,
+  quarantine,
+  canonicalConstraint,
+  canonicalSnapshot,
+};

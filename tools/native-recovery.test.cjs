@@ -144,3 +144,124 @@ test("native failures do not return private stderr, arguments or environment", a
     },
   );
 });
+
+test("restore refuses an existing destination database before touching storage", async () => {
+  let storageCalls = 0;
+  const admin = { query: async () => ({ rows: [{ exists: true }] }) };
+  await assert.rejects(
+    () =>
+      recovery.assertFreshTargets(
+        admin,
+        {
+          send: async () => {
+            storageCalls++;
+          },
+        },
+        {
+          database: "wearly_recovery_1792630000000_abcdef12",
+          bucket: "wearly-recovery-1792630000000-abcdef12",
+        },
+      ),
+    /RECOVERY_TARGET_EXISTS/,
+  );
+  assert.equal(storageCalls, 0);
+});
+test("restore refuses an existing bucket instead of changing or reusing it", async () => {
+  let calls = 0;
+  await assert.rejects(
+    () =>
+      recovery.assertFreshTargets(
+        { query: async () => ({ rows: [] }) },
+        {
+          send: async () => {
+            calls++;
+            return {};
+          },
+        },
+        {
+          database: "wearly_recovery_1792630000000_abcdef12",
+          bucket: "wearly-recovery-1792630000000-abcdef12",
+        },
+      ),
+    /RECOVERY_TARGET_EXISTS/,
+  );
+  assert.equal(calls, 1);
+});
+test("quarantine cannot mutate a business source even if passed the wrong connection", async () => {
+  const queries = [];
+  await assert.rejects(
+    () =>
+      postgres.quarantine(
+        {
+          query: async (sql) => {
+            queries.push(sql);
+            return { rows: [{ database: "wearly" }] };
+          },
+        },
+        "wearly_recovery_1792630000000_abcdef12",
+      ),
+    /RECOVERY_TARGET_REQUIRED/,
+  );
+  assert.equal(queries.length, 1);
+  assert.match(queries[0], /current_database/);
+});
+test("schema comparison normalizes only equivalent PostgreSQL varchar-array text coercions", () => {
+  const source =
+    "CHECK (kind::text = ANY (ARRAY['STYLIST'::character varying, 'TRY_ON'::character varying]::text[]))";
+  const restored =
+    "CHECK (kind::text = ANY (ARRAY['STYLIST'::character varying::text, 'TRY_ON'::character varying::text]))";
+  assert.equal(postgres.canonicalConstraint(source), restored);
+  const different =
+    "CHECK (kind::text = ANY (ARRAY['STYLIST'::integer]::text[]))";
+  assert.equal(postgres.canonicalConstraint(different), different);
+  assert.notEqual(
+    postgres.canonicalConstraint(source.replace("TRY_ON", "OTHER")),
+    restored,
+  );
+  assert.equal(
+    postgres.canonicalConstraint(
+      "ARRAY['contains ::character varying'::character varying]::text[]",
+    ),
+    "ARRAY['contains ::character varying'::character varying::text]",
+  );
+});
+test("corrupt archive is refused before any restore directory or target is created", async (t) => {
+  const root = folder(t);
+  fs.mkdirSync(path.join(root, ".tools"));
+  const loc = recovery.locations(root),
+    archive = path.join(loc.base, Date.now() + "-" + randomUUID());
+  fs.mkdirSync(archive);
+  fs.writeFileSync(path.join(archive, "database.dump"), "corrupt");
+  fs.writeFileSync(
+    path.join(archive, "manifest.json"),
+    JSON.stringify({
+      version: 1,
+      status: "complete",
+      files: [{ file: "database.dump", size: 7, sha256: "0".repeat(64) }],
+    }),
+  );
+  const before = fs.readdirSync(loc.base);
+  await assert.rejects(
+    recovery.restore(root, archive, { env: config() }),
+    /RECOVERY_FILE_MISMATCH/,
+  );
+  assert.deepEqual(fs.readdirSync(loc.base), before);
+});
+test("native PostgreSQL environment cannot inherit alternate routing with mixed case keys", () => {
+  const env = postgres.environment(
+    { password: "current-private-fixture" },
+    {
+      PATH: "toolchain",
+      pghostaddr: "remote.test",
+      PGSERVICE: "remote-service",
+      pgpassword: "old-private-fixture",
+      PGOPTIONS: "unsafe",
+    },
+  );
+  assert.equal(env.PGPASSWORD, "current-private-fixture");
+  assert.equal(env.PGOPTIONS, "-c timezone=UTC");
+  assert.equal(env.PATH, "toolchain");
+  assert(!("pghostaddr" in env));
+  assert(!("PGSERVICE" in env));
+  assert(!("pgpassword" in env));
+});

@@ -12,6 +12,11 @@ let stage = "CONFIG";
 async function main() {
   if (typeof recovery.backup !== "function")
     throw Error("BACKUP_NOT_IMPLEMENTED");
+  if (
+    !process.argv.includes("--backup-only") &&
+    typeof recovery.restore !== "function"
+  )
+    throw Error("RESTORE_NOT_IMPLEMENTED");
   const env = {
     ...req("dotenv").parse(fs.readFileSync(path.join(root, "backend/.env"))),
     ...req("dotenv").parse(
@@ -51,6 +56,15 @@ async function main() {
     objectKey = `catalog/${assetId}.png`,
     oldName = "recovery-before-" + id,
     newName = "recovery-after-" + id;
+  const imageId = randomUUID(),
+    usageId = randomUUID(),
+    jobId = randomUUID(),
+    completedJobId = randomUUID(),
+    sessionId = randomUUID(),
+    resetId = randomUUID(),
+    mailId = randomUUID();
+  const privateKey = `users/${id}/images/${imageId}.png`;
+  let privateCreated = false;
   let locked = false,
     createdUser = false,
     createdAsset = false,
@@ -98,6 +112,85 @@ async function main() {
       ],
     );
     createdAsset = true;
+    if (!process.argv.includes("--backup-only")) {
+      stage = "FIXTURE";
+      const variant = (
+        await db.query(
+          'SELECT id FROM public."ProductVariant" ORDER BY id LIMIT 1',
+        )
+      ).rows[0];
+      if (!variant) throw Error("SEEDED_TEST_CATALOG_REQUIRED");
+      await db.query('UPDATE public."User" SET role=$2 WHERE id=$1', [
+        id,
+        "ADMIN",
+      ]);
+      stage = "FIXTURE_SESSION";
+      await db.query(
+        'INSERT INTO public."RefreshToken" (id,"userId","tokenHash","familyId","browserScope","expiresAt","updatedAt") VALUES ($1,$2,$3,$4,$5,now()+interval \'1 day\',now())',
+        [sessionId, id, "session-" + id, randomUUID(), "customer"],
+      );
+      await db.query(
+        'INSERT INTO public."PasswordResetToken" (id,"userId","tokenHash","expiresAt") VALUES ($1,$2,$3,now()+interval \'1 day\')',
+        [resetId, id, createHash("sha256").update(id).digest("hex")],
+      );
+      stage = "FIXTURE_IMAGE";
+      await db.query(
+        'INSERT INTO public."ImageAsset" (id,"userId","objectKey","mimeType",size,"consentAt","verifiedAt","expiresAt","updatedAt") VALUES ($1,$2,$3,$4,$5,now(),now(),now()+interval \'1 day\',now())',
+        [imageId, id, privateKey, "image/png", bytes.length],
+      );
+      await s3.send(
+        new sdk.PutObjectCommand({
+          Bucket: config.bucket,
+          Key: privateKey,
+          Body: bytes,
+          ContentType: "image/png",
+        }),
+        { abortSignal: AbortSignal.timeout(10000) },
+      );
+      privateCreated = true;
+      stage = "FIXTURE_AI";
+      await db.query(
+        'INSERT INTO public."AiUsage" (id,"userId",kind,"requestKey","inputHash",status,model,"estimatedCostVnd","deadlineAt","expiresAt") VALUES ($1,$2,$3,$4,$5,$6,$7,3000,now()+interval \'1 hour\',now()+interval \'1 day\')',
+        [
+          usageId,
+          id,
+          "TRY_ON",
+          randomUUID(),
+          "b".repeat(64),
+          "PROCESSING",
+          "gemini-fixture",
+        ],
+      );
+      for (const [job, status, usage] of [
+        [jobId, "PENDING", usageId],
+        [completedJobId, "COMPLETED", null],
+      ])
+        await db.query(
+          'INSERT INTO public."AIJob" (id,"userId","variantId","imageId",status,"consentAt","updatedAt","usageId") VALUES ($1,$2,$3,$4,$5,now(),now(),$6)',
+          [job, id, variant.id, imageId, status, usage],
+        );
+      await db.query(
+        'INSERT INTO public."OutboxEvent" (id,"jobId") VALUES ($1,$2)',
+        [randomUUID(), jobId],
+      );
+      await db.query(
+        'INSERT INTO public."TryOnResult" (id,"jobId","objectKey","expiresAt") VALUES ($1,$2,$3,now()+interval \'1 day\')',
+        [randomUUID(), completedJobId, "results/" + completedJobId + ".png"],
+      );
+      stage = "FIXTURE_MAIL";
+      await db.query(
+        'INSERT INTO public."MailOutbox" (id,"eventKey",recipient,subject,body,status,"leaseToken","leaseUntil","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,now()+interval \'1 hour\',now())',
+        [
+          mailId,
+          "recovery-" + id,
+          id + "@recovery.test",
+          "Synthetic recovery",
+          "Synthetic recovery",
+          "PROCESSING",
+          randomUUID(),
+        ],
+      );
+    }
     stage = "BACKUP";
     const result = await recovery.backup(root, {
       env: testEnv,
@@ -133,6 +226,169 @@ async function main() {
         .rows[0].name,
       newName,
     );
+    if (!process.argv.includes("--backup-only")) {
+      stage = "RESTORE";
+      await db.query("BEGIN READ ONLY");
+      const sourceBefore = await postgres.snapshot(db);
+      await db.query("COMMIT");
+      const restored = await recovery.restore(root, result.directory, {
+        env: testEnv,
+      });
+      const target = new Client({
+        ...config.database,
+        database: restored.target.database,
+        options: "-c timezone=UTC",
+      });
+      await target.connect();
+      try {
+        assert.equal(
+          (
+            await target.query('SELECT active FROM public."User" WHERE id=$1', [
+              id,
+            ])
+          ).rows[0].active,
+          false,
+        );
+        assert(
+          (
+            await target.query(
+              'SELECT "revokedAt" FROM public."RefreshToken" WHERE id=$1',
+              [sessionId],
+            )
+          ).rows[0].revokedAt,
+        );
+        assert(
+          (
+            await target.query(
+              'SELECT "consumedAt" FROM public."PasswordResetToken" WHERE id=$1',
+              [resetId],
+            )
+          ).rows[0].consumedAt,
+        );
+        assert(
+          (
+            await target.query(
+              'SELECT "purgedAt" FROM public."ImageAsset" WHERE id=$1',
+              [imageId],
+            )
+          ).rows[0].purgedAt,
+        );
+        assert.equal(
+          (
+            await target.query(
+              'SELECT status FROM public."AIJob" WHERE id=$1',
+              [jobId],
+            )
+          ).rows[0].status,
+          "FAILED",
+        );
+        const usage = (
+          await target.query(
+            'SELECT status,"estimatedCostVnd"::text AS cost FROM public."AiUsage" WHERE id=$1',
+            [usageId],
+          )
+        ).rows[0];
+        assert.equal(usage.status, "UNKNOWN");
+        assert.equal(usage.cost, "3000");
+        assert(
+          (
+            await target.query(
+              'SELECT "publishedAt" FROM public."OutboxEvent" WHERE "jobId"=$1',
+              [jobId],
+            )
+          ).rows[0].publishedAt,
+        );
+        assert.equal(
+          (
+            await target.query(
+              'SELECT status FROM public."MailOutbox" WHERE id=$1',
+              [mailId],
+            )
+          ).rows[0].status,
+          "FAILED",
+        );
+        assert.equal(
+          (
+            await target.query(
+              'SELECT "expiresAt"<now() AS expired FROM public."TryOnResult" WHERE "jobId"=$1',
+              [completedJobId],
+            )
+          ).rows[0].expired,
+          true,
+        );
+        await assert.rejects(
+          s3.send(
+            new sdk.HeadObjectCommand({
+              Bucket: restored.target.bucket,
+              Key: privateKey,
+            }),
+            { abortSignal: AbortSignal.timeout(10000) },
+          ),
+          (error) => error.$metadata?.httpStatusCode === 404,
+        );
+        const object = await s3.send(
+          new sdk.GetObjectCommand({
+            Bucket: restored.target.bucket,
+            Key: objectKey,
+          }),
+          { abortSignal: AbortSignal.timeout(10000) },
+        );
+        assert.deepEqual(
+          Buffer.from(await object.Body.transformToByteArray()),
+          bytes,
+        );
+      } finally {
+        await target.end();
+      }
+      assert.equal(
+        (await db.query('SELECT active FROM public."User" WHERE id=$1', [id]))
+          .rows[0].active,
+        true,
+      );
+      assert.equal(
+        (
+          await db.query('SELECT status FROM public."AIJob" WHERE id=$1', [
+            jobId,
+          ])
+        ).rows[0].status,
+        "PENDING",
+      );
+      await db.query("BEGIN READ ONLY");
+      const sourceAfter = await postgres.snapshot(db);
+      await db.query("COMMIT");
+      assert.deepEqual(sourceAfter, sourceBefore);
+      await assert.rejects(
+        recovery.assertFreshTargets(db, s3, restored.target),
+        /RECOVERY_TARGET_EXISTS/,
+      );
+      const inspection = req("dotenv").parse(
+        fs.readFileSync(restored.inspectionFile),
+      );
+      console.log(
+        (
+          await postgres.runNative(
+            process.execPath,
+            [path.join(__dirname, "verify-recovery-api.cjs")],
+            {
+              cwd: root,
+              env: {
+                ...process.env,
+                ...inspection,
+                RECOVERY_VERIFY_ASSET: assetId,
+                RECOVERY_VERIFY_HASH: createHash("sha256")
+                  .update(bytes)
+                  .digest("hex"),
+                RECOVERY_VERIFY_USER: id,
+                RECOVERY_VERIFY_SESSION: sessionId,
+              },
+            },
+          )
+        ).trim(),
+      );
+      console.log(
+        "PASS fresh restore: exact snapshot verified before quarantine; old auth/private images/pending work suppressed; source unchanged.",
+      );
+    }
     stage = "MISSING_OBJECT";
     await s3.send(
       new sdk.DeleteObjectCommand({ Bucket: config.bucket, Key: objectKey }),
@@ -160,6 +416,28 @@ async function main() {
     );
     console.log("Retained archive: " + result.directory);
   } finally {
+    if (createdUser) {
+      await db.query(
+        'DELETE FROM public."OutboxEvent" WHERE "jobId" IN ($1,$2)',
+        [jobId, completedJobId],
+      );
+      await db.query(
+        'DELETE FROM public."TryOnResult" WHERE "jobId" IN ($1,$2)',
+        [jobId, completedJobId],
+      );
+      await db.query('DELETE FROM public."AIJob" WHERE id IN ($1,$2)', [
+        jobId,
+        completedJobId,
+      ]);
+      await db.query('DELETE FROM public."AiUsage" WHERE id=$1', [usageId]);
+      await db.query('DELETE FROM public."ImageAsset" WHERE id=$1', [imageId]);
+      await db.query('DELETE FROM public."MailOutbox" WHERE id=$1', [mailId]);
+    }
+    if (privateCreated)
+      await s3.send(
+        new sdk.DeleteObjectCommand({ Bucket: config.bucket, Key: privateKey }),
+        { abortSignal: AbortSignal.timeout(10000) },
+      );
     if (createdAsset)
       await db.query('DELETE FROM public."CatalogAsset" WHERE id=$1', [
         assetId,
@@ -181,8 +459,12 @@ async function main() {
 }
 main().catch((error) => {
   console.error(
-    error.message === "BACKUP_NOT_IMPLEMENTED"
-      ? "BACKUP_NOT_IMPLEMENTED"
+    [
+      "BACKUP_NOT_IMPLEMENTED",
+      "RESTORE_NOT_IMPLEMENTED",
+      "SEEDED_TEST_CATALOG_REQUIRED",
+    ].includes(error.message)
+      ? error.message
       : "NATIVE_RECOVERY_ACCEPTANCE_FAILED_" + stage,
   );
   process.exitCode = 1;

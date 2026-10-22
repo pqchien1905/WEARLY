@@ -209,19 +209,7 @@ async function backup(workspace, options = {}) {
     const exported = (await client.query("SELECT pg_export_snapshot() AS id"))
       .rows[0].id;
     await options.afterSnapshot?.();
-    const pgEnvironment = {
-      ...process.env,
-      PGPASSWORD: config.database.password,
-      PGOPTIONS: "-c timezone=UTC",
-      PGCONNECT_TIMEOUT: "5",
-    };
-    // Reject inherited libpq routing/configuration; explicit CLI arguments own routing.
-    for (const key of Object.keys(pgEnvironment))
-      if (
-        key.startsWith("PG") &&
-        !["PGPASSWORD", "PGOPTIONS", "PGCONNECT_TIMEOUT"].includes(key)
-      )
-        delete pgEnvironment[key];
+    const pgEnvironment = postgres.environment(config.database);
     const connection = [
       "-h",
       config.database.host,
@@ -287,20 +275,72 @@ async function backup(workspace, options = {}) {
     s3.destroy();
   }
 }
-module.exports = { validateConfig, safeFile, verifyFiles, locations, backup };
+async function assertFreshTargets(admin, s3, target) {
+  if (
+    !/^wearly_recovery_[0-9]{13}_[a-f0-9]{8}$/.test(target.database) ||
+    !/^wearly-recovery-[0-9]{13}-[a-f0-9]{8}$/.test(target.bucket)
+  )
+    fail("RECOVERY_INVALID_TARGET");
+  if (
+    (
+      await admin.query("SELECT 1 FROM pg_database WHERE datname=$1", [
+        target.database,
+      ])
+    ).rows.length
+  )
+    fail("RECOVERY_TARGET_EXISTS");
+  const { HeadBucketCommand } = req("@aws-sdk/client-s3");
+  try {
+    await s3.send(new HeadBucketCommand({ Bucket: target.bucket }), {
+      abortSignal: AbortSignal.timeout(10000),
+    });
+  } catch (error) {
+    if (error.$metadata?.httpStatusCode === 404) return;
+    throw Error("RECOVERY_TARGET_UNAVAILABLE");
+  }
+  fail("RECOVERY_TARGET_EXISTS");
+}
+const restore = (...args) => require("./recovery-restore.cjs").restore(...args);
+module.exports = {
+  validateConfig,
+  safeFile,
+  verifyFiles,
+  locations,
+  backup,
+  assertFreshTargets,
+  restore,
+};
 if (require.main === module) {
   (async () => {
-    if (process.argv[2] !== "backup") fail("RECOVERY_INVALID_ACTION");
-    const args = process.argv.slice(3);
+    const action = process.argv[2];
+    if (!["backup", "restore"].includes(action))
+      fail("RECOVERY_INVALID_ACTION");
+    const archive = action === "restore" ? process.argv[3] : undefined;
+    if (action === "restore" && !archive) fail("RECOVERY_INVALID_ARGUMENTS");
+    const args = process.argv.slice(action === "restore" ? 4 : 3);
     if (args.length && !(args.length === 2 && args[0] === "--env-file"))
       fail("RECOVERY_INVALID_ARGUMENTS");
-    const result = await backup(path.resolve(__dirname, ".."), {
-      envFile: args[1],
-    });
-    console.log("Backup complete: " + result.directory);
+    const workspace = path.resolve(__dirname, "..");
+    const result =
+      action === "backup"
+        ? await backup(workspace, { envFile: args[1] })
+        : await restore(workspace, archive, { envFile: args[1] });
     console.log(
-      "Tables: " + result.tables + "; managed images: " + result.objects,
+      (action === "backup"
+        ? "Backup complete: "
+        : "Quarantined restore complete: ") + result.directory,
     );
+    if (action === "backup")
+      console.log(
+        "Tables: " + result.tables + "; managed images: " + result.objects,
+      );
+    else
+      console.log(
+        "New database: " +
+          result.target.database +
+          "; new bucket: " +
+          result.target.bucket,
+      );
   })().catch(() => {
     console.error("RECOVERY_FAILED; inspect the retained private manifest.");
     process.exitCode = 1;
