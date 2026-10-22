@@ -30,10 +30,10 @@ backend/src/modules/content/{content.dto,content.service,store-details}.ts;
 backend/test/content.e2e-spec.ts; frontend/lib/app/{content_provider,store_details}.dart.
 Produces details contract in spec; omission=>preserve, null=>400; published fields only.
 
-- [ ] Add meaningful failing content E2E assertions for defaults, invalid details,
+- [x] Add meaningful failing content E2E assertions for defaults, invalid details,
   draft isolation, publishing details, legacy omission and stale version.
-- [ ] Run targeted E2E via existing native test harness; inspect expected RED.
-- [ ] Add nullable columns, typed validation/defaults and copy-on-publish. Generate
+- [x] Run targeted E2E via existing native test harness; inspect expected RED.
+- [x] Add nullable columns, typed validation/defaults and copy-on-publish. Generate
   client/apply test migration only; rerun content tests GREEN, lint/build; commit.
 
 ### Task2: published storefront and editor

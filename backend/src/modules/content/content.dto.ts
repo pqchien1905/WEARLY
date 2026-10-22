@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
+import { StoreDetailsDto } from './store-details';
 import {
   IsInt,
   IsString,
@@ -7,6 +8,9 @@ import {
   MaxLength,
   Min,
   MinLength,
+  IsObject,
+  ValidateIf,
+  ValidateNested,
 } from 'class-validator';
 
 export class ContentVersionDto {
@@ -18,6 +22,12 @@ export class ContentVersionDto {
 }
 
 export class SaveContentDto extends ContentVersionDto {
+  @ValidateIf((_object: unknown, value: unknown) => value !== undefined)
+  @IsObject()
+  @ValidateNested()
+  @Type(() => StoreDetailsDto)
+  details?: StoreDetailsDto;
+
   @ApiProperty()
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim() : value,

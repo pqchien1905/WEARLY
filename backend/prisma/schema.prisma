@@ -101,9 +101,11 @@ model StoreContent {
   key String @unique @db.VarChar(30)
   banner String @db.VarChar(120)
   policy String @db.VarChar(5000)
+  details Json?
   version Int @default(1)
   publishedBanner String? @db.VarChar(120)
   publishedPolicy String? @db.VarChar(5000)
+  publishedDetails Json?
   publishedVersion Int?
   publishedAt DateTime?
   createdAt DateTime @default(now())

@@ -5,6 +5,7 @@ import { transaction } from '../../common/transaction';
 import { fail } from '../../common/errors';
 import { recordAdminActivity } from '../admin/audit';
 import { ContentVersionDto, SaveContentDto } from './content.dto';
+import { storeDetails } from './store-details';
 
 const key = 'storefront';
 const conflict = () =>
@@ -16,6 +17,7 @@ const conflict = () =>
 const publishedSelect = {
   publishedBanner: true,
   publishedPolicy: true,
+  publishedDetails: true,
   publishedVersion: true,
   publishedAt: true,
 } as const;
@@ -26,6 +28,7 @@ function published(
     ? {
         banner: row.publishedBanner,
         policy: row.publishedPolicy,
+        details: storeDetails(row.publishedDetails),
         version: row.publishedVersion,
         publishedAt: row.publishedAt,
       }
@@ -36,6 +39,7 @@ function privateContent(row: StoreContent | null) {
     id: row?.id ?? null,
     banner: row?.banner ?? 'Mặc theo cách bạn.',
     policy: row?.policy ?? '',
+    details: storeDetails(row?.details),
     version: row?.version ?? 0,
     published: published(row),
   };
@@ -67,7 +71,14 @@ export class ContentService {
         let row: StoreContent;
         if (dto.expectedVersion === 0) {
           row = await tx.storeContent.create({
-            data: { key, banner: dto.banner, policy: dto.policy },
+            data: {
+              key,
+              banner: dto.banner,
+              policy: dto.policy,
+              ...(dto.details === undefined
+                ? {}
+                : { details: { ...dto.details } }),
+            },
           });
         } else {
           const changed = await tx.storeContent.updateMany({
@@ -75,6 +86,9 @@ export class ContentService {
             data: {
               banner: dto.banner,
               policy: dto.policy,
+              ...(dto.details === undefined
+                ? {}
+                : { details: { ...dto.details } }),
               version: { increment: 1 },
             },
           });
@@ -111,6 +125,7 @@ export class ContentService {
         data: {
           publishedBanner: row.banner,
           publishedPolicy: row.policy,
+          publishedDetails: row.details ?? Prisma.DbNull,
           publishedVersion: row.version + 1,
           publishedAt: new Date(),
           version: { increment: 1 },

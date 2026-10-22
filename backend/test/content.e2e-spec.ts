@@ -209,4 +209,85 @@ describe('Store content publication with PostgreSQL', () => {
     ]);
     expect(events.every((e) => e.actorId === users[0])).toBe(true);
   });
+  it('publishes typed identity without leaking drafts and preserves it for legacy saves', async () => {
+    const details = {
+      name: '  Local Shop  ',
+      tagline: 'Demo',
+      email: '',
+      phone: '',
+      address: '',
+      about: 'About draft',
+      privacy: 'Privacy draft',
+      terms: 'Terms draft',
+    };
+    const draft = (await call('get', 'admin/content').expect(200)).body;
+    expect(draft.details).toMatchObject({
+      name: 'WEARLY',
+      email: '',
+      phone: '',
+      address: '',
+    });
+    for (const invalid of [
+      null,
+      [],
+      {},
+      { ...details, name: ' ' },
+      { ...details, email: 'not-email' },
+      { ...details, name: 'x'.repeat(81) },
+      { ...details, privacy: 'x'.repeat(5001) },
+      { ...details, unknown: true },
+    ]) {
+      await call('put', 'admin/content')
+        .send({
+          banner: 'Identity',
+          policy: 'Local shipping',
+          expectedVersion: draft.version,
+          details: invalid,
+        })
+        .expect(400);
+    }
+    const saved = (
+      await call('put', 'admin/content')
+        .send({
+          banner: 'Identity',
+          policy: 'Local shipping',
+          expectedVersion: draft.version,
+          details,
+        })
+        .expect(200)
+    ).body;
+    expect(saved.details.name).toBe('Local Shop');
+    expect(
+      (await request(app.getHttpServer()).get('/api/v1/content')).body.content
+        .details.name,
+    ).toBe('WEARLY');
+    const legacy = (
+      await call('put', 'admin/content')
+        .send({
+          banner: 'Legacy',
+          policy: 'Local shipping',
+          expectedVersion: saved.version,
+        })
+        .expect(200)
+    ).body;
+    expect(legacy.details).toEqual(saved.details);
+    await call('post', 'admin/content/publish')
+      .send({ expectedVersion: legacy.version })
+      .expect(201);
+    const published = (
+      await request(app.getHttpServer()).get('/api/v1/content').expect(200)
+    ).body.content;
+    expect(published.details).toEqual(saved.details);
+    await call('put', 'admin/content')
+      .send({
+        banner: 'Later',
+        policy: 'Later',
+        expectedVersion: legacy.version + 1,
+        details: { ...details, name: 'Unpublished' },
+      })
+      .expect(200);
+    expect(
+      (await request(app.getHttpServer()).get('/api/v1/content')).body.content,
+    ).toEqual(published);
+  });
 });
