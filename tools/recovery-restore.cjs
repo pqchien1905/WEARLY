@@ -24,6 +24,7 @@ async function restore(workspace, archive, options = {}) {
     fail("RECOVERY_INVALID_MANIFEST");
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
   recovery.verifyFiles(directory, manifest);
+  postgres.validateSnapshot(manifest.snapshot);
   if (
     !manifest.snapshot?.tables ||
     !manifest.snapshot?.schema ||
@@ -143,6 +144,11 @@ async function restore(workspace, archive, options = {}) {
     target,
     startedAt: new Date().toISOString(),
     workspaceAssetsMatch,
+    applicationCompatibility: {
+      assets: workspaceAssetsMatch ? "verified" : "mismatched",
+      schema: "unverified",
+      api: "unverified",
+    },
     stage: "PREFLIGHT",
   };
   const save = () =>

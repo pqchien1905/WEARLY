@@ -95,6 +95,16 @@ Có thể xem dữ liệu đích bằng pgAdmin với đúng tên database đư�
 trước khi coi giao diện đã phục hồi. Không chạy worker với bản phục hồi đang điều
 tra và không sửa cấu hình cửa hàng hiện tại chỉ để thử archive.
 
+`status=complete` chứng nhận dữ liệu đã phục hồi và khóa an toàn. Trường
+`applicationCompatibility` ghi riêng `assets`, `schema`, `api`: `verified`,
+`mismatched` hoặc `unverified`. Restore chưa chạy ứng dụng nên schema/API ban đầu
+là `unverified`. Công cụ kiểm tra API yêu cầu `RECOVERY_REPORT_FILE` trỏ đúng
+`result.json`, đúng database/bucket đích và kiểm lại hash ảnh hiện tại trước khi
+khởi động. Ảnh thiếu hoặc thay đổi làm kiểm tra ứng dụng thất bại dù dữ liệu đã
+phục hồi thành công. Schema được kiểm với model/enum của backend đã build; đây
+không phải chứng nhận tương thích mọi phiên bản giao diện hay thay thế migration.
+`applicationChecks.performed` và `skipped` ghi rõ phần thực sự đã chạy.
+
 ## Khi lệnh lỗi
 
 Giữ nguyên thư mục và xem `status`, `stage`, `error` trong manifest/report. Archive
@@ -124,7 +134,10 @@ phiên/token cũ, AI/mail đang chờ và API thực. Không gọi Gemini/VNPay 
 không có managed CatalogAsset nên việc chép object được chứng minh bằng fixture
 riêng. Dữ liệu/schema phục hồi trùng snapshot trước các thay đổi được chỉ rõ ở
 trên; API readiness/catalog/content đạt; dữ liệu nguồn và `.env` giữ nguyên.
-Bằng chứng riêng tại `.tools/recovery/<mã-workspace>/restore-.../business-acceptance.json`.
+Bộ kiểm thử công cụ đạt53 bài sau sửa review. Lượt business cuối đã kiểm ảnh,
+schema và API; không cung cấp fixture phiên cũ/managed image nên ghi rõ bỏ qua hai
+kiểm tra đó. Lượt synthetic đã chạy cả hai. Bằng chứng riêng tại
+`.tools/recovery/<mã-workspace>/restore-.../business-acceptance.json`.
 Chưa chứng nhận phục hồi ngoài máy hoặc tự động đưa bản phục hồi vào sử dụng.
 
 Tham khảo chính thức: [pg_dump](https://www.postgresql.org/docs/17/app-pgdump.html),

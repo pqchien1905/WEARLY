@@ -151,6 +151,39 @@ async function quarantine(client, target) {
     throw error;
   }
 }
+function validateSnapshot(value) {
+  const object = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+  const invalid = () => { throw Error("RECOVERY_INVALID_MANIFEST"); };
+  const string = (v) => typeof v === "string" && v.length <= 100000;
+  const integer = (v) => Number.isSafeInteger(v);
+  const nullable = (check) => (v) => v === null || check(v);
+  const int64 = (v) => integer(v) || (typeof v === "string" && /^-?\d{1,20}$/.test(v));
+  if (!object(value) || !object(value.tables) || !Object.keys(value.tables).length || !object(value.schema)) invalid();
+  for (const [name, row] of Object.entries(value.tables)) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) || !object(row) ||
+      !integer(row.count) || row.count < 0 || !/^[a-f0-9]{64}$/.test(row.sha256)) invalid();
+  }
+  const fields = {
+    columns: {table_name:string,column_name:string,ordinal_position:integer,data_type:string,udt_name:string,is_nullable:(v)=>v==='YES'||v==='NO',column_default:nullable(string),numeric_precision:nullable(integer),numeric_scale:nullable(integer),character_maximum_length:nullable(integer)},
+    enums: {typname:string,enumlabel:string,enumsortorder:Number.isFinite},
+    constraints: {table_name:string,conname:string,definition:string},
+    indexes: {tablename:string,indexname:string,indexdef:string},
+    triggers: {table_name:string,tgname:string,definition:string},
+    functions: {proname:string,arguments:string,definition:string},
+    views: {viewname:string,definition:string},
+    sequences: {sequencename:string,data_type:string,start_value:int64,min_value:int64,max_value:int64,increment_by:int64,cycle:(v)=>typeof v==='boolean',cache_size:int64},
+  };
+  if (Object.keys(value.schema).length !== Object.keys(fields).length) invalid();
+  for (const [section, validators] of Object.entries(fields)) {
+    const rows = value.schema[section];
+    if (!Array.isArray(rows) || rows.length > 100000) invalid();
+    for (const row of rows) {
+      if (!object(row) || Object.keys(row).length !== Object.keys(validators).length ||
+        Object.entries(validators).some(([key, check]) => !check(row[key]))) invalid();
+    }
+  }
+  return value;
+}
 function canonicalConstraint(definition) {
   // pg_dump/parse moves varchar[] -> text[] coercion onto each literal element.
   // Keep all other casts, literals and operators intact.
@@ -178,6 +211,7 @@ function canonicalSnapshot(value) {
   };
 }
 module.exports = {
+  validateSnapshot,
   environment,
   runNative,
   snapshot,

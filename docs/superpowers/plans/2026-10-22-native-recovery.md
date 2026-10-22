@@ -132,7 +132,7 @@ README.md,docs/LOCAL_COMPLETION_PROGRESS.md; helpers as required by acceptance.
 - [x] Run all Node tool guards, relevant backend validation and compiled app smoke.
   Full backend/Flutter suites only if product code changes or a new concern warrants
   them; don't rerun unrelated suites to inflate evidence. Commit checkpoint.
-- [ ] One fresh strongest-model reviewer of whole recovery milestone, with this
+- [x] One fresh strongest-model reviewer of whole recovery milestone, with this
   Review focus verbatim and rulings. Regrade by user effect, one tested fix pass,
   no rereview. Record all exclusions/remaining limitations, commit final evidence,
   remove only this plan's scratch. A-Z goal remains active for identity/policies/SEO,

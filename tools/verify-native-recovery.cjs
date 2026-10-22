@@ -375,6 +375,7 @@ async function main() {
                 ...process.env,
                 ...inspection,
                 RECOVERY_VERIFY_ASSET: assetId,
+                RECOVERY_REPORT_FILE: path.join(restored.directory, 'result.json'),
                 RECOVERY_VERIFY_HASH: createHash("sha256")
                   .update(bytes)
                   .digest("hex"),

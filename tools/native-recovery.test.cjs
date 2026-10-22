@@ -7,6 +7,10 @@ const { createHash, randomUUID } = require("node:crypto");
 const recovery = require("./native-recovery.cjs");
 const objects = require("./recovery-objects.cjs");
 const postgres = require("./recovery-postgres.cjs");
+test('restore metadata requires all schema arrays before any destination writes',()=>{
+  assert.throws(()=>postgres.validateSnapshot({tables:{User:{count:1,sha256:'0'.repeat(64)}},schema:{}}),/RECOVERY_INVALID_MANIFEST/);
+  assert.throws(()=>postgres.validateSnapshot({tables:[],schema:{}}),/RECOVERY_INVALID_MANIFEST/);
+});
 function folder(t) {
   const root = fs.mkdtempSync(
     path.join(os.tmpdir(), "wearly-native-recovery-test-"),
@@ -264,4 +268,42 @@ test("native PostgreSQL environment cannot inherit alternate routing with mixed 
   assert(!("pghostaddr" in env));
   assert(!("PGSERVICE" in env));
   assert(!("pgpassword" in env));
+});
+
+test("malformed schema is refused before restore output or native configuration access", async (t) => {
+  const root = folder(t);
+  fs.mkdirSync(path.join(root, '.tools'));
+  const loc = recovery.locations(root), archive = path.join(loc.base, Date.now()+'-'+randomUUID());
+  fs.mkdirSync(archive);
+  const bytes = Buffer.from('fixture');
+  fs.writeFileSync(path.join(archive,'database.dump'),bytes);
+  fs.writeFileSync(path.join(archive,'manifest.json'),JSON.stringify({version:1,status:'complete',files:[{file:'database.dump',size:bytes.length,sha256:hash(bytes)}],snapshot:{tables:{User:{count:0,sha256:hash('')}},schema:{}},objects:[],bundled:[],source:{database:'wearly',bucket:'wearly'}}));
+  const before=fs.readdirSync(loc.base);
+  await assert.rejects(recovery.restore(root,archive,{env:config()}),/RECOVERY_INVALID_MANIFEST/);
+  assert.deepEqual(fs.readdirSync(loc.base),before);
+});
+
+test("application acceptance requires a matching recovery report and fresh bundled asset hashes", (t) => {
+  const context = require('./recovery-context.cjs');
+  const root=folder(t);fs.mkdirSync(path.join(root,'.tools'));
+  const loc=recovery.locations(root), archive=Date.now()+'-'+randomUUID(), dir=path.join(loc.base,archive);
+  fs.mkdirSync(dir);fs.mkdirSync(path.join(dir,'bundled'));
+  fs.mkdirSync(path.join(root,'frontend/assets/images'),{recursive:true});
+  const bytes=Buffer.from('image-fixture'),source=path.join(root,'frontend/assets/images/shirt.jpg');
+  fs.writeFileSync(source,bytes);fs.writeFileSync(path.join(dir,'bundled/shirt.jpg'),bytes);
+  const schema=Object.fromEntries(['columns','enums','constraints','indexes','triggers','functions','views','sequences'].map(k=>[k,[]]));
+  fs.writeFileSync(path.join(dir,'manifest.json'),JSON.stringify({version:1,status:'complete',files:[{file:'bundled/shirt.jpg',size:bytes.length,sha256:hash(bytes)}],snapshot:{tables:{User:{count:0,sha256:hash('')}},schema},bundled:[{file:'bundled/shirt.jpg',source:'frontend/assets/images/shirt.jpg'}]}));
+  const target={database:'wearly_recovery_1792630000000_abcdef12',bucket:'wearly-recovery-1792630000000-abcdef12'}, reportDir=path.join(loc.base,'restore-1792630000000_abcdef12');
+  fs.mkdirSync(reportDir);
+  const reportFile=path.join(reportDir,'result.json');
+  fs.writeFileSync(reportFile,JSON.stringify({version:1,status:'complete',stage:'QUARANTINED',exactSnapshotVerified:true,archive,target}));
+  const env={...config(),DATABASE_URL:config().DATABASE_URL.replace('/wearly','/'+target.database),S3_BUCKET:target.bucket};
+  assert.throws(()=>context.loadContext(root,undefined,env),/RECOVERY_CONTEXT_REQUIRED/);
+  assert.throws(()=>context.loadContext(root,reportFile,{...env,S3_BUCKET:'wrong'}),/RECOVERY_CONTEXT_MISMATCH/);
+  assert.equal(context.loadContext(root,reportFile,env).report.applicationCompatibility.assets,'verified');
+  fs.writeFileSync(source,'changed');
+  assert.throws(()=>context.loadContext(root,reportFile,env),/RECOVERY_ASSETS_MISMATCH/);
+  assert.equal(JSON.parse(fs.readFileSync(reportFile)).applicationCompatibility.assets,'mismatched');
+  fs.unlinkSync(source);
+  assert.throws(()=>context.loadContext(root,reportFile,env),/RECOVERY_ASSETS_MISMATCH/);
 });

@@ -526,7 +526,7 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   Native recovery is the next required milestone; identity/policies/SEO, configured
   provider acceptance and root integration remain. A-Z goal ACTIVE.
 
-## Native backup/recovery — acceptance passed, review pending,22October2026
+## Native backup/recovery — complete,22October2026
 
 - Commits098408c(plan),f76bed5(backup),ffe77d0(restore). Native pg_dump exported
   snapshot, streamed ordered hashes, private Windows ACL, catalog/bundled bytes
@@ -547,3 +547,16 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
 - Guide [NATIVE_RECOVERY.md](NATIVE_RECOVERY.md). No cutover, account reactivation,
   external-provider call, service teardown or destructive cleanup. Sole independent
   milestone review and any required fixes remain before marking recovery complete.
+
+- Sole review8c1cb60..dbc17f5 completed; one fix pass validates all snapshot schema
+  sections before target creation, requires matching archive/report for compiled
+  acceptance, rechecks current bundled assets and records schema/API compatibility.
+  Evidence overclaim regraded Important: performed/skipped checks now explicit.
+- Final53Node tool tests PASS; full synthetic and business drills repeated PASS.
+  Latest business target `wearly_recovery_1792633567495_fa0e0284`, archive
+  `1792633566825-4585827c-90d0-4f02-8b86-98b19eca90b4`; private result and
+  business-acceptance.json under corresponding restore directory. All source/env
+  hashes unchanged. Assets/schema/API verified; no live provider call or cutover.
+- Review/rulings: [recovery implementation log](RECOVERY_IMPLEMENTATION_LOG.md).
+  Identity/policies/SEO, configured provider acceptance and final root integration
+  remain; A-Z goal ACTIVE.
