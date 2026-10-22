@@ -186,6 +186,11 @@ Helper ghi checkpoint tên/ID container trước và trong quá trình chạy. C
 
 ### Kiểm chứng backup và khôi phục local
 
+**Cập nhật22/10:** backup/restore native dùng `tools/recovery.ps1` đã có diễn tập
+với database nghiệp vụ thực, ảnh đi kèm và API phục hồi. Xem
+[NATIVE_RECOVERY.md](NATIVE_RECOVERY.md). Các lệnh Docker bên dưới là bằng chứng
+test cũ riêng biệt, không phải quy trình sao lưu native hiện tại.
+
 Sau bootstrap/container verification, chạy:
 
 ```powershell

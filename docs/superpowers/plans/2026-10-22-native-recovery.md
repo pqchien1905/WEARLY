@@ -120,16 +120,16 @@ Interfaces:
 Files: docs/NATIVE_RECOVERY.md,docs/LOCAL_OPERATIONS.md,docs/setup.md,
 README.md,docs/LOCAL_COMPLETION_PROGRESS.md; helpers as required by acceptance.
 
-- [ ] Run the same backup against configured native business database read-only,
+- [x] Run the same backup against configured native business database read-only,
   then restore to fresh retained targets. Validate source counts/hashes unchanged,
   exact pre-quarantine target schema/data, post-quarantine expected differences,
   catalog byte verification and compiled API read-only readiness/catalog. Never
   register users, grant roles, start worker or activate restored business accounts.
-- [ ] Document backup/restore commands, local private retention, manual RPO, source
+- [x] Document backup/restore commands, local private retention, manual RPO, source
   preservation, excluded private images/external URLs, exact vs quarantine evidence,
   no automatic cutover, account/password/operator reconciliation needed before any
   later activation. Document retained failure recovery without unsafe cleanup.
-- [ ] Run all Node tool guards, relevant backend validation and compiled app smoke.
+- [x] Run all Node tool guards, relevant backend validation and compiled app smoke.
   Full backend/Flutter suites only if product code changes or a new concern warrants
   them; don't rerun unrelated suites to inflate evidence. Commit checkpoint.
 - [ ] One fresh strongest-model reviewer of whole recovery milestone, with this

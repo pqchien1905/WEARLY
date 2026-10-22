@@ -115,4 +115,6 @@ và [Flutter3.47.7](https://github.com/flutter/flutter/releases/tag/3.47.7).
 Giới hạn đã ghi nhận: Mailpit được cấu hình lưu dữ liệu nhưng bước xác minh giữ
 thư qua stop/restart đã bị automatic approval review từ chối với lý do
 `blocked by policy`; chưa được xác nhận và không được coi là kiểm thử đã đạt.
-Backup/restore dữ liệu nghiệp vụ native là mốc riêng còn phải hoàn thiện.
+Backup/restore dữ liệu nghiệp vụ native đã có diễn tập riêng; xem
+[hướng dẫn phục hồi](NATIVE_RECOVERY.md). Công cụ tạo đích mới và khóa phiên/tác vụ
+cũ, không tự chuyển cửa hàng sang database phục hồi.

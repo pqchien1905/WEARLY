@@ -525,3 +525,25 @@ VNPay sandbox, delegated shipping and explicit COD settlement. Goal is ACTIVE.
   executed; Mailpit persistence restart remains blocked as previously documented.
   Native recovery is the next required milestone; identity/policies/SEO, configured
   provider acceptance and root integration remain. A-Z goal ACTIVE.
+
+## Native backup/recovery — acceptance passed, review pending,22October2026
+
+- Commits098408c(plan),f76bed5(backup),ffe77d0(restore). Native pg_dump exported
+  snapshot, streamed ordered hashes, private Windows ACL, catalog/bundled bytes
+  and complete manifests. Corrupt/missing files fail closed; no source/env overwrite.
+- Fresh DB/bucket restore uses ordinary app role, checks every table/schema/object,
+  then atomically disables accounts, revokes sessions/reset tokens, expires private
+  AI metadata and suppresses pending AI/mail/outbox. Commerce amounts/history stay
+  unchanged. No private Try-On bytes, Redis queues or provider keys restored.
+- Synthetic acceptance PASS: snapshot holds pre-concurrent-change row, required
+  missing image fails backup, exact round-trip, quarantine invariants, old correctly
+  signed session401, catalog object bytes through restored API, full source hash
+  unchanged.50Node tool tests PASS; ACL current-user/SYSTEM only verified.
+- Business `wearly` drill PASS:42 public tables,7 bundled images,0managed images;
+  actual managed object copy is covered by synthetic fixture. Source/env unchanged,
+  exact pre-quarantine snapshot and compiled target API verified. Retained target
+  `wearly_recovery_1792632721963_d5cae7e8`, bucket corresponding hyphenated name;
+  private evidence `.tools/recovery/0e2e53abed9b08caecc6/restore-1792632721963_d5cae7e8/business-acceptance.json`.
+- Guide [NATIVE_RECOVERY.md](NATIVE_RECOVERY.md). No cutover, account reactivation,
+  external-provider call, service teardown or destructive cleanup. Sole independent
+  milestone review and any required fixes remain before marking recovery complete.

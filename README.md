@@ -4,6 +4,7 @@
 
 - [Cài đặt và chạy trên Windows](docs/setup.md)
 - [Vận hành local, giám sát và kiểm thử tự động](docs/LOCAL_OPERATIONS.md)
+- [Sao lưu và phục hồi dữ liệu native](docs/NATIVE_RECOVERY.md)
 - [Tiến độ hoàn thiện local hiện tại](docs/LOCAL_COMPLETION_PROGRESS.md)
 - [Audit và sửa lỗi hệ thống hiện tại](docs/SYSTEM_AUDIT.md)
 - [Tiến độ goal và phần còn thiếu](docs/IMPLEMENTATION_PROGRESS.md)
