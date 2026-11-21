@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { AdminPageDto } from '../../common/admin-page.dto';
 import {
   IsEmail,
@@ -7,6 +7,7 @@ import {
   IsInt,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
   Min,
   MinLength,
@@ -47,11 +48,48 @@ export class StatusSupportDto {
   @ApiProperty({ enum: ['OPEN', 'CLOSED'] }) @IsIn(['OPEN', 'CLOSED']) status!:
     'OPEN' | 'CLOSED';
 }
+/** Name and email come from the signed-in account, not the request. */
+export class CustomerSupportDto {
+  @ApiProperty() @Transform(lower) @IsUUID() requestKey!: string;
+  @ApiProperty()
+  @Transform(trim)
+  @IsString()
+  @MinLength(10)
+  @MaxLength(3000)
+  message!: string;
+}
+export class CustomerFollowUpDto {
+  @ApiProperty() @Transform(lower) @IsUUID() requestKey!: string;
+  @ApiProperty()
+  @Transform(trim)
+  @IsString()
+  @MinLength(3)
+  @MaxLength(3000)
+  message!: string;
+}
+export class CustomerSupportPageDto {
+  @ApiPropertyOptional({ default: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(10000)
+  page = 1;
+  @ApiPropertyOptional({ default: 10 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(20)
+  limit = 10;
+}
 export class ListSupportDto extends AdminPageDto {
   @ApiPropertyOptional()
   @ValidateIf((_o, v) => v !== undefined)
   @IsUUID()
   cursor?: string;
+  @ApiPropertyOptional()
+  @ValidateIf((_o, v) => v !== undefined)
+  @IsUUID()
+  userId?: string;
   @ApiPropertyOptional({ enum: ['OPEN', 'ANSWERED', 'CLOSED'] })
   @ValidateIf((_o, v) => v !== undefined)
   @IsIn(['OPEN', 'ANSWERED', 'CLOSED'])

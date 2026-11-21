@@ -330,8 +330,8 @@ class CartSummary extends StatelessWidget {
               ? (paymentMethod == 'free'
                     ? 'Không cần thanh toán.'
                     : onlinePaymentProviders.contains(paymentMethod)
-                    ? '${paymentProviderName(paymentMethod)} sandbox: thanh toán thử nghiệm. Kiểm tra kết quả trong chi tiết đơn hàng.'
-                    : 'Thanh toán COD khi nhận hàng. Tổng tiền được xác nhận khi tạo đơn.')
+                    ? 'Thanh toán qua ${paymentProviderName(paymentMethod)} (môi trường thử nghiệm, không trừ tiền thật).'
+                    : 'Thanh toán bằng tiền mặt khi nhận hàng.')
               : 'Giá và phí vận chuyển mô phỏng, không thu tiền.',
           style: T.small,
         ),

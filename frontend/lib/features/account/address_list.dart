@@ -201,6 +201,12 @@ class _AddressRow extends StatelessWidget {
           const SizedBox(height: 6),
         ],
         Text(address.address, style: T.body),
+        if (address.pinned)
+          PinMapLink(
+            latitude: address.latitude!,
+            longitude: address.longitude!,
+            label: 'Đã ghim vị trí · Xem bản đồ',
+          ),
       ],
     );
     final buttons = [

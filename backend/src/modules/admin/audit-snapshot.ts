@@ -69,6 +69,13 @@ const fields: Record<AdminAuditAction, readonly string[]> = {
   RETURN_RECEIVED: returned,
   REFUND_CREATED: refund,
   REFUND_UPDATED: refund,
+  PAYMENT_RECONCILED: ['provider', 'paymentStatus', 'reviewRequired'],
+  MAIL_UPDATED: ['status', 'attempts'],
+  NEWSLETTER_UPDATED: ['version', 'unsubscribedAt'],
+  NEWSLETTER_QUEUED: ['version', 'recipientCount'],
+  ORDER_CLASSIFIED: ['version', 'isTest'],
+  REVIEW_HIDDEN: ['rating', 'hiddenAt', 'hiddenReason'],
+  REVIEW_RESTORED: ['rating', 'hiddenAt', 'hiddenReason'],
   SUPPORT_REPLIED: status,
   SUPPORT_STATUS_CHANGED: status,
 };

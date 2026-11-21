@@ -554,7 +554,7 @@ void main() {
       isNull,
     );
     expect(writes, 0);
-    expect(find.textContaining('ước tính'), findsWidgets);
+    expect(find.textContaining('Miễn phí · Còn 0 / 3'), findsOneWidget);
   });
 
   testWidgets(

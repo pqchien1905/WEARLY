@@ -12,6 +12,7 @@ export type RefundPolicyOrder = {
   } | null;
   attempts: {
     id: string;
+    provider: string | null;
     status: string;
     transactionNo: string | null;
     amount: string;
@@ -27,7 +28,6 @@ export function refundSources(order: RefundPolicyOrder) {
   const p = order.payment;
   if (!p || vnd(p.amount) === 0n) return [];
   const paid = ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(p.status);
-  if (!paid) return [];
   const received = vnd(order.receivedAmount),
     total = vnd(p.amount);
   if (received > total)
@@ -36,22 +36,26 @@ export function refundSources(order: RefundPolicyOrder) {
     order.status === 'CANCELLED' || order.shipmentStatus === 'RETURNED'
       ? total
       : received;
-  const sources =
-    p.provider === 'cod' && p.settled
+  const sources = [
+    ...(paid && p.provider === 'cod' && p.settled
       ? [{ id: null, amount: p.amount, primary: true }]
-      : isOnlineProvider(p.provider) &&
-          p.transactionNo &&
-          order.attempts.some(
-            (a) => a.transactionNo === p.transactionNo && a.status === 'PAID',
-          )
-        ? order.attempts
-            .filter((a) => a.status === 'PAID' && a.transactionNo)
-            .map((a) => ({
-              id: a.id,
-              amount: a.amount,
-              primary: a.transactionNo === p.transactionNo,
-            }))
-        : [];
+      : []),
+    ...order.attempts
+      .filter(
+        (a) =>
+          a.status === 'PAID' &&
+          a.transactionNo &&
+          isOnlineProvider(a.provider ?? ''),
+      )
+      .map((a) => ({
+        id: a.id,
+        amount: a.amount,
+        primary:
+          paid &&
+          a.provider === p.provider &&
+          a.transactionNo === p.transactionNo,
+      })),
+  ];
   return sources
     .filter(
       (source) =>

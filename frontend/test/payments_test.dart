@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/testing.dart';
+import 'package:nep_storefront/app/account_state.dart';
 import 'package:nep_storefront/app/api_providers.dart';
 import 'package:nep_storefront/app/payment_providers.dart';
 import 'package:nep_storefront/core/network/api_client.dart';
@@ -87,6 +88,7 @@ void main() {
               body: SingleChildScrollView(
                 child: PaymentPanel(
                   order: order,
+                  autoCheck: false,
                   onRefresh: () async {
                     refreshes++;
                   },
@@ -97,17 +99,16 @@ void main() {
         ),
       );
       expect(find.text('Chờ thanh toán'), findsOneWidget);
-      await tester.tap(find.text('Chuẩn bị thanh toán'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Mở VNPay sandbox (tab mới)'));
+      // One action starts the payment and leaves for the gateway.
+      await tester.tap(find.text('Thanh toán ngay'));
       await tester.pumpAndSettle();
       expect(opened?.host, 'sandbox.vnpayment.vn');
       await tester.tap(find.text('Kiểm tra kết quả'));
       await tester.pumpAndSettle();
       expect(paths.last, endsWith('/reconcile'));
-      expect(refreshes, 2);
+      expect(refreshes, 1);
       expect(find.text('Đã thanh toán'), findsOneWidget);
-      expect(find.text('Mở VNPay sandbox (tab mới)'), findsNothing);
+      expect(find.text('Thanh toán ngay'), findsNothing);
     },
   );
   test(
@@ -210,10 +211,9 @@ void main() {
         ),
       ),
     );
-    expect(find.text('MoMo sandbox'), findsOneWidget);
-    await tester.tap(find.text('Chuẩn bị thanh toán'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Mở MoMo sandbox (tab mới)'));
+    expect(find.text('Thanh toán qua MoMo'), findsOneWidget);
+    await tester.tap(find.text('Thanh toán ngay'));
     await tester.pumpAndSettle();
     expect(opened?.host, 'test-payment.momo.vn');
   });
@@ -257,4 +257,169 @@ void main() {
       expect(find.text('Đã thanh toán'), findsNothing);
     },
   );
+  testWidgets('after opening the gateway tab the order watches for payment', (
+    tester,
+  ) async {
+    Uri? opened;
+    var paid = false;
+    final expires = DateTime.now()
+        .add(const Duration(minutes: 15))
+        .toUtc()
+        .toIso8601String();
+    Map<String, Object?> open(String status) => state(status: status, url: null)
+      ..['provider'] = 'zalopay'
+      ..['attempt'] = {
+        'reference': 'test',
+        'status': status,
+        'expiresAt': expires,
+        'reviewRequired': false,
+      }
+      ..['checkoutUrl'] = status == 'PAID'
+          ? null
+          : 'https://qcgateway.zalopay.vn/openinapp?order=test';
+    final api = ApiClient(
+      baseUrl: 'http://localhost/api/v1',
+      client: MockClient((r) async {
+        if (r.url.path.endsWith('/start')) return jsonResponse(open('PENDING'));
+        return jsonResponse(open(paid ? 'PAID' : 'PENDING'));
+      }),
+    );
+    addTearDown(api.close);
+    final order = commerceOrder(
+      orderJson()..['payment'] = {'provider': 'zalopay', 'status': 'PENDING'},
+      email: '',
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          apiClientProvider.overrideWithValue(api),
+          paymentLauncherProvider.overrideWithValue((uri) => opened = uri),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: PaymentPanel(
+                order: order,
+                autoCheck: false,
+                onRefresh: () async {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Thanh toán ngay'));
+    await tester.pumpAndSettle();
+    expect(opened?.host, 'qcgateway.zalopay.vn');
+    expect(find.text('Mở lại trang thanh toán'), findsOneWidget);
+    expect(find.textContaining('tự cập nhật'), findsOneWidget);
+    // The shopper pays in the other tab; the next periodic check sees it.
+    paid = true;
+    await tester.pump(const Duration(seconds: 11));
+    await tester.pumpAndSettle();
+    expect(find.text('Đã thanh toán'), findsOneWidget);
+    expect(find.text('Mở lại trang thanh toán'), findsNothing);
+  });
+  testWidgets('opening an unpaid wallet order verifies it once without a tap', (
+    tester,
+  ) async {
+    final paths = <String>[];
+    final api = ApiClient(
+      baseUrl: 'http://localhost/api/v1',
+      client: MockClient((r) async {
+        paths.add(r.url.path);
+        return jsonResponse(state(status: 'PAID', url: null));
+      }),
+    );
+    addTearDown(api.close);
+    final order = commerceOrder(
+      orderJson()..['payment'] = {'provider': 'vnpay', 'status': 'PENDING'},
+      email: '',
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [apiClientProvider.overrideWithValue(api)],
+        child: MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: PaymentPanel(order: order, onRefresh: () async {}),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(paths, [endsWith('/reconcile')]);
+    expect(find.text('Đã thanh toán'), findsOneWidget);
+    expect(find.text('Thanh toán ngay'), findsNothing);
+  });
+  const returnedOrder = '9245c6f3-db91-40bd-a1e3-de5489859803';
+  Future<List<String>> pumpReturn(
+    WidgetTester tester,
+    Map<String, Object?> reply,
+  ) async {
+    final calls = <String>[];
+    final api = ApiClient(
+      baseUrl: 'http://localhost/api/v1',
+      client: MockClient((r) async {
+        calls.add('${r.method} ${r.url.path}');
+        return jsonResponse(reply);
+      }),
+    );
+    addTearDown(api.close);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          apiClientProvider.overrideWithValue(api),
+          accountProvider.overrideWith(_SignedIn.new),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: PaymentReturnPage(orderId: returnedOrder),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    return calls;
+  }
+
+  testWidgets('return page asks the provider and shows a confirmed payment', (
+    tester,
+  ) async {
+    final calls = await pumpReturn(
+      tester,
+      state(status: 'PAID', url: null)
+        ..['orderId'] = returnedOrder
+        ..['provider'] = 'zalopay',
+    );
+    expect(
+      calls,
+      contains('POST /api/v1/payments/orders/$returnedOrder/reconcile'),
+    );
+    expect(find.text('Thanh toán thành công'), findsOneWidget);
+    expect(find.text('Xem đơn hàng'), findsOneWidget);
+  });
+
+  testWidgets('return page reports a failed payment without a paid claim', (
+    tester,
+  ) async {
+    await pumpReturn(
+      tester,
+      state(status: 'FAILED', url: null)
+        ..['orderId'] = returnedOrder
+        ..['provider'] = 'momo',
+    );
+    expect(find.text('Thanh toán chưa hoàn tất'), findsOneWidget);
+    expect(find.text('Thanh toán thành công'), findsNothing);
+  });
+}
+
+class _SignedIn extends AccountController {
+  @override
+  UserProfile? build() =>
+      const UserProfile(name: 'Khách', email: 'khach@example.com', id: 'u1');
 }

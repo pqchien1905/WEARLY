@@ -3,11 +3,14 @@ import { PrismaService } from '../../database/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
 import { lockUser, transaction } from '../../common/transaction';
 import { fail } from '../../common/errors';
+import { recordAdminActivity } from '../admin/audit';
 import {
+  AdminReviewQueryDto,
   CreateReviewDto,
   OwnedReviewPageDto,
   ReviewPageDto,
   ReviewVersionDto,
+  ReviewVisibilityDto,
   UpdateReviewDto,
 } from './review.dto';
 
@@ -17,6 +20,11 @@ const reviewSelect = {
   comment: true,
   createdAt: true,
   updatedAt: true,
+} as const;
+const ownedSelect = {
+  ...reviewSelect,
+  hiddenAt: true,
+  hiddenReason: true,
 } as const;
 type Db = Prisma.TransactionClient;
 
@@ -62,7 +70,7 @@ export class ReviewsService {
         const rows = await tx.review.findMany({
           where,
           select: {
-            ...reviewSelect,
+            ...ownedSelect,
             productId: true,
             product: {
               select: {
@@ -150,6 +158,7 @@ export class ReviewsService {
         const where: Prisma.ReviewWhereInput = {
           productId,
           rating: { gte: 1, lte: 5 },
+          hiddenAt: null,
           user: {
             orders: {
               some: {
@@ -191,7 +200,7 @@ export class ReviewsService {
         const available = await this.product(tx, productId);
         const review = await tx.review.findUnique({
           where: { userId_productId: { userId, productId } },
-          select: reviewSelect,
+          select: ownedSelect,
         });
         return {
           review,
@@ -219,7 +228,7 @@ export class ReviewsService {
       if (!('expectedUpdatedAt' in dto))
         return tx.review.create({
           data: { ...data, userId, productId },
-          select: reviewSelect,
+          select: ownedSelect,
         });
       const existing = await tx.review.findUnique({
         where: { userId_productId: { userId, productId } },
@@ -242,8 +251,103 @@ export class ReviewsService {
         );
       return tx.review.findUniqueOrThrow({
         where: { id: existing.id },
-        select: reviewSelect,
+        select: ownedSelect,
       });
+    });
+  }
+  adminList(q: AdminReviewQueryDto) {
+    return this.db.$transaction(
+      async (tx) => {
+        const words = (q.q ?? '').split(/\s+/).filter(Boolean);
+        const where: Prisma.ReviewWhereInput = {
+          ...(q.rating ? { rating: q.rating } : {}),
+          ...(q.productId ? { productId: q.productId } : {}),
+          ...(q.visibility === 'all'
+            ? {}
+            : { hiddenAt: q.visibility === 'hidden' ? { not: null } : null }),
+          ...(words.length
+            ? {
+                AND: words.map((part) => {
+                  const word = part.replace(/[\\%_]/g, '\\$&');
+                  const contains = { contains: word, mode: 'insensitive' as const };
+                  return {
+                    OR: [
+                      { comment: contains },
+                      { product: { name: contains } },
+                      { user: { name: contains } },
+                      { user: { email: contains } },
+                    ],
+                  };
+                }),
+              }
+            : {}),
+        };
+        const [items, total, hidden, all] = await Promise.all([
+          tx.review.findMany({
+            where,
+            select: {
+              ...reviewSelect,
+              hiddenAt: true,
+              hiddenReason: true,
+              product: { select: { id: true, name: true, slug: true } },
+              user: { select: { id: true, name: true, email: true } },
+            },
+            skip: (q.page - 1) * q.limit,
+            take: q.limit,
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          }),
+          tx.review.count({ where }),
+          tx.review.count({ where: { hiddenAt: { not: null } } }),
+          tx.review.count(),
+        ]);
+        return {
+          items,
+          total,
+          page: q.page,
+          limit: q.limit,
+          counts: { all, hidden, visible: all - hidden },
+        };
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
+  }
+  setVisibility(actorId: string, id: string, dto: ReviewVisibilityDto) {
+    return transaction(this.db, async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Review" WHERE id=${id}::uuid FOR UPDATE`;
+      const before = await tx.review.findUnique({ where: { id } });
+      if (!before) throw new NotFoundException();
+      // A retried decision that already applied is acknowledged, not repeated.
+      if (
+        !!before.hiddenAt === dto.hidden &&
+        (!dto.hidden || before.hiddenReason === dto.reason)
+      )
+        return before;
+      // The moderator decided on the text they saw; an edit since then needs a
+      // fresh look before the decision applies.
+      if (before.updatedAt.toISOString() !== dto.expectedUpdatedAt)
+        fail(
+          409,
+          'VERSION_CONFLICT',
+          'Đánh giá đã thay đổi. Hãy tải lại trước khi kiểm duyệt.',
+        );
+      const after = await tx.review.update({
+        where: { id },
+        data: {
+          hiddenAt: dto.hidden ? (before.hiddenAt ?? new Date()) : null,
+          hiddenReason: dto.hidden ? dto.reason : null,
+          updatedAt: new Date(
+            Math.max(Date.now(), before.updatedAt.getTime() + 1),
+          ),
+        },
+      });
+      await recordAdminActivity(
+        tx,
+        actorId,
+        dto.hidden ? 'REVIEW_HIDDEN' : 'REVIEW_RESTORED',
+        id,
+        { before, after },
+      );
+      return after;
     });
   }
   remove(userId: string, productId: string, dto: ReviewVersionDto) {

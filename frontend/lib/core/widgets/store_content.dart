@@ -12,18 +12,25 @@ class StoreContentText extends ConsumerWidget {
     required this.field,
     required this.fallback,
     this.style,
+    this.builder,
   });
   final String field, fallback;
   final TextStyle? style;
 
+  /// Renders the resolved text; defaults to a plain [Text] with [style].
+  final Widget Function(String text)? builder;
+
+  Widget _render(String text) =>
+      builder?.call(text) ?? Text(text, style: style);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (!ref.watch(remoteApiProvider)) return Text(fallback, style: style);
+    if (!ref.watch(remoteApiProvider)) return _render(fallback);
     return ref
         .watch(publishedContentProvider)
         .when(
           data: (content) =>
-              Text(content == null ? fallback : _value(content), style: style),
+              _render(content == null ? fallback : _value(content)),
           loading: () => const Padding(
             padding: EdgeInsets.symmetric(vertical: 24),
             child: LinearProgressIndicator(),

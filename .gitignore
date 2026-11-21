@@ -19,3 +19,14 @@ backend/src/generated/
 .codex/
 .worktrees/
 *.log
+
+# Generated verification output
+docs/qa/
+**/coverage/
+**/test-results/
+**/playwright-report/
+*.tmp
+*.temp
+*.swp
+*.swo
+*~

@@ -10,13 +10,20 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { CurrentUser, Identity, Public } from '../../common/decorators/auth';
+import {
+  Admin,
+  CurrentUser,
+  Identity,
+  Public,
+} from '../../common/decorators/auth';
 import { ReviewsService } from './reviews.service';
 import {
+  AdminReviewQueryDto,
   CreateReviewDto,
   OwnedReviewPageDto,
   ReviewPageDto,
   ReviewVersionDto,
+  ReviewVisibilityDto,
   UpdateReviewDto,
 } from './review.dto';
 
@@ -69,5 +76,23 @@ export class ReviewsController {
     @Body() dto: ReviewVersionDto,
   ) {
     return this.service.remove(user.id, productId, dto);
+  }
+}
+
+@Admin('content.manage')
+@ApiBearerAuth()
+@ApiTags('admin')
+@Controller('admin/reviews')
+export class AdminReviewsController {
+  constructor(private readonly service: ReviewsService) {}
+  @Get() list(@Query() q: AdminReviewQueryDto) {
+    return this.service.adminList(q);
+  }
+  @Patch(':id/visibility') visibility(
+    @CurrentUser() user: Identity,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReviewVisibilityDto,
+  ) {
+    return this.service.setVisibility(user.id, id, dto);
   }
 }

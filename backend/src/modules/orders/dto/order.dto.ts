@@ -34,3 +34,11 @@ export class CreateOrderDto {
   @Min(0)
   cartVersion?: number;
 }
+export class ChangeOrderAddressDto {
+  @ApiProperty() @IsUUID() addressId!: string;
+}
+export class ChangeOrderPaymentDto {
+  @ApiProperty({ enum: ['cod', 'vnpay', 'momo', 'zalopay'] })
+  @IsIn(['cod', 'vnpay', 'momo', 'zalopay'])
+  paymentMethod!: 'cod' | 'vnpay' | 'momo' | 'zalopay';
+}

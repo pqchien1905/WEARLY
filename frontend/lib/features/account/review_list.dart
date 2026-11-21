@@ -129,6 +129,10 @@ class _HistoryRow extends StatelessWidget {
           const SizedBox(height: 8),
         ],
         Text(review.comment, style: T.body),
+        if (review.hidden) ...[
+          const SizedBox(height: 12),
+          ReviewModerationNotice(reason: review.hiddenReason),
+        ],
         if (!review.canEdit) ...[
           const SizedBox(height: 12),
           const Text(

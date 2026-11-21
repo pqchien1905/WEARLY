@@ -7,6 +7,7 @@ import 'package:nep_storefront/app/app.dart';
 import 'package:nep_storefront/app/account_state.dart';
 import 'package:nep_storefront/app/api_providers.dart';
 import 'package:nep_storefront/app/commerce_state.dart';
+import 'package:nep_storefront/app/payment_providers.dart';
 import 'package:nep_storefront/core/network/api_client.dart';
 import 'remote_account_test.dart' show sessionJson;
 import 'remote_commerce_test.dart' show cartJson, orderJson;
@@ -21,6 +22,7 @@ void main() {
       tester,
     ) async {
       var delayed = false;
+      Uri? opened;
       final snapshot = orderJson()
         ..['payment'] = {'provider': 'vnpay', 'status': 'PENDING'};
       final api = ApiClient(
@@ -68,6 +70,7 @@ void main() {
           remoteApiProvider.overrideWithValue(true),
           apiClientProvider.overrideWithValue(api),
           sessionTokensProvider.overrideWithValue(api.tokens),
+          paymentLauncherProvider.overrideWithValue((uri) => opened = uri),
         ],
       );
       addTearDown(() {
@@ -87,15 +90,13 @@ void main() {
           .signIn('', 'an@example.com', 'example-password');
       await tester.pumpAndSettle();
       delayed = true;
-      final prepare = find.text('Chuẩn bị thanh toán');
-      await tester.ensureVisible(prepare);
-      await tester.tap(prepare);
+      final pay = find.text('Thanh toán ngay');
+      await tester.ensureVisible(pay);
+      await tester.tap(pay);
       await tester.pumpAndSettle();
-      expect(find.text('Mở VNPay sandbox (tab mới)'), findsOneWidget);
+      expect(opened?.host, 'sandbox.vnpayment.vn');
       expect(
-        find.text(
-          'Thanh toán COD khi nhận hàng. Tổng tiền được xác nhận khi tạo đơn.',
-        ),
+        find.text('Thanh toán bằng tiền mặt khi nhận hàng.'),
         findsNothing,
       );
     });
@@ -259,20 +260,12 @@ void main() {
           .read(accountProvider.notifier)
           .signIn('', 'an@example.com', 'example-password');
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Chọn địa chỉ đã lưu'));
-      await tester.tap(find.text('Chọn địa chỉ đã lưu'));
+      // The only saved address is selected automatically.
+      expect(find.textContaining('Nguyễn An ·'), findsOneWidget);
+      await tester.ensureVisible(find.text('Giao nhanh'));
+      await tester.tap(find.text('Giao nhanh'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Nhà — Nguyễn An').last);
-      await tester.pumpAndSettle();
-      final confirm = find.text(
-        'Tôi xác nhận thông tin nhận hàng và phương thức thanh toán.',
-      );
-      await tester.ensureVisible(find.text('Giao nhanh · 50.000đ'));
-      await tester.tap(find.text('Giao nhanh · 50.000đ'));
-      await tester.ensureVisible(confirm);
-      await tester.tap(confirm);
-      await tester.pumpAndSettle();
-      final submit = find.widgetWithText(FilledButton, 'Đặt hàng COD');
+      final submit = find.widgetWithText(FilledButton, 'Đặt hàng');
       await tester.ensureVisible(submit);
       await tester.tap(submit);
       await tester.pumpAndSettle();
@@ -281,23 +274,7 @@ void main() {
       await tester.pumpAndSettle();
       router.go('/checkout');
       await tester.pumpAndSettle();
-      expect(
-        tester
-            .widget<TextFormField>(
-              find.widgetWithText(TextFormField, 'Họ và tên'),
-            )
-            .controller!
-            .text,
-        'Nguyễn An',
-      );
-      expect(
-        tester
-            .widget<CheckboxListTile>(
-              find.widgetWithText(CheckboxListTile, 'Giao nhanh · 50.000đ'),
-            )
-            .value,
-        isTrue,
-      );
+      expect(find.textContaining('Nguyễn An ·'), findsOneWidget);
       expect(find.text('540.000 ₫'), findsOneWidget);
       final retry = find.widgetWithText(
         FilledButton,
@@ -311,8 +288,8 @@ void main() {
       expect(bodies.first, bodies.last);
       expect(jsonDecode(bodies.first)['addressId'], 'address-1');
       expect(jsonDecode(bodies.first)['shippingMethod'], 'express');
-      expect(find.text('Đã tiếp nhận đơn hàng'), findsOneWidget);
-      expect(find.textContaining('Chưa thu tiền'), findsWidgets);
+      expect(find.text('Đặt hàng thành công'), findsOneWidget);
+      expect(find.textContaining('thanh toán khi nhận hàng'), findsWidgets);
       router.go('/account/orders/order-1');
       await tester.pumpAndSettle();
       final cancel = find.widgetWithText(OutlinedButton, 'Hủy đơn hàng');

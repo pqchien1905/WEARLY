@@ -1,3 +1,5 @@
+import '../features/account/newsletter_unsubscribe_page.dart';
+import '../features/account/support_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -211,6 +213,8 @@ GoRouter createRouter({String initialLocation = '/'}) {
             '/admin/support',
             '/admin/support/:id',
             '/admin/mail',
+            '/admin/newsletter',
+            '/admin/reviews',
             '/admin/staff',
           ])
             appRoute(
@@ -246,7 +250,16 @@ GoRouter createRouter({String initialLocation = '/'}) {
           appRoute(path: '/', builder: (_, _) => const HomePage()),
           appRoute(
             path: '/payments/return',
-            builder: (_, _) => const PaymentReturnPage(),
+            builder: (_, s) => PaymentReturnPage(
+              orderId: s.uri.queryParameters['order'],
+              declined: s.uri.queryParameters['declined'] == '1',
+            ),
+          ),
+          appRoute(
+            path: '/newsletter/unsubscribe',
+            builder: (_, state) => NewsletterUnsubscribePage(
+              token: state.uri.queryParameters['token'],
+            ),
           ),
           appRoute(
             path: '/reset-password',
@@ -295,6 +308,14 @@ GoRouter createRouter({String initialLocation = '/'}) {
           appRoute(
             path: '/account/orders',
             builder: (_, _) => const OrdersPage(),
+          ),
+          appRoute(
+            path: '/account/support',
+            builder: (_, _) => const SupportRequestsPage(),
+          ),
+          appRoute(
+            path: '/account/support/:id',
+            builder: (_, s) => SupportRequestsPage(id: s.pathParameters['id']),
           ),
           appRoute(
             path: '/account/orders/:id',

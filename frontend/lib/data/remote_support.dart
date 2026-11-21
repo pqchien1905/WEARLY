@@ -8,6 +8,8 @@ const supportStatusNames = {
   'CLOSED': 'Đã đóng',
 };
 const mailStatusNames = {
+  'HELD': 'Chờ duyệt lại',
+  'CANCELLED': 'Đã hủy gửi',
   'PENDING': 'Chờ gửi thư',
   'PROCESSING': 'Đang gửi thư',
   'SENT': 'Đã gửi thư',
@@ -48,6 +50,8 @@ class RemoteSupportRepository {
   void dispose() {
     _disposed = true;
     _pendingContact = null;
+    _pendingAccount = null;
+    _pendingFollowUps.clear();
     _pendingReplies.clear();
     lastReceipt = null;
   }
@@ -100,7 +104,103 @@ class RemoteSupportRepository {
     }
   }
 
+  Map<String, Object?>? _pendingAccount;
+  Map<String, Object?>? get pendingAccountRequest =>
+      _pendingAccount == null ? null : Map.unmodifiable(_pendingAccount!);
+
+  /// Signed-in customers: the ticket is linked to the account, whose name
+  /// and email the server uses.
+  Future<SupportReceipt> createForAccount(String message) async {
+    _check();
+    _pendingAccount ??= {
+      'requestKey': const Uuid().v4(),
+      'message': message.trim(),
+    };
+    try {
+      final result = SupportReceipt(
+        await api.request('POST', 'users/me/support', body: _pendingAccount),
+      );
+      _check();
+      _pendingAccount = null;
+      lastReceipt = result;
+      return result;
+    } on ApiException catch (e) {
+      if ([400, 401, 403, 404, 409, 422].contains(e.status)) {
+        _pendingAccount = null;
+      }
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> mine({int page = 1, int limit = 10}) async {
+    _check();
+    final d = commerceMap(
+      await api.get(
+        'users/me/support',
+        query: {'page': '$page', 'limit': '$limit'},
+      ),
+    );
+    _check();
+    if (d['items'] is! List || d['total'] is! int) throw invalidSupport;
+    for (final row in d['items'] as List) {
+      if (row is! Map ||
+          row['id'] is! String ||
+          row['message'] is! String ||
+          !supportStatusNames.containsKey(row['status'])) {
+        throw invalidSupport;
+      }
+    }
+    return d;
+  }
+
+  Future<Map<String, dynamic>> mineDetail(String id) async {
+    _check();
+    final d = commerceMap(
+      await api.get('users/me/support/${Uri.encodeComponent(id)}'),
+    );
+    _check();
+    if (d['id'] != id ||
+        d['message'] is! String ||
+        !supportStatusNames.containsKey(d['status']) ||
+        d['replies'] is! List) {
+      throw invalidSupport;
+    }
+    return d;
+  }
+
+  final _pendingFollowUps = <String, Map<String, Object?>>{};
+  Map<String, Object?>? pendingFollowUp(String id) =>
+      _pendingFollowUps[id] == null
+      ? null
+      : Map.unmodifiable(_pendingFollowUps[id]!);
+
+  Future<SupportReceipt> followUp(String id, String message) async {
+    _check();
+    _pendingFollowUps.putIfAbsent(
+      id,
+      () => {'requestKey': const Uuid().v4(), 'message': message.trim()},
+    );
+    try {
+      final receipt = SupportReceipt(
+        await api.request(
+          'POST',
+          'users/me/support/${Uri.encodeComponent(id)}/replies',
+          body: _pendingFollowUps[id],
+        ),
+      );
+      _check();
+      _pendingFollowUps.remove(id);
+      return receipt;
+    } on ApiException catch (e) {
+      if ([400, 401, 403, 404, 409, 422].contains(e.status)) {
+        _pendingFollowUps.remove(id);
+      }
+      rethrow;
+    }
+  }
+
   Future<Map<String, dynamic>> list({
+    String? userId,
     String? cursor,
     String? status,
     int page = 1,
@@ -113,6 +213,7 @@ class RemoteSupportRepository {
         query: {
           'cursor': ?cursor,
           'status': ?status,
+          'userId': ?userId,
           'page': '$page',
           'limit': '$limit',
         },

@@ -794,10 +794,6 @@ class _RemoteTryOnPageState extends ConsumerState<RemoteTryOnPage> {
             style: T.body.copyWith(fontWeight: FontWeight.w600),
           ),
           Text('Trang phục: ${job!.sku}', style: T.small),
-          Text(
-            'Chi phí dịch vụ ước tính của lượt này: ${money(job!.estimatedCost)}. Không cộng vào đơn hàng.',
-            style: T.small,
-          ),
         ],
         if (!hidePrivate && job?.resultAvailable == true)
           Padding(
@@ -845,14 +841,10 @@ class _RemoteTryOnPageState extends ConsumerState<RemoteTryOnPage> {
                     'Dịch vụ đang chờ cửa hàng kích hoạt. Các ảnh đã lưu vẫn có thể được xem và xóa.',
               ),
             Text(
-              'Đã dùng ${info!.used} / ${info!.limit} lượt hôm nay · Còn ${info!.remaining} lượt',
+              'Miễn phí · Còn ${info!.remaining} / ${info!.limit} lượt hôm nay',
               style: T.body.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
-            Text(
-              'Chi phí dịch vụ ước tính: ${money(info!.estimatedPerRequest)} / lượt; hôm nay ${money(info!.estimatedUsed)}. Không cộng vào tiền hàng.',
-              style: T.small,
-            ),
             Text(
               'Đặt lại hạn mức: ${_date(info!.resetsAt.toLocal())}. Yêu cầu đã tiếp nhận tính một lượt, kể cả khi không tạo được ảnh.',
               style: T.small,

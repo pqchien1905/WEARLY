@@ -49,6 +49,19 @@ export class UsersService {
     if (key !== undefined && !/^[A-Za-z0-9_-]{16,128}$/.test(key)) {
       fail(400, 'INVALID_IDEMPOTENCY_KEY', 'Mã yêu cầu không hợp lệ.');
     }
+    // A pin is a pair: both coordinates, or neither (null clears it).
+    const hasLat = dto.latitude !== undefined && dto.latitude !== null,
+      hasLng = dto.longitude !== undefined && dto.longitude !== null;
+    if (
+      hasLat !== hasLng ||
+      (dto.latitude === null) !== (dto.longitude === null) ||
+      (dto.latitude === undefined) !== (dto.longitude === undefined)
+    )
+      fail(
+        400,
+        'INVALID_COORDINATES',
+        'Vị trí ghim cần đủ cả vĩ độ và kinh độ.',
+      );
     const requestHash =
       key === undefined
         ? undefined
@@ -60,85 +73,95 @@ export class UsersService {
                 dto.address,
                 dto.label ?? 'Nhà',
                 dto.isDefault ?? false,
+                // Only pinned requests extend the hash, so older keys still match.
+                ...(hasLat ? [dto.latitude, dto.longitude] : []),
               ]),
             )
             .digest('hex');
-    return transaction(this.db, async (tx) => {
-      await lockUser(tx, userId);
-      if (!id && key !== undefined) {
-        const receipt = await tx.addressCreateReceipt.findUnique({
-          where: { userId_key: { userId, key } },
-          include: { address: true },
-        });
-        if (receipt) {
-          if (receipt.requestHash !== requestHash)
-            fail(
-              409,
-              'IDEMPOTENCY_CONFLICT',
-              'Mã yêu cầu đã dùng cho nội dung khác.',
-            );
-          if (!receipt.address)
-            fail(
-              410,
-              'ADDRESS_REMOVED',
-              'Địa chỉ của yêu cầu này đã bị xóa. Hãy mở lại sổ địa chỉ.',
-            );
-          return receipt.address;
+    return transaction(
+      this.db,
+      async (tx) => {
+        await lockUser(tx, userId);
+        if (!id && key !== undefined) {
+          const receipt = await tx.addressCreateReceipt.findUnique({
+            where: { userId_key: { userId, key } },
+            include: { address: true },
+          });
+          if (receipt) {
+            if (receipt.requestHash !== requestHash)
+              fail(
+                409,
+                'IDEMPOTENCY_CONFLICT',
+                'Mã yêu cầu đã dùng cho nội dung khác.',
+              );
+            if (!receipt.address)
+              fail(
+                410,
+                'ADDRESS_REMOVED',
+                'Địa chỉ của yêu cầu này đã bị xóa. Hãy mở lại sổ địa chỉ.',
+              );
+            return receipt.address;
+          }
         }
-      }
-      if (id && !(await tx.address.findFirst({ where: { id, userId } })))
-        throw new NotFoundException();
-      const makeDefault =
-        dto.isDefault === true ||
-        (!id &&
+        if (id && !(await tx.address.findFirst({ where: { id, userId } })))
+          throw new NotFoundException();
+        const makeDefault =
+          dto.isDefault === true ||
+          (!id &&
+            !(await tx.address.findFirst({
+              where: { userId, isDefault: true },
+              select: { id: true },
+            })));
+        if (makeDefault)
+          await tx.address.updateMany({
+            where: { userId, isDefault: true },
+            data: { isDefault: false },
+          });
+        if (id) return tx.address.update({ where: { id }, data: dto });
+        const address = await tx.address.create({
+          data: { ...(dto as AddressDto), userId, isDefault: makeDefault },
+        });
+        if (key !== undefined)
+          await tx.addressCreateReceipt.create({
+            data: {
+              userId,
+              key,
+              requestHash: requestHash!,
+              addressId: address.id,
+            },
+          });
+        return address;
+      },
+      'ReadCommitted',
+    );
+  }
+  deleteAddress(userId: string, id: string) {
+    return transaction(
+      this.db,
+      async (tx) => {
+        await lockUser(tx, userId);
+        const result = await tx.address.deleteMany({ where: { id, userId } });
+        if (!result.count) throw new NotFoundException();
+        if (
           !(await tx.address.findFirst({
             where: { userId, isDefault: true },
             select: { id: true },
-          })));
-      if (makeDefault)
-        await tx.address.updateMany({
-          where: { userId, isDefault: true },
-          data: { isDefault: false },
-        });
-      if (id) return tx.address.update({ where: { id }, data: dto });
-      const address = await tx.address.create({
-        data: { ...(dto as AddressDto), userId, isDefault: makeDefault },
-      });
-      if (key !== undefined)
-        await tx.addressCreateReceipt.create({
-          data: {
-            userId,
-            key,
-            requestHash: requestHash!,
-            addressId: address.id,
-          },
-        });
-      return address;
-    });
-  }
-  deleteAddress(userId: string, id: string) {
-    return transaction(this.db, async (tx) => {
-      await lockUser(tx, userId);
-      const result = await tx.address.deleteMany({ where: { id, userId } });
-      if (!result.count) throw new NotFoundException();
-      if (
-        !(await tx.address.findFirst({
-          where: { userId, isDefault: true },
-          select: { id: true },
-        }))
-      ) {
-        const next = await tx.address.findFirst({
-          where: { userId },
-          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-          select: { id: true },
-        });
-        if (next)
-          await tx.address.update({
-            where: { id: next.id },
-            data: { isDefault: true },
+          }))
+        ) {
+          const next = await tx.address.findFirst({
+            where: { userId },
+            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+            select: { id: true },
           });
-      }
-      return { deleted: true };
-    });
+          if (next)
+            await tx.address.update({
+              where: { id: next.id },
+              data: { isDefault: true },
+            });
+        }
+        return { deleted: true };
+      },
+      'ReadCommitted',
+    );
   }
 }

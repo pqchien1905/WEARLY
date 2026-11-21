@@ -21,6 +21,10 @@ class ProductReview {
     createdAt = DateTime.parse(json['createdAt'] as String);
     updatedAt = json['updatedAt'] as String;
     DateTime.parse(updatedAt);
+    // Present only on the author's own reviews.
+    hidden = json['hiddenAt'] != null;
+    if (hidden) DateTime.parse(json['hiddenAt'] as String);
+    hiddenReason = json['hiddenReason'] as String?;
     if (id.isEmpty ||
         rating < 1 ||
         rating > 5 ||
@@ -30,6 +34,8 @@ class ProductReview {
     }
   }
   late final String id, comment, updatedAt;
+  late final String? hiddenReason;
+  late final bool hidden;
   late final int rating;
   late final DateTime createdAt;
 }

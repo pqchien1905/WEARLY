@@ -311,8 +311,9 @@ describe('VNPay sandbox workflow with PostgreSQL and signed transport fixtures',
     const returned = await call('get', 'payments/vnpay/return')
       .query(signed)
       .expect(302);
+    // The redirect names the order so the storefront can reconcile at once.
     expect(returned.headers.location).toBe(
-      'http://localhost:5173/#/payments/return',
+      `http://localhost:5173/#/payments/return?order=${f.order.id}`,
     );
     expect(
       (await db.payment.findUniqueOrThrow({ where: { orderId: f.order.id } }))

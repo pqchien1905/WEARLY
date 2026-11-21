@@ -12,6 +12,9 @@ import {
 import { AdminPageDto as PageDto } from '../../../common/admin-page.dto';
 
 export class AdminOrdersQueryDto extends PageDto {
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsIn(['live', 'test', 'all'])
+  dataKind?: string;
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)
   @IsUUID()

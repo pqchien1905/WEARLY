@@ -48,10 +48,10 @@ class _AdminRefundActionsState extends ConsumerState<AdminRefundActions> {
   }) async {
     final repo = ref.read(adminRefundRepositoryProvider),
         controller = TextEditingController(text: refund?.transactionNo);
-    final query = refund != null, cod = state.provider == 'cod';
+    final provider = refund?.provider ?? source?.provider ?? state.provider;
+    final query = refund != null, cod = provider == 'cod';
     // VNPay refunds are queried by a refund number; wallets by the stored request.
-    final vnpay = state.provider == 'vnpay',
-        gateway = paymentProviderName(state.provider);
+    final vnpay = provider == 'vnpay', gateway = paymentProviderName(provider);
     await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -172,9 +172,9 @@ class _AdminRefundActionsState extends ConsumerState<AdminRefundActions> {
                             pending == null &&
                             !source.pending)
                           AppButton(
-                            state.provider == 'cod'
+                            (source.provider ?? state.provider) == 'cod'
                                 ? 'Ghi nhận hoàn COD'
-                                : 'Hoàn qua ${paymentProviderName(state.provider)} sandbox',
+                                : 'Hoàn qua ${paymentProviderName(source.provider ?? state.provider)} sandbox',
                             onPressed: () => act(state, source: source),
                           ),
                       ],

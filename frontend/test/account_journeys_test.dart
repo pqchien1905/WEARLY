@@ -105,10 +105,9 @@ void main() {
     await t.pumpAndSettle();
     final name = find.widgetWithText(TextFormField, 'Họ và tên');
     expect(t.widget<TextFormField>(name).controller!.text, isEmpty);
-    await t.ensureVisible(find.text('Chọn địa chỉ đã lưu'));
-    await t.tap(find.text('Chọn địa chỉ đã lưu'));
-    await t.pumpAndSettle();
-    await t.tap(find.text('Nhà — Nguyễn An').last);
+    final saved = find.textContaining('Nguyễn An ·');
+    await t.ensureVisible(saved);
+    await t.tap(saved);
     await t.pumpAndSettle();
     expect(t.widget<TextFormField>(name).controller!.text, 'Nguyễn An');
     await t.enterText(name, 'Người nhận khác');

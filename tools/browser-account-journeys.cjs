@@ -1,6 +1,7 @@
 const {chromium}=require('../.tools/browser/node_modules/playwright');
 const fs=require('fs'),path=require('path');
 const out=path.resolve(__dirname,'../docs/qa');
+fs.mkdirSync(path.join(out,'screenshots'),{recursive:true});
 (async()=>{
  const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
  const page=await browser.newPage({viewport:{width:1440,height:1000}});

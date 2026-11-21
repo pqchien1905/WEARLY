@@ -16,6 +16,7 @@ export function orderFilters(q: AdminOrdersQueryDto): Prisma.OrderWhereInput {
   const search = (q.q ?? '').replace(/[\\%_]/g, '\\$&');
   const contains = { contains: search, mode: 'insensitive' as const };
   return {
+    ...(q.dataKind === 'all' ? {} : { isTest: q.dataKind === 'test' }),
     ...(q.customerId ? { userId: q.customerId } : {}),
     ...(q.from || q.to
       ? {
@@ -86,6 +87,7 @@ export function orderSort(
 }
 // The list only loads its preview. History, attempts and returns belong to detail.
 export const adminOrderListSelect = {
+  isTest: true,
   id: true,
   code: true,
   status: true,

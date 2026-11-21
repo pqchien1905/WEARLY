@@ -24,11 +24,12 @@ export function isTransactionConflict(error: unknown): boolean {
 export async function transaction<T>(
   db: PrismaService,
   run: (tx: Prisma.TransactionClient) => Promise<T>,
+  isolationLevel: Prisma.TransactionIsolationLevel = 'Serializable',
 ): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try {
       return await db.$transaction(run, {
-        isolationLevel: 'Serializable',
+        isolationLevel,
         timeout: 15000,
       });
     } catch (error) {

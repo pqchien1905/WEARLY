@@ -7,8 +7,9 @@ import { WALLET_HTTP } from '../../integrations/payments/wallet-gateway';
 import { WalletGateways } from '../../integrations/payments/wallet-gateways';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
+import { AdminPaymentsController } from './admin-payments.controller';
 @Module({
-  controllers: [PaymentsController],
+  controllers: [PaymentsController, AdminPaymentsController],
   providers: [
     { provide: 'VNPAY_HTTP', useValue: fetch },
     { provide: WALLET_HTTP, useValue: fetch },
@@ -33,6 +34,6 @@ import { PaymentsService } from './payments.service';
     WalletGateways,
     PaymentsService,
   ],
-  exports: [VnpayProvider, WalletGateways],
+  exports: [VnpayProvider, WalletGateways, PaymentsService],
 })
 export class PaymentsModule {}

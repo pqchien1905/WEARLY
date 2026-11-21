@@ -3,12 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/support_providers.dart';
 import '../../../core/design/tokens.dart';
 import '../../../core/widgets/primitives.dart';
-import '../../../data/remote_admin.dart';
 import '../../../data/remote_support.dart';
 import 'admin_pagination.dart';
 import 'admin_presentation.dart';
 import 'admin_widgets.dart';
 import 'operations_widgets.dart';
+import '../../../app/api_providers.dart';
+import 'admin_providers.dart';
 
 class RemoteMailPage extends ConsumerStatefulWidget {
   const RemoteMailPage({super.key});
@@ -17,6 +18,72 @@ class RemoteMailPage extends ConsumerStatefulWidget {
 }
 
 class _RemoteMailPageState extends ConsumerState<RemoteMailPage> {
+  bool busy = false;
+  Future<void> review(Map<String, dynamic> row) async {
+    if (busy) return;
+    setState(() => busy = true);
+    try {
+      final detail =
+          await ref.read(adminApiClientProvider).get('admin/mail/${row['id']}')
+              as Map;
+      if (!mounted) return;
+      final action = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('${detail['subject']}'),
+          content: SizedBox(
+            width: 540,
+            child: SingleChildScrollView(
+              child: SelectableText(
+                'Đến: ${detail['recipient']}\n\n${detail['body']}',
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Đóng'),
+            ),
+            if (canStaff(ref.read(staffRoleProvider), 'mail.manage') &&
+                ![
+                  'SENT',
+                  'PROCESSING',
+                  'CANCELLED',
+                ].contains(detail['status'])) ...[
+              TextButton(
+                onPressed: () => Navigator.pop(context, 'hold'),
+                child: const Text('Giữ lại'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, 'cancel'),
+                child: const Text('Hủy gửi'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, 'release'),
+                child: const Text('Duyệt gửi thư này'),
+              ),
+            ],
+          ],
+        ),
+      );
+      if (action == null || !mounted) return;
+      await ref
+          .read(adminApiClientProvider)
+          .request(
+            'POST',
+            'admin/mail/${row['id']}',
+            body: {'action': action, 'expectedUpdatedAt': detail['updatedAt']},
+          );
+      if (mounted) ref.invalidate(adminMailPagesProvider);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
   int page = 1, limit = 10;
   @override
   Widget build(BuildContext context) {
@@ -54,6 +121,18 @@ class _RemoteMailPageState extends ConsumerState<RemoteMailPage> {
                     for (final (status, label, icon, color) in const [
                       ('PENDING', 'Chờ gửi thư', Icons.schedule, T.warning),
                       (
+                        'HELD',
+                        'Chờ duyệt lại',
+                        Icons.pause_circle_outline,
+                        T.warning,
+                      ),
+                      (
+                        'CANCELLED',
+                        'Đã hủy gửi',
+                        Icons.cancel_outlined,
+                        T.muted,
+                      ),
+                      (
                         'PROCESSING',
                         'Đang gửi thư',
                         Icons.outgoing_mail,
@@ -88,7 +167,7 @@ class _RemoteMailPageState extends ConsumerState<RemoteMailPage> {
                       ? 'Đang dùng hộp thư thử nghiệm'
                       : 'Dịch vụ gửi thư đã bật',
                   message: !enabled
-                      ? 'Thư đã lưu sẽ chờ xử lý khi dịch vụ được bật trở lại.'
+                      ? 'Thư đã lưu đang chờ. Thư tồn quá lâu sẽ được giữ lại để duyệt trước khi gửi.'
                       : local
                       ? 'Thư được chuyển tới hộp thư trên máy này để kiểm tra.'
                       : 'Thư được gửi qua máy chủ SMTP. Theo dõi kết quả của từng thư trong danh sách bên dưới.',
@@ -231,6 +310,10 @@ class _RemoteMailPageState extends ConsumerState<RemoteMailPage> {
       ),
       const SizedBox(height: 6),
       Text('Số lần gửi: ${row['attempts']}', style: T.small),
+      TextButton(
+        onPressed: busy ? null : () => review(row),
+        child: const Text('Xem và xử lý'),
+      ),
       if (row['status'] == 'FAILED') ...[
         const SizedBox(height: 4),
         const Text('Cần kiểm tra dịch vụ gửi thư.', style: T.small),

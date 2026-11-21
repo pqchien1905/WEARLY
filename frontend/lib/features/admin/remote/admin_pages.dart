@@ -19,6 +19,8 @@ import 'customer_detail.dart';
 import 'order_detail.dart';
 export 'order_detail.dart' show RemoteAdminOrder;
 import 'content_page.dart';
+import 'newsletter_page.dart';
+import 'reviews_page.dart';
 import 'promotions_page.dart';
 import 'support_page.dart';
 import 'staff_page.dart';
@@ -47,6 +49,8 @@ class RemoteAdminRoute extends StatelessWidget {
         returnTo: GoRouterState.of(context).uri.queryParameters['from'],
       );
     }
+    if (path == '/admin/newsletter') return const RemoteNewsletterPage();
+    if (path == '/admin/reviews') return const RemoteReviewsPage();
     if (path == '/admin/content') return const RemoteContentPage();
     if (parts.length == 4 && parts[2] == 'collections') {
       return RemoteCollectionDetail(

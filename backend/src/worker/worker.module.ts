@@ -16,6 +16,8 @@ import { RecoveryWorker } from './recovery.worker';
 import { CatalogMediaModule } from '../modules/catalog-media/catalog-media.module';
 import { MailModule } from '../modules/mail/mail.module';
 import { MailWorker } from './mail.worker';
+import { PaymentWorker } from './payment.worker';
+import { PaymentsModule } from '../modules/payments/payments.module';
 import { WorkerHeartbeat } from '../modules/operations/worker-heartbeat.service';
 import { operationsResourcesProvider } from '../modules/operations/operations.probes';
 @Module({
@@ -26,6 +28,7 @@ import { operationsResourcesProvider } from '../modules/operations/operations.pr
     RecoveryModule,
     CatalogMediaModule,
     MailModule,
+    PaymentsModule,
   ],
   providers: [
     AiProcessor,
@@ -33,6 +36,7 @@ import { operationsResourcesProvider } from '../modules/operations/operations.pr
     RetentionWorker,
     RecoveryWorker,
     MailWorker,
+    PaymentWorker,
     WorkerHeartbeat,
     operationsResourcesProvider,
     AiUsageService,

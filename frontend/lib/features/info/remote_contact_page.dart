@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../app/account_state.dart';
 import '../../app/support_providers.dart';
 import '../../core/design/tokens.dart';
 import '../../core/network/api_client.dart';
@@ -25,7 +27,7 @@ class _RemoteContactPageState extends ConsumerState<RemoteContactPage> {
   void initState() {
     super.initState();
     final repo = ref.read(supportRepositoryProvider),
-        draft = repo.pendingContact;
+        draft = repo.pendingAccountRequest ?? repo.pendingContact;
     name.text = draft?['name'] as String? ?? '';
     email.text = draft?['email'] as String? ?? '';
     message.text = draft?['message'] as String? ?? '';
@@ -40,10 +42,13 @@ class _RemoteContactPageState extends ConsumerState<RemoteContactPage> {
     super.dispose();
   }
 
+  bool get signedIn => ref.read(accountProvider) != null;
   Future<void> send() async {
     final repo = ref.read(supportRepositoryProvider);
-    if (busy ||
-        (repo.pendingContact == null && !form.currentState!.validate())) {
+    final pending = signedIn
+        ? repo.pendingAccountRequest != null
+        : repo.pendingContact != null;
+    if (busy || (!pending && !form.currentState!.validate())) {
       return;
     }
     setState(() {
@@ -51,11 +56,13 @@ class _RemoteContactPageState extends ConsumerState<RemoteContactPage> {
       error = null;
     });
     try {
-      final result = await repo.create(
-        name: name.text,
-        email: email.text,
-        message: message.text,
-      );
+      final result = signedIn
+          ? await repo.createForAccount(message.text)
+          : await repo.create(
+              name: name.text,
+              email: email.text,
+              message: message.text,
+            );
       if (mounted) setState(() => receipt = result);
     } catch (e) {
       if (mounted) {
@@ -72,7 +79,11 @@ class _RemoteContactPageState extends ConsumerState<RemoteContactPage> {
 
   @override
   Widget build(BuildContext context) {
-    final pending = ref.watch(supportRepositoryProvider).pendingContact != null;
+    final account = ref.watch(accountProvider);
+    final repo = ref.watch(supportRepositoryProvider);
+    final pending = account != null
+        ? repo.pendingAccountRequest != null
+        : repo.pendingContact != null;
     return PageBody(
       child: Align(
         alignment: Alignment.centerLeft,
@@ -97,18 +108,31 @@ class _RemoteContactPageState extends ConsumerState<RemoteContactPage> {
                 StatePanel(
                   title: 'Đã lưu yêu cầu hỗ trợ',
                   icon: Icons.check_circle_outline,
-                  message:
-                      'Mã tiếp nhận: ${receipt!.id}\nYêu cầu đã được lưu. Phản hồi sẽ được gửi tới email liên hệ của bạn sau khi cửa hàng trả lời.',
-                  action: AppButton(
-                    'Viết yêu cầu khác',
-                    outlined: true,
-                    onPressed: () {
-                      ref.read(supportRepositoryProvider).clearReceipt();
-                      name.clear();
-                      email.clear();
-                      message.clear();
-                      setState(() => receipt = null);
-                    },
+                  message: account != null
+                      ? 'Mã tiếp nhận: ${receipt!.id}\nYêu cầu đã được lưu vào tài khoản. Bạn có thể xem câu trả lời và nhắn thêm trong mục Hỗ trợ của tài khoản; câu trả lời cũng được gửi tới ${account.email}.'
+                      : 'Mã tiếp nhận: ${receipt!.id}\nYêu cầu đã được lưu. Phản hồi sẽ được gửi tới email liên hệ của bạn sau khi cửa hàng trả lời.',
+                  action: Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      if (account != null)
+                        AppButton(
+                          'Xem trong tài khoản',
+                          onPressed: () =>
+                              context.go('/account/support/${receipt!.id}'),
+                        ),
+                      AppButton(
+                        'Viết yêu cầu khác',
+                        outlined: true,
+                        onPressed: () {
+                          ref.read(supportRepositoryProvider).clearReceipt();
+                          name.clear();
+                          email.clear();
+                          message.clear();
+                          setState(() => receipt = null);
+                        },
+                      ),
+                    ],
                   ),
                 )
               else
@@ -117,8 +141,10 @@ class _RemoteContactPageState extends ConsumerState<RemoteContactPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Text(
-                        'Cửa hàng sẽ trả lời qua email liên hệ bạn cung cấp. Không gửi mật khẩu hoặc thông tin thanh toán trong nội dung.',
+                      Text(
+                        account != null
+                            ? 'Gửi từ tài khoản ${account.email}. Yêu cầu được lưu trong mục Hỗ trợ của tài khoản. Không gửi mật khẩu hoặc thông tin thanh toán trong nội dung.'
+                            : 'Cửa hàng sẽ trả lời qua email liên hệ bạn cung cấp. Đăng nhập trước khi gửi để theo dõi yêu cầu trong tài khoản. Không gửi mật khẩu hoặc thông tin thanh toán trong nội dung.',
                         style: T.small,
                       ),
                       const SizedBox(height: 24),
@@ -129,29 +155,31 @@ class _RemoteContactPageState extends ConsumerState<RemoteContactPage> {
                             'Đang giữ nguyên nội dung để gửi lại và tránh tạo yêu cầu trùng.',
                           ),
                         ),
-                      TextFormField(
-                        controller: name,
-                        readOnly: busy || pending,
-                        maxLength: 100,
-                        decoration: const InputDecoration(
-                          labelText: 'Tên của bạn',
+                      if (account == null) ...[
+                        TextFormField(
+                          controller: name,
+                          readOnly: busy || pending,
+                          maxLength: 100,
+                          decoration: const InputDecoration(
+                            labelText: 'Tên của bạn',
+                          ),
+                          validator: (v) => (v ?? '').trim().length >= 2
+                              ? null
+                              : 'Nhập tên từ 2 đến 100 ký tự.',
                         ),
-                        validator: (v) => (v ?? '').trim().length >= 2
-                            ? null
-                            : 'Nhập tên từ 2 đến 100 ký tự.',
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: email,
-                        readOnly: busy || pending,
-                        maxLength: 254,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: const InputDecoration(
-                          labelText: 'Email liên hệ',
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: email,
+                          readOnly: busy || pending,
+                          maxLength: 254,
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: const InputDecoration(
+                            labelText: 'Email liên hệ',
+                          ),
+                          validator: emailValidator,
                         ),
-                        validator: emailValidator,
-                      ),
-                      const SizedBox(height: 16),
+                        const SizedBox(height: 16),
+                      ],
                       TextFormField(
                         controller: message,
                         readOnly: busy || pending,

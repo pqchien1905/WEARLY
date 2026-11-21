@@ -103,6 +103,8 @@ class RemoteAccountDetailsRepository implements AccountDetailsRepository {
             recipient: a['recipient'] as String,
             phone: a['phone'] as String,
             address: a['address'] as String,
+            latitude: (a['latitude'] as num?)?.toDouble(),
+            longitude: (a['longitude'] as num?)?.toDouble(),
           ),
         )
         .toList();
@@ -128,6 +130,12 @@ class RemoteAccountDetailsRepository implements AccountDetailsRepository {
       'recipient': address.recipient.trim(),
       'phone': address.phone.trim(),
       'address': address.address.trim(),
+      // A new address sends a pin only when set; an edit always states it,
+      // so removing the pin clears it on the server.
+      if (address.pinned || !creating) ...{
+        'latitude': address.latitude,
+        'longitude': address.longitude,
+      },
     };
     if (!creating) {
       await _request(

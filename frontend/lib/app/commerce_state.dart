@@ -252,6 +252,30 @@ class CommerceController extends ChangeNotifier {
     }
   }
 
+  Future<void> changeOrderAddress(String id, String addressId) =>
+      _mutate(() async {
+        final repository = orderRepository;
+        if (repository is! RemoteOrderRepository) {
+          throw const ApiException(
+            'NOT_ALLOWED',
+            'Đơn demo không hỗ trợ đổi địa chỉ.',
+          );
+        }
+        await repository.changeAddress(id, addressId);
+      }, state: detailState(id));
+
+  Future<void> changeOrderPayment(String id, String method) =>
+      _mutate(() async {
+        final repository = orderRepository;
+        if (repository is! RemoteOrderRepository) {
+          throw const ApiException(
+            'NOT_ALLOWED',
+            'Đơn demo không hỗ trợ đổi phương thức thanh toán.',
+          );
+        }
+        await repository.changePaymentMethod(id, method);
+      }, state: detailState(id));
+
   Future<void> setStatus(String id, String status) => _mutate(() async {
     await Future<void>.sync(() => orderRepository.setStatus(id, status));
     if (!_disposed) onCatalogChanged?.call();

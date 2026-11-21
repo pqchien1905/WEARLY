@@ -36,6 +36,15 @@ export class ZalopayProvider implements WalletGateway {
   }
   assertAvailable() {
     if (!this.enabled) throw unavailable('PAYMENT_UNAVAILABLE');
+    this.assertConfigured();
+  }
+  assertConfigured() {
+    if (
+      ['ZALOPAY_APP_ID', 'ZALOPAY_KEY1', 'ZALOPAY_KEY2'].some(
+        (key) => !this.config.get<string>(key)?.trim(),
+      )
+    )
+      throw unavailable('PAYMENT_UNAVAILABLE');
   }
   private get appId() {
     return this.config.getOrThrow<string>('ZALOPAY_APP_ID');
@@ -103,7 +112,7 @@ export class ZalopayProvider implements WalletGateway {
     return url;
   }
   async query(attempt: WalletAttempt): Promise<PaymentEvent> {
-    this.assertAvailable();
+    this.assertConfigured();
     const appId = this.appId,
       key1 = this.config.getOrThrow<string>('ZALOPAY_KEY1');
     try {
@@ -136,7 +145,7 @@ export class ZalopayProvider implements WalletGateway {
   }
   /** Callback: { data: JSON string, mac: HMAC(key2, data) }; it only reports success. */
   verifyNotification(input: unknown): PaymentEvent {
-    this.assertAvailable();
+    this.assertConfigured();
     if (!input || typeof input !== 'object' || Array.isArray(input))
       throw new Error('Invalid ZaloPay callback');
     const { data, mac } = input as Record<string, unknown>;
@@ -164,7 +173,7 @@ export class ZalopayProvider implements WalletGateway {
     return { reference, amount, status: 'PAID', transactionNo };
   }
   async refund(request: WalletRefund): Promise<RefundEvent> {
-    this.assertAvailable();
+    this.assertConfigured();
     const body = {
       app_id: this.appId,
       m_refund_id: request.requestId,
@@ -197,7 +206,7 @@ export class ZalopayProvider implements WalletGateway {
     }
   }
   async queryRefund(request: WalletRefund): Promise<RefundEvent> {
-    this.assertAvailable();
+    this.assertConfigured();
     const appId = this.appId,
       timestamp = String(Date.now());
     try {

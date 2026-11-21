@@ -316,6 +316,8 @@ describe('Verified product reviews with PostgreSQL', () => {
           'comment',
           'createdAt',
           'updatedAt',
+          'hiddenAt',
+          'hiddenReason',
           'productId',
           'product',
           'canEdit',
@@ -410,6 +412,149 @@ describe('Verified product reviews with PostgreSQL', () => {
         data: { active: true },
       });
     }
+  });
+  it('lets content managers hide and restore reviews from the storefront', async () => {
+    const server = () => request(app.getHttpServer());
+    const email = `review-manager-${suffix}@example.test`;
+    const registered = (
+      await server()
+        .post('/api/v1/auth/register')
+        .send({
+          name: 'Review moderator',
+          email,
+          password: 'Reviews-test-password-2026',
+        })
+        .expect(201)
+    ).body;
+    users.push(registered.user.id);
+    await server().get('/api/v1/admin/reviews').expect(401);
+    await server()
+      .get('/api/v1/admin/reviews')
+      .auth(tokens[0], { type: 'bearer' })
+      .expect(403);
+    const manager = await db.user.update({
+      where: { id: registered.user.id },
+      data: { role: 'MANAGER' },
+    });
+    const token = (
+      await server()
+        .post('/api/v1/auth/admin/login')
+        .send({
+          username: manager.username,
+          password: 'Reviews-test-password-2026',
+        })
+        .expect(201)
+    ).body.accessToken as string;
+    const admin = (method: 'get' | 'patch', tail: string) =>
+      server()
+        [method]('/api/v1/admin/reviews' + tail)
+        .auth(token, { type: 'bearer' });
+    const listed = (
+      await admin('get', `?productId=${products[0]}&limit=20`).expect(200)
+    ).body;
+    // Moderators see every review, including unverified legacy rows.
+    expect(listed.total).toBe(3);
+    const target = listed.items.find(
+      (r: { comment: string }) => r.comment === 'Hơi rộng',
+    );
+    expect(target).toMatchObject({
+      hiddenAt: null,
+      product: { id: products[0] },
+      user: { id: users[1] },
+    });
+    for (const query of ['?visibility=bad', '?rating=6', '?productId=x'])
+      await admin('get', query).expect(400);
+    const visibility = `/${target.id}/visibility`;
+    for (const body of [
+      { hidden: true, expectedUpdatedAt: target.updatedAt },
+      { hidden: true, reason: ' ', expectedUpdatedAt: target.updatedAt },
+      {
+        hidden: true,
+        reason: 'a'.repeat(121),
+        expectedUpdatedAt: target.updatedAt,
+      },
+      { hidden: 'yes', reason: 'Spam', expectedUpdatedAt: target.updatedAt },
+    ])
+      await admin('patch', visibility).send(body).expect(400);
+    await admin('patch', visibility)
+      .send({
+        hidden: true,
+        reason: 'Spam',
+        expectedUpdatedAt: '2020-01-01T00:00:00.000Z',
+      })
+      .expect(409);
+    await admin('patch', `/${randomUUID()}/visibility`)
+      .send({
+        hidden: true,
+        reason: 'Spam',
+        expectedUpdatedAt: target.updatedAt,
+      })
+      .expect(404);
+    const hide = {
+      hidden: true,
+      reason: 'Ngôn từ không phù hợp',
+      expectedUpdatedAt: target.updatedAt,
+    };
+    const hidden = (await admin('patch', visibility).send(hide).expect(200))
+      .body;
+    expect(hidden.hiddenAt).not.toBeNull();
+    // A retried decision is acknowledged without a version conflict.
+    expect(
+      (await admin('patch', visibility).send(hide).expect(200)).body.hiddenAt,
+    ).toBe(hidden.hiddenAt);
+    const shown = (await call('get').expect(200)).body;
+    expect(shown).toMatchObject({ total: 1, average: 4 });
+    expect(JSON.stringify(shown)).not.toMatch(/Hơi rộng|hidden/);
+    const mine = (await call('get', '/me', 1).expect(200)).body.review;
+    expect(mine).toMatchObject({
+      comment: 'Hơi rộng',
+      hiddenReason: 'Ngôn từ không phù hợp',
+    });
+    // An author's edit does not lift moderation.
+    const edited = (
+      await call('patch', '/me', 1)
+        .send({
+          rating: 2,
+          comment: 'Hơi rộng',
+          expectedUpdatedAt: mine.updatedAt,
+        })
+        .expect(200)
+    ).body;
+    expect(edited.hiddenAt).toBe(hidden.hiddenAt);
+    expect(
+      (await admin('get', '?visibility=hidden&q=review-1-').expect(200)).body,
+    ).toMatchObject({ total: 1, items: [{ id: target.id }] });
+    const counts = (await admin('get', '?visibility=visible').expect(200)).body
+      .counts;
+    expect(counts.hidden).toBeGreaterThanOrEqual(1);
+    expect(counts.all).toBe(counts.hidden + counts.visible);
+    await admin('patch', visibility)
+      .send({ hidden: false, expectedUpdatedAt: hidden.updatedAt })
+      .expect(409);
+    const restored = (
+      await admin('patch', visibility)
+        .send({ hidden: false, expectedUpdatedAt: edited.updatedAt })
+        .expect(200)
+    ).body;
+    expect(restored).toMatchObject({ hiddenAt: null, hiddenReason: null });
+    expect((await call('get').expect(200)).body).toMatchObject({
+      total: 2,
+      average: 3,
+    });
+    const events = await db.adminAuditEvent.findMany({
+      where: { targetId: target.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(events.map((e) => e.action)).toEqual([
+      'REVIEW_HIDDEN',
+      'REVIEW_RESTORED',
+    ]);
+    expect(JSON.stringify(events)).not.toMatch(/Hơi rộng|example\.test/);
+    await db.user.update({
+      where: { id: manager.id },
+      data: { role: 'SUPPORT' },
+    });
+    await admin('get', '').expect(403);
   });
   it('guards stale updates/deletes and never targets another customer review', async () => {
     const before = (await call('get', '/me')).body.review;

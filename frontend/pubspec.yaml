@@ -16,6 +16,8 @@ dependencies:
   http: ^1.6.0
   http_parser: ^4.1.2
   uuid: ^4.5.3
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
 dev_dependencies:
   file_selector_platform_interface: 2.7.0
   flutter_test:
@@ -43,3 +45,8 @@ flutter:
     - family: Roboto
       fonts:
         - asset: assets/fonts/BeVietnamPro-Regular.ttf
+
+dependency_overrides:
+  # 2.5+ builds objective_c native assets, which breaks `flutter test` on
+  # Windows hosts. Only iOS/macOS use this package; the web build does not.
+  path_provider_foundation: ">=2.4.0 <2.5.0"

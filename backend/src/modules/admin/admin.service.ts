@@ -105,6 +105,7 @@ export class AdminService {
   }
   async summary() {
     const statusGroups = this.db.order.groupBy({
+      where: { isTest: false },
       by: ['status'],
       orderBy: { status: 'asc' },
       _count: { _all: true },
@@ -130,11 +131,14 @@ export class AdminService {
       [
         this.db.product.count(),
         this.db.inventory.aggregate({ _sum: { quantity: true } }),
-        this.db.order.count(),
-        this.db.order.count({ where: { status: 'PENDING' } }),
+        this.db.order.count({ where: { isTest: false } }),
+        this.db.order.count({ where: { status: 'PENDING', isTest: false } }),
         this.db.user.count({ where: { role: 'CUSTOMER', deletedAt: null } }),
         this.db.payment.aggregate({
-          where: { status: { in: ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'] } },
+          where: {
+            order: { isTest: false },
+            status: { in: ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'] },
+          },
           _sum: { amount: true },
           _count: true,
         }),
@@ -142,20 +146,21 @@ export class AdminService {
           where: {
             provider: 'cod',
             status: 'PENDING',
-            order: { status: 'DELIVERED' },
+            order: { status: 'DELIVERED', isTest: false },
           },
           _sum: { amount: true },
         }),
         this.db.refund.aggregate({
-          where: { status: 'SUCCEEDED' },
+          where: { status: 'SUCCEEDED', payment: { order: { isTest: false } } },
           _sum: { amount: true },
         }),
         this.db.$queryRaw<
           { amount: string }[]
-        >`SELECT COALESCE(sum(a.amount),0)::text AS amount FROM "PaymentAttempt" a JOIN "Payment" p ON p.id=a."paymentId" WHERE a.status='PAID' AND a."transactionNo"<>p."providerTransactionId"`,
+        >`SELECT COALESCE(sum(a.amount),0)::text AS amount FROM "PaymentAttempt" a JOIN "Payment" p ON p.id=a."paymentId" JOIN "Order" o ON o.id=p."orderId" WHERE NOT o."isTest" AND a.status='PAID' AND (a."transactionNo" IS DISTINCT FROM p."providerTransactionId" OR a.provider IS DISTINCT FROM p.provider)`,
         this.db.payment.aggregate({
           where: {
             status: 'REFUNDED',
+            order: { isTest: false },
             refunds: { none: { primary: true, status: 'SUCCEEDED' } },
           },
           _sum: { amount: true },
@@ -175,6 +180,7 @@ export class AdminService {
         }),
         statusGroups,
         this.db.order.findMany({
+          where: { isTest: false },
           take: 5,
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           select: {
@@ -203,6 +209,7 @@ export class AdminService {
             ON o."createdAt" >= now() - interval '15 days'
            AND timezone('Asia/Ho_Chi_Minh', timezone('UTC', o."createdAt"))::date = d.day
            AND o.status NOT IN ('CANCELLED', 'RETURNED')
+           AND NOT o."isTest"
           GROUP BY d.day
           ORDER BY d.day`,
       ],
@@ -364,6 +371,29 @@ export class AdminService {
       },
       { isolationLevel: 'RepeatableRead' },
     );
+  }
+  classify(
+    actorId: string,
+    id: string,
+    dto: { isTest: boolean; expectedVersion: number },
+  ) {
+    return transaction(this.db, async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Order" WHERE id=${id}::uuid FOR UPDATE`;
+      const before = await tx.order.findUnique({ where: { id } });
+      if (!before) throw new NotFoundException();
+      if (before.version !== dto.expectedVersion)
+        fail(409, 'VERSION_CONFLICT', 'Reload the order');
+      if (before.isTest === dto.isTest) return before;
+      const after = await tx.order.update({
+        where: { id },
+        data: { isTest: dto.isTest, version: { increment: 1 } },
+      });
+      await recordAdminActivity(tx, actorId, 'ORDER_CLASSIFIED', id, {
+        before,
+        after,
+      });
+      return after;
+    });
   }
   createProduct(actorId: string, dto: CreateProductDto) {
     const { images, ...data } = dto;

@@ -1,3 +1,4 @@
+import { GeoModule } from './modules/geo/geo.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
@@ -44,6 +45,7 @@ import { OperationsModule } from './modules/operations/operations.module';
     SupportModule,
     MailModule,
     OperationsModule,
+    GeoModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

@@ -8,6 +8,7 @@ import 'admin_providers.dart';
 import 'admin_widgets.dart';
 import 'admin_presentation.dart';
 import 'order_presentation.dart';
+import 'overdue_payments.dart';
 
 class RemoteAdminOrders extends ConsumerStatefulWidget {
   const RemoteAdminOrders({super.key});
@@ -107,6 +108,7 @@ class _RemoteAdminOrdersState extends ConsumerState<RemoteAdminOrders> {
       'status',
       'provider',
       'paymentStatus',
+      'dataKind',
       'from',
       'to',
     ].any((p) => (params[p] ?? '').isNotEmpty);
@@ -181,6 +183,14 @@ class _RemoteAdminOrdersState extends ConsumerState<RemoteAdminOrders> {
                   children: [
                     SizedBox(
                       width: c.maxWidth < 540 ? c.maxWidth : 210,
+                      child: _select('Phân loại', 'dataKind', {
+                        '': 'Đơn kinh doanh',
+                        'test': 'Đơn thử nghiệm',
+                        'all': 'Tất cả dữ liệu',
+                      }),
+                    ),
+                    SizedBox(
+                      width: c.maxWidth < 540 ? c.maxWidth : 210,
                       child: _select('Phương thức', 'provider', {
                         '': 'Mọi phương thức',
                         ...adminPaymentProviders,
@@ -232,6 +242,8 @@ class _RemoteAdminOrdersState extends ConsumerState<RemoteAdminOrders> {
           ],
         ),
         const SizedBox(height: 20),
+        if (canStaff(ref.watch(staffRoleProvider), 'payments.manage'))
+          const OverduePayments(),
         AdminAsync(
           value: result,
           reload: () => ref.invalidate(adminOrdersProvider(key)),

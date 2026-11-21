@@ -13,6 +13,9 @@ class _AddressEditorState extends ConsumerState<_AddressEditor> {
   late final recipient = TextEditingController(text: widget.address?.recipient);
   late final phone = TextEditingController(text: widget.address?.phone);
   late final address = TextEditingController(text: widget.address?.address);
+  // Optional delivery pin from the map.
+  late double? latitude = widget.address?.latitude;
+  late double? longitude = widget.address?.longitude;
   bool busy = false;
   bool uncertain = false;
   bool reconcile = false, confirmingDiscard = false;
@@ -36,7 +39,9 @@ class _AddressEditorState extends ConsumerState<_AddressEditor> {
       label.text.trim() != (widget.address?.label ?? '').trim() ||
       recipient.text.trim() != (widget.address?.recipient ?? '').trim() ||
       phone.text.trim() != (widget.address?.phone ?? '').trim() ||
-      address.text.trim() != (widget.address?.address ?? '').trim();
+      address.text.trim() != (widget.address?.address ?? '').trim() ||
+      latitude != widget.address?.latitude ||
+      longitude != widget.address?.longitude;
 
   void close() {
     if (busy) return;
@@ -106,6 +111,8 @@ class _AddressEditorState extends ConsumerState<_AddressEditor> {
               recipient: recipient.text,
               phone: phone.text,
               address: address.text,
+              latitude: latitude,
+              longitude: longitude,
             ),
             creationKey: creationKey,
           );
@@ -249,12 +256,23 @@ class _AddressEditorState extends ConsumerState<_AddressEditor> {
                     'Địa chỉ nhận hàng',
                     address,
                     500,
-                    hint: 'Số nhà, đường, phường/xã, tỉnh/thành phố',
+                    hint: 'Gõ để tìm: số nhà, đường, phường/xã, tỉnh/thành',
                     lines: 3,
                     validator: (v) => (v?.trim().length ?? 0) >= 8
                         ? null
                         : 'Nhập địa chỉ đầy đủ, ít nhất 8 ký tự.',
                   ),
+                  if (ref.watch(remoteApiProvider))
+                    AddressFinder(
+                      address: address,
+                      latitude: latitude,
+                      longitude: longitude,
+                      enabled: !(busy || uncertain || reconcile),
+                      onPin: (lat, lng) => setState(() {
+                        latitude = lat;
+                        longitude = lng;
+                      }),
+                    ),
                   if (error != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 16),

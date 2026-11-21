@@ -1,9 +1,12 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, NotFoundException, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import { MailOutbox } from '../../generated/prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { sendLocalMail } from './send-local-mail';
+import { transaction } from '../../common/transaction';
+import { fail } from '../../common/errors';
+import { recordAdminActivity } from '../admin/audit';
 @Injectable()
 export class MailService implements OnModuleDestroy {
   private readonly sends = new Set<AbortController>();
@@ -22,6 +25,18 @@ export class MailService implements OnModuleDestroy {
     if (!this.enabled() || this.stopping) return [];
     const token = randomUUID();
     return this.db.$transaction(async (tx) => {
+      const cutoff = new Date(
+        Date.now() -
+          Number(this.config.get('MAIL_MAX_AGE_HOURS') ?? 24) * 3600000,
+      );
+      await tx.mailOutbox.updateMany({
+        where: {
+          status: 'PENDING',
+          createdAt: { lt: cutoff },
+          deliveryApprovedAt: null,
+        },
+        data: { status: 'HELD', lastError: 'MAIL_REVIEW_REQUIRED' },
+      });
       await tx.$executeRaw`UPDATE "MailOutbox" SET "status"='FAILED',"lastError"='MAIL_LEASE_EXHAUSTED',"leaseToken"=NULL,"leaseUntil"=NULL,"updatedAt"=CURRENT_TIMESTAMP
         WHERE "status"='PROCESSING' AND "leaseUntil"<=CURRENT_TIMESTAMP AND "attempts">=5`;
       return tx.$queryRaw<MailOutbox[]>`WITH ready AS (
@@ -51,6 +66,27 @@ export class MailService implements OnModuleDestroy {
     if (!rows.length) return;
     const results = await Promise.allSettled(
       rows.map(async (row) => {
+        if (row.subscriptionId) {
+          const subscription = await this.db.newsletterSubscription.findUnique({
+            where: { id: row.subscriptionId },
+          });
+          if (!subscription || subscription.unsubscribedAt) {
+            await this.db.mailOutbox.updateMany({
+              where: {
+                id: row.id,
+                status: 'PROCESSING',
+                leaseToken: row.leaseToken,
+              },
+              data: {
+                status: 'CANCELLED',
+                leaseToken: null,
+                leaseUntil: null,
+                lastError: 'NEWSLETTER_UNSUBSCRIBED',
+              },
+            });
+            return;
+          }
+        }
         let success = false;
         const controller = new AbortController();
         this.sends.add(controller);
@@ -103,6 +139,7 @@ export class MailService implements OnModuleDestroy {
             lastError: true,
             sentAt: true,
             createdAt: true,
+            updatedAt: true,
             orderId: true,
             supportId: true,
           },
@@ -126,6 +163,79 @@ export class MailService implements OnModuleDestroy {
       },
       { isolationLevel: 'RepeatableRead' },
     );
+  }
+  async preview(id: string) {
+    const row = await this.db.mailOutbox.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        recipient: true,
+        subject: true,
+        body: true,
+        status: true,
+        updatedAt: true,
+      },
+    });
+    if (!row) throw new NotFoundException();
+    return row;
+  }
+  manage(
+    actorId: string,
+    id: string,
+    action: 'hold' | 'release' | 'cancel',
+    expectedUpdatedAt: string,
+  ) {
+    return transaction(this.db, async (tx) => {
+      const row = await tx.mailOutbox.findUnique({ where: { id } });
+      if (!row) throw new NotFoundException();
+      if (
+        row.updatedAt.toISOString() !== expectedUpdatedAt ||
+        ['PROCESSING', 'SENT', 'CANCELLED'].includes(row.status)
+      )
+        fail(
+          409,
+          'MAIL_STATE_CONFLICT',
+          'Reload the current mail before changing it',
+        );
+      if (
+        action === 'release' &&
+        row.subscriptionId &&
+        (
+          await tx.newsletterSubscription.findUnique({
+            where: { id: row.subscriptionId },
+          })
+        )?.unsubscribedAt
+      )
+        fail(409, 'NEWSLETTER_UNSUBSCRIBED', 'Recipient has unsubscribed');
+      const status =
+        action === 'hold'
+          ? 'HELD'
+          : action === 'cancel'
+            ? 'CANCELLED'
+            : 'PENDING';
+      const updated = await tx.mailOutbox.update({
+        where: { id },
+        data: {
+          status,
+          updatedAt: new Date(
+            Math.max(Date.now(), row.updatedAt.getTime() + 1),
+          ),
+          ...(action === 'release'
+            ? {
+                attempts: 0,
+                lastError: null,
+                nextAttemptAt: new Date(),
+                deliveryApprovedAt: new Date(),
+              }
+            : {}),
+        },
+      });
+      await recordAdminActivity(tx, actorId, 'MAIL_UPDATED', id, {
+        before: row,
+        after: updated,
+      });
+      return { id, status, updatedAt: updated.updatedAt };
+    });
   }
   onModuleDestroy() {
     this.stop();

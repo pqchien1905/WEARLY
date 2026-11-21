@@ -66,10 +66,23 @@ describe('refund entitlement by collected source', () => {
         settled: false,
       },
       attempts: [
-        { id: 'first', status: 'PAID', transactionNo: '11', amount: '960000' },
-        { id: 'extra', status: 'PAID', transactionNo: '22', amount: '960000' },
+        {
+          id: 'first',
+          provider: 'vnpay',
+          status: 'PAID',
+          transactionNo: '11',
+          amount: '960000',
+        },
+        {
+          id: 'extra',
+          provider: 'vnpay',
+          status: 'PAID',
+          transactionNo: '22',
+          amount: '960000',
+        },
         {
           id: 'pending',
+          provider: 'vnpay',
           status: 'PENDING',
           transactionNo: null,
           amount: '960000',
@@ -111,6 +124,35 @@ describe('refund entitlement by collected source', () => {
       expect(refundSources(order({ payment, receivedAmount: '0' }))).toEqual(
         [],
       );
+  });
+  it('does not infer an ambiguous legacy refund source from the current payment method', () => {
+    const input = order({
+      status: 'CANCELLED',
+      receivedAmount: '0',
+      payment: {
+        provider: 'vnpay',
+        status: 'PAID',
+        amount: '960000',
+        transactionNo: '11',
+        settled: false,
+      },
+      attempts: [
+        {
+          id: 'legacy',
+          provider: null,
+          status: 'PAID',
+          transactionNo: '11',
+          amount: '960000',
+        },
+      ],
+    });
+    expect(refundSources(input)).toEqual([]);
+    input.attempts[0].provider = 'momo';
+    expect(refundSources(input)[0]).toMatchObject({
+      attemptId: 'legacy',
+      primary: false,
+      available: '960000',
+    });
   });
   it('fails closed for inconsistent ledger totals instead of returning a negative/oversized balance', () => {
     expect(() =>

@@ -25,6 +25,23 @@ import {
   automaticOffers,
   automaticPrice,
 } from '../promotions/automatic-pricing';
+/** What the courier needs: who, how to call, where (and the map pin if set). */
+function addressSnapshot(a: {
+  recipient: string;
+  phone: string;
+  address: string;
+  latitude: number | null;
+  longitude: number | null;
+}) {
+  return {
+    recipient: a.recipient,
+    phone: a.phone,
+    address: a.address,
+    ...(a.latitude !== null && a.longitude !== null
+      ? { latitude: a.latitude, longitude: a.longitude }
+      : {}),
+  };
+}
 @Injectable()
 export class OrdersService {
   constructor(
@@ -169,11 +186,7 @@ export class OrdersService {
           userId,
           idempotencyKey: key,
           requestHash,
-          addressSnapshot: {
-            recipient: address.recipient,
-            phone: address.phone,
-            address: address.address,
-          },
+          addressSnapshot: addressSnapshot(address),
           subtotal,
           discount,
           couponCode: promotion?.code,
@@ -256,6 +269,56 @@ export class OrdersService {
     });
     if (!order) throw new NotFoundException();
     return order;
+  }
+  /**
+   * Ships a still-unconfirmed order to another saved address. The fee does not
+   * depend on the address, so totals and any payment stay untouched.
+   */
+  changeAddress(userId: string, id: string, addressId: string) {
+    return transaction(this.db, async (tx) => {
+      await lockUser(tx, userId);
+      await tx.$queryRaw`SELECT id FROM "Order" WHERE id = ${id}::uuid AND "userId" = ${userId}::uuid FOR UPDATE`;
+      const order = await tx.order.findFirst({ where: { id, userId } });
+      if (!order) throw new NotFoundException();
+      if (order.status !== 'PENDING')
+        fail(
+          409,
+          'ORDER_STATE_CONFLICT',
+          'The shipping address can only change before the order is confirmed',
+        );
+      const address = await tx.address.findFirst({
+        where: { id: addressId, userId },
+      });
+      if (!address) throw new NotFoundException('Address not found');
+      const snapshot = addressSnapshot(address);
+      const current = order.addressSnapshot as Record<string, unknown>;
+      if (
+        current?.recipient === snapshot.recipient &&
+        current?.phone === snapshot.phone &&
+        current?.address === snapshot.address &&
+        (current?.latitude ?? null) === (snapshot.latitude ?? null) &&
+        (current?.longitude ?? null) === (snapshot.longitude ?? null)
+      )
+        return tx.order.findUniqueOrThrow({ where: { id }, include });
+      const version = order.version + 1;
+      await tx.order.update({
+        where: { id },
+        data: { addressSnapshot: snapshot, version },
+      });
+      await tx.orderEvent.create({
+        data: {
+          orderId: id,
+          status: order.status,
+          version,
+          actorId: userId,
+          note: `Khách đổi địa chỉ nhận hàng: ${snapshot.recipient}, ${snapshot.address}`.slice(
+            0,
+            300,
+          ),
+        },
+      });
+      return tx.order.findUniqueOrThrow({ where: { id }, include });
+    });
   }
   cancel(userId: string, id: string) {
     return transaction(this.db, async (tx) => {

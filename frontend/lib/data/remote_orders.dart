@@ -154,6 +154,38 @@ class RemoteOrderRepository implements OrderRepository {
     if (order.id != id) throw invalidCommerce;
     _upsert(order);
   });
+
+  /// Ships an unconfirmed order to another saved address.
+  Future<void> changeAddress(String id, String addressId) => _queue(() async {
+    final order = commerceOrder(
+      await api.request(
+        'PATCH',
+        'orders/${Uri.encodeComponent(id)}/address',
+        body: {'addressId': addressId},
+      ),
+      email: email,
+    );
+    _check();
+    if (order.id != id) throw invalidCommerce;
+    _upsert(order);
+  });
+
+  /// Switches an unpaid, unconfirmed order to another payment method.
+  Future<void> changePaymentMethod(String id, String method) =>
+      _queue(() async {
+        final order = commerceOrder(
+          await api.request(
+            'PATCH',
+            'payments/orders/${Uri.encodeComponent(id)}/method',
+            body: {'paymentMethod': method},
+          ),
+          email: email,
+        );
+        _check();
+        if (order.id != id) throw invalidCommerce;
+        _upsert(order);
+      });
+
   @override
   Future<void> setStatus(String id, String status) => _queue(() async {
     if (status != 'Đã hủy') {

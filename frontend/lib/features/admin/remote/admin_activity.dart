@@ -42,6 +42,13 @@ const _actions = {
   'CONTENT_DRAFT_RESTORED': 'Khôi phục bản nháp từ bản công khai',
   'CONTENT_DRAFT_SAVED': 'Lưu bản nháp nội dung',
   'CONTENT_PUBLISHED': 'Xuất bản nội dung',
+  'PAYMENT_RECONCILED': 'Đối soát thanh toán',
+  'MAIL_UPDATED': 'Xử lý thư chờ gửi',
+  'NEWSLETTER_UPDATED': 'Ngừng gửi bản tin cho người đăng ký',
+  'NEWSLETTER_QUEUED': 'Xếp hàng gửi bản tin',
+  'ORDER_CLASSIFIED': 'Phân loại đơn thử nghiệm',
+  'REVIEW_HIDDEN': 'Ẩn đánh giá',
+  'REVIEW_RESTORED': 'Hiện lại đánh giá',
 };
 
 class AdminActivityPanel extends ConsumerStatefulWidget {
@@ -156,6 +163,9 @@ const _fields = {
   'coverProductId': 'Sản phẩm làm ảnh bìa',
   'provider': 'Thanh toán',
   'primary': 'Khoản thu chính',
+  'rating': 'Số sao',
+  'hiddenAt': 'Ẩn lúc',
+  'hiddenReason': 'Lý do ẩn',
 };
 Iterable<String> auditChanges(Object? details) sync* {
   if (details is! Map) return;

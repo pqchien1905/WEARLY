@@ -53,6 +53,7 @@ export interface WalletGateway {
   /** How long the provider keeps the payment page open; attempts expire with it. */
   readonly linkLifetimeMs: number;
   assertAvailable(): void;
+  assertConfigured(): void;
   /** Provider-specific merchant reference for a new attempt (max 32 chars). */
   reference(createdAt: Date): string;
   /** Provider-specific refund identifier (max 32 chars). */

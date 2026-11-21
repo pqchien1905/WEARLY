@@ -149,10 +149,16 @@ export class ContentService {
   }
   async subscribe(email: string) {
     // Same acknowledgement for existing/new subscribers. Repeated submissions
-    // preserve the original consent and never enqueue unsolicited email.
+    // preserve an active subscriber's original consent and never enqueue mail.
     await this.db.newsletterSubscription.createMany({
       data: [{ email }],
       skipDuplicates: true,
+    });
+    // A former subscriber who opts in again gets a fresh consent. Mail
+    // cancelled by the earlier unsubscribe stays cancelled.
+    await this.db.newsletterSubscription.updateMany({
+      where: { email, unsubscribedAt: { not: null } },
+      data: { unsubscribedAt: null, consentedAt: new Date() },
     });
     return { accepted: true };
   }

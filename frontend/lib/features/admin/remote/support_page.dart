@@ -10,7 +10,7 @@ import '../../../data/remote_support.dart';
 import '../../../data/remote_admin.dart';
 import 'admin_pagination.dart';
 import 'admin_widgets.dart';
-import 'admin_providers.dart' show staffRoleProvider, canStaff;
+import 'admin_providers.dart' show staffRoleProvider, canStaff, canVisitAdmin;
 import 'admin_presentation.dart';
 import 'operations_widgets.dart';
 
@@ -359,6 +359,8 @@ class _RemoteSupportDetailState extends ConsumerState<RemoteSupportDetail> {
                       style: T.body.copyWith(fontWeight: FontWeight.w600),
                     ),
                     SelectableText(ticket['email']),
+                    const SizedBox(height: 4),
+                    _LinkedAccount(user: ticket['user'] as Map?),
                     const SizedBox(height: 12),
                     SelectableText(ticket['message']),
                     const SizedBox(height: 16),
@@ -383,11 +385,25 @@ class _RemoteSupportDetailState extends ConsumerState<RemoteSupportDetail> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Text(
+                        reply['fromCustomer'] == true
+                            ? 'Khách nhắn thêm'
+                            : 'Cửa hàng trả lời',
+                        style: T.small.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: reply['fromCustomer'] == true
+                              ? T.accent
+                              : T.muted,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
                       SelectableText(reply['message']),
                       const SizedBox(height: 8),
                       Text(
-                        mailStatusNames[reply['mail']?['status']] ??
-                            'Chưa có thông tin gửi thư',
+                        reply['fromCustomer'] == true
+                            ? adminDate(reply['createdAt'])
+                            : mailStatusNames[reply['mail']?['status']] ??
+                                  'Chưa có thông tin gửi thư',
                         style: T.small,
                       ),
                     ],
@@ -432,6 +448,77 @@ class _RemoteSupportDetailState extends ConsumerState<RemoteSupportDetail> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Signed-in submissions link to the customer's admin profile.
+class _LinkedAccount extends ConsumerWidget {
+  const _LinkedAccount({required this.user});
+  final Map? user;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (user == null) {
+      return const Text(
+        'Khách vãng lai · không gắn với tài khoản',
+        style: T.small,
+      );
+    }
+    final path = '/admin/customers/${user!['id']}';
+    final label =
+        'Tài khoản: ${user!['name'] ?? ''} · ${user!['email'] ?? ''}${user!['deletedAt'] != null ? ' (đã xóa)' : ''}';
+    return canVisitAdmin(ref.watch(staffRoleProvider), path)
+        ? TextButton.icon(
+            style: TextButton.styleFrom(padding: EdgeInsets.zero),
+            onPressed: () => context.go(path),
+            icon: const Icon(Icons.person_outline, size: 18),
+            label: Text(label),
+          )
+        : Text(label, style: T.small);
+  }
+}
+
+/// The latest tickets linked to one customer, for the admin profile.
+class CustomerSupportTickets extends ConsumerWidget {
+  const CustomerSupportTickets({super.key, required this.userId});
+  final String userId;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final provider = customerSupportProvider(userId);
+    return AdminAsync(
+      value: ref.watch(provider),
+      reload: () => ref.invalidate(provider),
+      builder: (data) {
+        final items = data['items'] as List;
+        if (items.isEmpty) {
+          return const AdminCard(
+            child: Text('Khách chưa gửi yêu cầu hỗ trợ nào.', style: T.body),
+          );
+        }
+        return AdminCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final row in items)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  onTap: () => context.go('/admin/support/${row['id']}'),
+                  title: Text(
+                    '${supportStatusNames[row['status']] ?? row['status']} · ${row['_count']?['replies'] ?? 0} phản hồi',
+                    style: T.body,
+                  ),
+                  subtitle: Text(adminDate(row['createdAt']), style: T.small),
+                  trailing: const Icon(Icons.chevron_right),
+                ),
+              if ((data['total'] as int? ?? 0) > items.length)
+                Text(
+                  'Hiển thị ${items.length}/${data['total']} yêu cầu gần nhất.',
+                  style: T.small,
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

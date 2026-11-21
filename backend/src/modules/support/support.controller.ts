@@ -18,6 +18,9 @@ import {
 } from '../../common/decorators/auth';
 import {
   CreateSupportDto,
+  CustomerFollowUpDto,
+  CustomerSupportDto,
+  CustomerSupportPageDto,
   ListSupportDto,
   ReplySupportDto,
   StatusSupportDto,
@@ -59,5 +62,37 @@ export class AdminSupportController {
     @Body() dto: StatusSupportDto,
   ) {
     return this.service.status(user.id, id, dto);
+  }
+}
+@ApiTags('support')
+@ApiBearerAuth()
+@Controller('users/me/support')
+export class CustomerSupportController {
+  constructor(private readonly service: SupportService) {}
+  @Get() list(
+    @CurrentUser() user: Identity,
+    @Query() q: CustomerSupportPageDto,
+  ) {
+    return this.service.mine(user.id, q);
+  }
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Post()
+  create(@CurrentUser() user: Identity, @Body() dto: CustomerSupportDto) {
+    return this.service.createForCustomer(user.id, dto);
+  }
+  @Get(':id') detail(
+    @CurrentUser() user: Identity,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.service.mineDetail(user.id, id);
+  }
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Post(':id/replies')
+  followUp(
+    @CurrentUser() user: Identity,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CustomerFollowUpDto,
+  ) {
+    return this.service.followUp(user.id, id, dto);
   }
 }

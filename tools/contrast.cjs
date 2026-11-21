@@ -4,5 +4,6 @@ const luminance=hex=>{const c=hex.slice(1).match(/../g).map(h=>parseInt(h,16)/25
 const pairs=[['ink','surface'],['muted','surface'],['muted','canvas'],['accent','surface'],['accent','soft'],['surface','accent'],['surface','ink'],['success','surface'],['danger','surface'],['warning','surface']];
 pairs.push(['controlLine','surface']);
 const results=pairs.map(([foreground,background])=>{const a=luminance(colors[foreground]),b=luminance(colors[background]);const ratio=(Math.max(a,b)+.05)/(Math.min(a,b)+.05);const requiredRatio=foreground==='controlLine'?3:4.5;return {foreground,background,ratio:Number(ratio.toFixed(2)),requiredRatio,pass:ratio>=requiredRatio};});
+fs.mkdirSync('docs/qa',{recursive:true});
 fs.writeFileSync('docs/qa/contrast.json',JSON.stringify(results,null,2));
 console.log(results);if(results.some(r=>!r.pass))process.exitCode=1;

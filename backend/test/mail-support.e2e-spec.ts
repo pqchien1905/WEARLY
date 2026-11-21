@@ -11,6 +11,7 @@ import * as audit from '../src/modules/admin/audit';
 
 describe('Persistent guest support', () => {
   let app: INestApplication, db: PrismaService, admin: string, buyer: string;
+  let buyerId: string, buyerEmail: string;
   const call = (method: 'get' | 'post' | 'patch', path: string, token = '') =>
     request(app.getHttpServer())
       [method]('/api/v1/' + path)
@@ -54,7 +55,11 @@ describe('Persistent guest support', () => {
           where: { id: r.body.user.id },
           data: { role: 'ADMIN' },
         });
-      } else buyer = r.body.accessToken;
+      } else {
+        buyer = r.body.accessToken;
+        buyerId = r.body.user.id;
+        buyerEmail = r.body.user.email;
+      }
     }
   });
   afterAll(async () => {
@@ -216,6 +221,129 @@ describe('Persistent guest support', () => {
     expect(await db.mailOutbox.count({ where: { supportId: ticket.id } })).toBe(
       0,
     );
+  });
+  it('links signed-in requests to the account and keeps the thread private', async () => {
+    const mine = 'users/me/support';
+    await call('get', mine).expect(401);
+    const request = {
+      requestKey: randomUUID(),
+      message: 'Đơn của tôi cần đổi size áo.',
+    };
+    for (const body of [
+      { ...request, message: 'short' },
+      { ...request, email: 'other@example.test' },
+      { ...request, requestKey: 'bad' },
+    ])
+      await call('post', mine, buyer).send(body).expect(400);
+    const created = (await call('post', mine, buyer).send(request).expect(201))
+      .body;
+    expect(Object.keys(created).sort()).toEqual(['createdAt', 'id']);
+    expect(
+      (await call('post', mine, buyer).send(request).expect(201)).body,
+    ).toEqual(created);
+    await call('post', mine, buyer)
+      .send({ ...request, message: 'Một nội dung khác hẳn.' })
+      .expect(409);
+    const stored = await db.supportTicket.findUniqueOrThrow({
+      where: { id: created.id },
+    });
+    expect(stored).toMatchObject({ userId: buyerId, email: buyerEmail });
+    // A guest request with the same email is not attached to the account.
+    const guest = (
+      await call('post', 'support')
+        .send({ ...draft(), email: buyerEmail })
+        .expect(201)
+    ).body;
+    expect((await call('get', mine, buyer).expect(200)).body).toMatchObject({
+      total: 1,
+      items: [{ id: created.id, status: 'OPEN', _count: { replies: 0 } }],
+    });
+    await call('get', `${mine}/${guest.id}`, buyer).expect(404);
+    await call('post', `${mine}/${guest.id}/replies`, buyer)
+      .send({ requestKey: randomUUID(), message: 'Not mine' })
+      .expect(404);
+    // Another account cannot read or write the ticket.
+    expect((await call('get', mine, admin).expect(200)).body.total).toBe(0);
+    await call('get', `${mine}/${created.id}`, admin).expect(404);
+    expect(
+      (await call('get', `admin/support?userId=${buyerId}`, admin).expect(200))
+        .body,
+    ).toMatchObject({ total: 1, items: [{ id: created.id, userId: buyerId }] });
+    await call('get', 'admin/support?userId=bad', admin).expect(400);
+    // Staff replies reach the account's current email address.
+    const renamed = randomUUID() + '@example.test';
+    await db.user.update({ where: { id: buyerId }, data: { email: renamed } });
+    const path = 'admin/support/' + created.id;
+    await call('post', path + '/replies', admin)
+      .send({
+        requestKey: randomUUID(),
+        expectedVersion: 0,
+        message: 'Bạn có thể đổi size trong 7 ngày.',
+      })
+      .expect(201);
+    const mail = await db.mailOutbox.findFirstOrThrow({
+      where: { supportId: created.id },
+    });
+    expect(mail.recipient).toBe(renamed);
+    expect(mail.body).toContain(`/#/account/support/${created.id}`);
+    let thread = (await call('get', `${mine}/${created.id}`, buyer).expect(200))
+      .body;
+    expect(thread).toMatchObject({
+      status: 'ANSWERED',
+      message: request.message,
+      replies: [
+        { fromCustomer: false, message: 'Bạn có thể đổi size trong 7 ngày.' },
+      ],
+    });
+    expect(Object.keys(thread.replies[0]).sort()).toEqual(
+      ['createdAt', 'fromCustomer', 'id', 'message'].sort(),
+    );
+    expect(JSON.stringify(thread)).not.toMatch(/example\.test|actorId|mail/);
+    const followUp = { requestKey: randomUUID(), message: 'Cảm ơn, tôi đổi M.' };
+    const sent = (
+      await call('post', `${mine}/${created.id}/replies`, buyer)
+        .send(followUp)
+        .expect(201)
+    ).body;
+    expect(
+      (
+        await call('post', `${mine}/${created.id}/replies`, buyer)
+          .send(followUp)
+          .expect(201)
+      ).body,
+    ).toEqual(sent);
+    thread = (await call('get', `${mine}/${created.id}`, buyer).expect(200))
+      .body;
+    expect(thread.status).toBe('OPEN');
+    expect(thread.replies.map((r: { fromCustomer: boolean }) => r.fromCustomer))
+      .toEqual([false, true]);
+    expect(await db.mailOutbox.count({ where: { supportId: created.id } })).toBe(
+      1,
+    );
+    const detail = (await call('get', path, admin).expect(200)).body;
+    expect(detail).toMatchObject({
+      status: 'OPEN',
+      version: 2,
+      user: { id: buyerId, email: renamed },
+    });
+    expect(detail.replies[1]).toMatchObject({
+      fromCustomer: true,
+      actorId: buyerId,
+    });
+    // A staff reply key cannot replay a customer follow-up.
+    await call('post', path + '/replies', admin)
+      .send({
+        requestKey: followUp.requestKey,
+        expectedVersion: 2,
+        message: followUp.message,
+      })
+      .expect(409);
+    await call('patch', path, admin)
+      .send({ expectedVersion: 2, status: 'CLOSED' })
+      .expect(200);
+    await call('post', `${mine}/${created.id}/replies`, buyer)
+      .send({ requestKey: randomUUID(), message: 'Còn một câu hỏi.' })
+      .expect(409);
   });
   it('limits public contact submissions to five per minute', async () => {
     jest.spyOn(ThrottlerGuard.prototype, 'canActivate').mockRestore();

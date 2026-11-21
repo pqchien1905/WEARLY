@@ -47,6 +47,8 @@ class MockAccountDetailsRepository implements AccountDetailsRepository {
       recipient: input.recipient.trim(),
       phone: input.phone.trim(),
       address: input.address.trim(),
+      latitude: input.latitude,
+      longitude: input.longitude,
     );
     _value = AccountDetails(
       addresses: existing

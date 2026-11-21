@@ -13,6 +13,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Admin, CurrentUser, Identity } from '../../common/decorators/auth';
 import { AdminPageDto as PageDto } from '../../common/admin-page.dto';
 import { AdminService } from './admin.service';
+import { OrderClassificationDto } from './dto/order-classification.dto';
 import { AdminOrdersQueryDto } from './dto/admin-orders-query.dto';
 import { AdminProductsQueryDto } from './dto/admin-products-query.dto';
 import {
@@ -55,6 +56,15 @@ export class AdminController {
     private readonly taxonomy: TaxonomyService,
     private readonly customers: CustomersService,
   ) {}
+  @Admin('payments.manage')
+  @Patch('orders/:id/classification')
+  classify(
+    @CurrentUser() u: Identity,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: OrderClassificationDto,
+  ) {
+    return this.service.classify(u.id, id, dto);
+  }
   @Admin('reports.read')
   @Get('summary')
   summary() {

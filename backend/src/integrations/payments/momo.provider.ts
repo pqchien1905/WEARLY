@@ -40,6 +40,15 @@ export class MomoProvider implements WalletGateway {
   }
   assertAvailable() {
     if (!this.enabled) throw unavailable('PAYMENT_UNAVAILABLE');
+    this.assertConfigured();
+  }
+  assertConfigured() {
+    if (
+      ['MOMO_PARTNER_CODE', 'MOMO_ACCESS_KEY', 'MOMO_SECRET_KEY'].some(
+        (key) => !this.config.get<string>(key)?.trim(),
+      )
+    )
+      throw unavailable('PAYMENT_UNAVAILABLE');
   }
   private get partnerCode() {
     return this.config.getOrThrow<string>('MOMO_PARTNER_CODE');
@@ -125,7 +134,7 @@ export class MomoProvider implements WalletGateway {
     throw new Error('Unrecognized MoMo result');
   }
   async query(attempt: WalletAttempt): Promise<PaymentEvent> {
-    this.assertAvailable();
+    this.assertConfigured();
     try {
       return this.event(
         await this.queryPayment(attempt.reference),
@@ -151,7 +160,7 @@ export class MomoProvider implements WalletGateway {
   }
   /** IPN and browser return share the same signed field set. */
   verifyNotification(input: unknown): PaymentEvent {
-    this.assertAvailable();
+    this.assertConfigured();
     if (!input || typeof input !== 'object' || Array.isArray(input))
       throw new Error('Invalid MoMo notification');
     const f = input as Record<string, unknown>;
@@ -181,7 +190,7 @@ export class MomoProvider implements WalletGateway {
     );
   }
   async refund(request: WalletRefund): Promise<RefundEvent> {
-    this.assertAvailable();
+    this.assertConfigured();
     const body = {
       partnerCode: this.partnerCode,
       orderId: request.requestId,
@@ -209,7 +218,7 @@ export class MomoProvider implements WalletGateway {
   }
   /** Reads the refund through the original payment's refund ledger. */
   async queryRefund(request: WalletRefund): Promise<RefundEvent> {
-    this.assertAvailable();
+    this.assertConfigured();
     try {
       const f = await this.queryPayment(request.reference);
       if (f.partnerCode !== this.partnerCode || f.orderId !== request.reference)

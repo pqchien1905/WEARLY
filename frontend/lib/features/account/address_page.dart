@@ -10,6 +10,8 @@ import '../../core/design/tokens.dart';
 import '../../core/widgets/primitives.dart';
 import 'account_navigation.dart';
 import 'account_components.dart';
+import 'address_finder.dart';
+import '../../core/widgets/pin_map_link.dart';
 
 part 'address_list.dart';
 part 'address_editor.dart';

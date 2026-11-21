@@ -2,7 +2,7 @@
 const publicEvent = { id: true, status: true, note: true, createdAt: true };
 export const orderInclude = {
   items: true,
-  payment: true,
+  payment: { include: { attempts: { select: { status: true } } } },
   history: { select: publicEvent, orderBy: { version: 'asc' as const } },
   shipment: {
     select: {

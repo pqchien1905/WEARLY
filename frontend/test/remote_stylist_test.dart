@@ -289,7 +289,7 @@ void main() {
       expect(writes, 1);
       expect(find.text('Tổng trang phục: 490.000 ₫'), findsOneWidget);
       expect(find.textContaining('M · Trắng'), findsOneWidget);
-      expect(find.textContaining('500 ₫'), findsWidgets);
+      expect(find.textContaining('Chi phí dịch vụ'), findsNothing);
       expect(t.takeException(), isNull);
     },
   );
@@ -444,7 +444,7 @@ void main() {
       t,
       client((_) async => jsonResponse(stylistStatus(remaining: 0))),
     );
-    expect(find.textContaining('20 / 20'), findsOneWidget);
+    expect(find.textContaining('Miễn phí · Còn 0 / 20'), findsOneWidget);
     expect(
       t
           .widget<FilledButton>(

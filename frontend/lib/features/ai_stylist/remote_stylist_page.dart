@@ -409,14 +409,6 @@ class _RemoteStylistPageState extends ConsumerState<RemoteStylistPage> {
           const Text(
             'Gemini sẽ chọn các món còn hàng theo size và ngân sách của bạn. Gợi ý chưa bao gồm phí vận chuyển.',
           ),
-        if (receipt != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 20),
-            child: Text(
-              'Chi phí dịch vụ ước tính của lượt này: ${money(receipt!.estimatedCost)}. Đây không phải khoản thu trong đơn hàng.',
-              style: T.small,
-            ),
-          ),
       ],
     );
     return PageBody(
@@ -460,13 +452,8 @@ class _RemoteStylistPageState extends ConsumerState<RemoteStylistPage> {
                     'Dịch vụ đang chờ cửa hàng kích hoạt. Bạn có thể xem sản phẩm trong lúc chờ.',
               ),
             Text(
-              'Đã dùng ${info.used} / ${info.limit} lượt hôm nay · Còn ${info.remaining} lượt',
+              'Miễn phí · Còn ${info.remaining} / ${info.limit} lượt hôm nay',
               style: T.body.copyWith(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Chi phí dịch vụ ước tính: ${money(info.estimatedPerRequest)} / yêu cầu; hôm nay ${money(info.estimatedUsed)}. Không cộng vào tiền hàng.',
-              style: T.small,
             ),
             const SizedBox(height: 8),
             Text(

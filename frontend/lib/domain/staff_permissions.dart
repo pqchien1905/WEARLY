@@ -25,6 +25,7 @@ const _capabilities = {
   'content.manage',
   'support.manage',
   'mail.read',
+  'mail.manage',
   'staff.manage',
 };
 bool isStaff(String? role) => staffRoles.contains(role);
@@ -61,6 +62,7 @@ bool canVisitAdmin(String? role, String path) {
     'content' || 'collections' => 'content.manage',
     'support' => 'support.manage',
     'mail' => 'mail.read',
+    'newsletter' || 'reviews' => 'content.manage',
     'staff' || 'settings' || 'ai-monitoring' => 'staff.manage',
     _ => null,
   };

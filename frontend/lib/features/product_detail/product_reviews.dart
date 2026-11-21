@@ -97,6 +97,10 @@ class _ProductReviewsState extends ConsumerState<ProductReviews> {
                             'Đánh giá của bạn: ${data.review!.rating} sao',
                             style: T.small,
                           ),
+                          if (data.review!.hidden)
+                            ReviewModerationNotice(
+                              reason: data.review!.hiddenReason,
+                            ),
                           if (data.canReview)
                             AppButton(
                               'Sửa đánh giá',

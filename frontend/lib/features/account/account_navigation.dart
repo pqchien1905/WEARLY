@@ -18,6 +18,7 @@ const accountDestinations = [
   ('Sổ địa chỉ', '/account/addresses', Icons.location_on_outlined),
   ('Phong cách của tôi', '/account/style', Icons.tune_outlined),
   ('Lịch sử thử đồ', '/account/try-ons', Icons.checkroom_outlined),
+  ('Hỗ trợ', '/account/support', Icons.support_agent_outlined),
   ('Yêu thích', '/wishlist', Icons.favorite_border),
   ('Cài đặt tài khoản', '/account/settings', Icons.settings_outlined),
 ];
@@ -40,6 +41,8 @@ String accountDescription(String path) => switch (path) {
   '/account/try-ons' =>
     'Xem lại những trang phục bạn đã thử và tìm cảm hứng mới.',
   '/wishlist' => 'Lưu cảm hứng, trở lại khi bạn sẵn sàng.',
+  '/account/support' =>
+    'Theo dõi câu trả lời của cửa hàng và nhắn thêm khi cần.',
   _ => 'Quản lý thông tin đăng nhập, bảo mật và tùy chọn mua sắm.',
 };
 
@@ -56,7 +59,8 @@ class AccountNavigation extends ConsumerWidget {
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       for (final item in accountDestinations)
-        if (item.$2 != '/account/reviews' || ref.watch(remoteApiProvider))
+        if (!const {'/account/reviews', '/account/support'}.contains(item.$2) ||
+            ref.watch(remoteApiProvider))
           Padding(
             padding: const EdgeInsets.only(bottom: 4),
             child: Semantics(

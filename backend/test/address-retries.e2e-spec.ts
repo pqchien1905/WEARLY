@@ -145,6 +145,39 @@ describe('Address create retries with PostgreSQL', () => {
     ).expect(201);
     expect(next.body.isDefault).toBe(true);
   });
+  it('trims address fields and rejects invalid delivery details on create and edit', async () => {
+    for (const patch of [
+      { recipient: '   ' },
+      { phone: 'abcdefg' },
+      { phone: '1234567890' },
+      { address: '        ' },
+    ]) {
+      await post(randomUUID(), { ...body, ...patch }).expect(400);
+    }
+    const row = (
+      await post(randomUUID(), {
+        ...body,
+        recipient: '  Recipient  ',
+        address: '  12 Test Street  ',
+      }).expect(201)
+    ).body;
+    expect(row.recipient).toBe('Recipient');
+    expect(row.address).toBe('12 Test Street');
+    for (const patch of [
+      { recipient: ' ' },
+      { phone: 'abcdefg' },
+      { address: '  ' },
+    ]) {
+      await request(app.getHttpServer())
+        .patch(`${path}/${row.id}`)
+        .auth(tokens[0], { type: 'bearer' })
+        .send(patch)
+        .expect(400);
+    }
+    expect(
+      (await db.address.findUniqueOrThrow({ where: { id: row.id } })).recipient,
+    ).toBe('Recipient');
+  });
   it('serializes deleting the default with selecting another and isolates ownership', async () => {
     const original = await db.address.findFirstOrThrow({
       where: { userId: users[2], isDefault: true },

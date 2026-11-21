@@ -38,9 +38,14 @@ export function sources(order: RefundOrder) {
       p?.attempts.map((a) => ({ ...a, amount: a.amount.toFixed(0) })) ?? [],
     refunds:
       p?.refunds.map((r) => ({ ...r, amount: r.amount.toFixed(0) })) ?? [],
-  });
+  }).map((s) => ({
+    ...s,
+    provider: s.attemptId
+      ? (p?.attempts.find((a) => a.id === s.attemptId)?.provider ?? 'unknown')
+      : 'cod',
+  }));
 }
-/** `provider` is the order's payment provider; COD receipts have no attempt. */
+/** `provider` identifies the original collection; COD receipts have no attempt. */
 export function publicRefund(row: RefundRow, provider: string, admin = false) {
   return {
     id: row.id,
@@ -72,7 +77,13 @@ export function refundState(order: RefundOrder, admin: boolean) {
       .reduce((s, r) => s + BigInt(r.amount.toFixed(0)), 0n)
       .toString(),
     refunds: rows.map((r) =>
-      publicRefund(r, order.payment?.provider ?? 'cod', admin),
+      publicRefund(
+        r,
+        order.payment?.attempts.find((a) => a.id === r.attemptId)?.provider ??
+          order.payment?.provider ??
+          'cod',
+        admin,
+      ),
     ),
     ...(admin
       ? {

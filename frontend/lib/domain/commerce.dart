@@ -90,13 +90,21 @@ class Order {
     required this.createdAt,
     this.paymentProvider = 'cod',
     this.paymentStatus = 'PENDING',
+    this.hasOnlineCollection = false,
     this.discount = 0,
     this.couponCode,
     this.shipment,
     this.history = const [],
     this.isSample = false,
+    this.pinLatitude,
+    this.pinLongitude,
   });
   final String id, code, status, paymentProvider, paymentStatus;
+  final bool hasOnlineCollection;
+
+  /// Delivery pin copied from the address when the order was placed/edited.
+  final double? pinLatitude, pinLongitude;
+  bool get pinned => pinLatitude != null && pinLongitude != null;
   String get displayCode => code.isEmpty ? id : code;
   final List<CartItem> items;
   final CheckoutDraft draft;
@@ -119,11 +127,14 @@ class Order {
     createdAt: createdAt,
     paymentProvider: paymentProvider,
     paymentStatus: paymentStatus,
+    hasOnlineCollection: hasOnlineCollection,
     discount: discount,
     couponCode: couponCode,
     shipment: shipment,
     history: history,
     isSample: isSample,
+    pinLatitude: pinLatitude,
+    pinLongitude: pinLongitude,
   );
 }
 

@@ -44,6 +44,8 @@ const _groups = [
       ...taxonomyNav,
       ('Khuyến mãi', '/admin/promotions', Icons.local_offer_outlined),
       ('Nội dung', '/admin/content', Icons.edit_note_outlined),
+      ('Đánh giá', '/admin/reviews', Icons.rate_review_outlined),
+      ('Bản tin', '/admin/newsletter', Icons.campaign_outlined),
     ],
   ),
   (

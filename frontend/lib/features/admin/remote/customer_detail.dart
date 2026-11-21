@@ -13,6 +13,7 @@ import 'admin_widgets.dart';
 import 'admin_presentation.dart';
 import 'order_presentation.dart';
 import 'customer_widgets.dart';
+import 'support_page.dart' show CustomerSupportTickets;
 
 class RemoteAdminCustomer extends ConsumerWidget {
   const RemoteAdminCustomer({super.key, required this.id, this.returnTo});
@@ -248,6 +249,13 @@ class RemoteAdminCustomer extends ConsumerWidget {
                     .toString(),
               ),
             ),
+            if (canStaff(role, 'support.manage')) ...[
+              const AdminHeading(
+                'Yêu cầu hỗ trợ',
+                'Yêu cầu khách gửi khi đã đăng nhập. Yêu cầu gửi lúc chưa đăng nhập không tự gắn vào tài khoản.',
+              ),
+              CustomerSupportTickets(userId: id),
+            ],
           ],
         );
       },

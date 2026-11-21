@@ -7,6 +7,7 @@ import '../../../core/design/tokens.dart';
 import '../../../core/format.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/widgets/primitives.dart';
+import '../../../core/widgets/pin_map_link.dart';
 import '../../../data/commerce_json.dart';
 import '../../../domain/commerce.dart';
 import '../../account/order_tracking.dart';
@@ -18,6 +19,8 @@ import 'order_actions.dart';
 import 'shipment_actions.dart';
 import 'return_actions.dart';
 import 'refund_actions.dart';
+import 'reconcile_button.dart';
+import 'order_classification.dart';
 import '../../../data/remote_payments.dart';
 
 class RemoteAdminOrder extends ConsumerWidget {
@@ -72,6 +75,12 @@ class RemoteAdminOrder extends ConsumerWidget {
               _info('Số điện thoại', order.draft.phone),
               _info('Email tài khoản', order.draft.email),
               _info('Địa chỉ giao hàng', order.draft.address),
+              if (order.pinned)
+                PinMapLink(
+                  latitude: order.pinLatitude!,
+                  longitude: order.pinLongitude!,
+                  label: 'Mở vị trí khách ghim trên bản đồ',
+                ),
               _info(
                 'Hình thức giao hàng',
                 order.draft.express
@@ -207,7 +216,8 @@ class RemoteAdminOrder extends ConsumerWidget {
                   onPressed: () => settleCod(context, ref, data, order.total),
                 ),
               ],
-              if (onlinePaymentProviders.contains(payment['provider'])) ...[
+              if (onlinePaymentProviders.contains(payment['provider']) ||
+                  (payment['attempts'] as List? ?? []).isNotEmpty) ...[
                 const SizedBox(height: 16),
                 if (![
                   'PAID',
@@ -221,7 +231,7 @@ class RemoteAdminOrder extends ConsumerWidget {
                 ExpansionTile(
                   tilePadding: EdgeInsets.zero,
                   title: Text(
-                    'Lịch sử thanh toán ${paymentProviderName(payment['provider'])}',
+                    'Lịch sử thanh toán',
                     style: T.body,
                   ),
                   children: [
@@ -244,12 +254,17 @@ class RemoteAdminOrder extends ConsumerWidget {
                               style: T.small,
                             ),
                             Text(
-                              '${adminPaymentStatuses[attempt['status']] ?? attempt['status']} · ${money(vnd(attempt['amount']))}',
+                              '${paymentProviderName(attempt['provider'] ?? payment['provider'])} · ${adminPaymentStatuses[attempt['status']] ?? attempt['status']} · ${money(vnd(attempt['amount']))}',
                               style: T.body,
                             ),
+                            if (canStaff(role, 'payments.manage'))
+                              ReconcilePaymentButton(
+                                orderId: id,
+                                attemptId: '${attempt['id']}',
+                              ),
                             if (attempt['reviewRequired'] == true)
                               const Text(
-                                'Cần kiểm tra khoản thu trùng hoặc đơn đã hủy.',
+                                'Cần kiểm tra khoản thu đến muộn, thu trùng hoặc đơn đã hủy.',
                                 style: TextStyle(color: T.warning),
                               ),
                           ],
@@ -268,6 +283,8 @@ class RemoteAdminOrder extends ConsumerWidget {
               'Chi tiết đơn hàng',
               '${order.displayCode} · Đặt lúc ${adminOrderDate(data['createdAt'])}',
               actions: [
+                if (canStaff(role, 'payments.manage'))
+                  OrderClassification(data: data),
                 AppButton(
                   back.startsWith('/admin/customers/')
                       ? 'Về khách hàng'

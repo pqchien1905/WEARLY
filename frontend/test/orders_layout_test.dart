@@ -71,7 +71,7 @@ void main() {
       Finder panel(String title) =>
           find.byWidgetPredicate((w) => w is AccountCard && w.title == title);
       final products = t.getRect(panel('Sản phẩm trong đơn'));
-      final recipient = t.getRect(panel('Thông tin nhận hàng'));
+      final recipient = t.getRect(panel('Thanh toán'));
       if (width >= 1440) {
         expect(products.top, closeTo(recipient.top, 1));
         expect(products.left, closeTo(344, 1));

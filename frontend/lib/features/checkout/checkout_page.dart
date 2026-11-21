@@ -11,6 +11,7 @@ import '../../data/remote_payments.dart';
 import '../../data/remote_promotions.dart';
 import 'payment_panel.dart';
 import '../../core/design/tokens.dart';
+import '../../core/format.dart';
 import '../../core/widgets/primitives.dart';
 import '../../core/widgets/purchase_progress.dart';
 import '../../domain/commerce.dart';
@@ -106,7 +107,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       setState(() => error = 'Hãy chọn một địa chỉ đã lưu trước khi đặt hàng.');
       return;
     }
-    if (!retry && !confirmed) {
+    if (!retry && !store.remote && !confirmed) {
       setState(
         () => error = store.remote
             ? 'Vui lòng xác nhận thông tin nhận hàng và phương thức thanh toán.'
@@ -135,6 +136,23 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               discount: applied?.discount ?? 0,
             ),
           );
+      // Online methods open the gateway in a new tab; this tab moves to the
+      // order page, which watches the payment until it is confirmed.
+      if (store.remote &&
+          onlinePaymentProviders.contains(paymentMethodFor(payment))) {
+        try {
+          final state = await ref
+              .read(paymentRepositoryProvider)
+              .start(order.id);
+          final url = state.checkoutUrl;
+          if (url != null && mounted) {
+            // Gateway in a new tab; this tab shows the order and watches it.
+            ref.read(paymentLauncherProvider)(url);
+          }
+        } catch (_) {
+          // The order exists; its page offers "Thanh toán ngay" to retry.
+        }
+      }
       if (mounted) {
         context.go('/checkout/success/${order.id}');
       }
@@ -147,6 +165,17 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         setState(() => busy = false);
       }
     }
+  }
+
+  void selectAddress(DeliveryAddress selected) {
+    final profile = ref.read(accountProvider);
+    setState(() {
+      addressId = selected.id;
+      name.text = selected.recipient;
+      phone.text = selected.phone;
+      address.text = selected.address;
+      if (email.text.isEmpty && profile != null) email.text = profile.email;
+    });
   }
 
   Future<void> applyCoupon() async {
@@ -222,232 +251,245 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
             : subtotal >= BrandConfig.freeShippingAt
             ? 0
             : BrandConfig.shippingFee);
+    final paymentChoices = remote
+        ? [
+            for (final entry in checkoutPaymentMethods.entries)
+              if (entry.value == 'cod' ||
+                  payment == entry.key ||
+                  (methods?.asData?.value.enabled(entry.value) ?? false))
+                entry.key,
+          ]
+        : ['COD demo', 'Thẻ / ví điện tử demo'];
+    final standardFee = subtotal >= BrandConfig.freeShippingAt
+        ? 0
+        : BrandConfig.shippingFee;
     final fields = Form(
       key: form,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          DemoNotice(
-            text: remote
-                ? 'Chọn địa chỉ đã lưu và phương thức thanh toán. VNPay, MoMo và ZaloPay sandbox là thanh toán thử nghiệm.'
-                : 'Đặt hàng demo. Không có thanh toán hoặc giao hàng thật. Bạn có thể dùng thông tin minh họa.',
-          ),
+          if (!remote)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 24),
+              child: DemoNotice(
+                text:
+                    'Đặt hàng demo. Không có thanh toán hoặc giao hàng thật. Bạn có thể dùng thông tin minh họa.',
+              ),
+            ),
           if (cart.checkoutPending)
             const Padding(
-              padding: EdgeInsets.only(top: 16),
+              padding: EdgeInsets.only(bottom: 24),
               child: DemoNotice(
                 text:
                     'Chưa xác định được kết quả đặt hàng. Bấm “Kiểm tra lại đơn vừa đặt” để xác nhận yêu cầu cũ, tránh tạo đơn trùng.',
               ),
             ),
-          const SizedBox(height: 28),
-          Text('Thông tin nhận hàng', style: T.display(26)),
-          const SizedBox(height: 24),
-          if (profile != null) ...[
+          _SectionTitle(
+            'Địa chỉ nhận hàng',
+            trailing: remote && profile != null
+                ? TextButton(
+                    onPressed: locked
+                        ? null
+                        : () => context.go('/account/addresses'),
+                    child: const Text('Quản lý sổ địa chỉ'),
+                  )
+                : null,
+          ),
+          if (profile != null)
             savedAddresses!.when(
-              data: (details) => details.addresses.isEmpty
-                  ? TextButton.icon(
-                      onPressed: () => context.go('/account/addresses'),
-                      icon: const Icon(
-                        Icons.add_location_alt_outlined,
-                        size: 18,
+              data: (details) {
+                if (details.addresses.isEmpty) {
+                  return remote
+                      ? _EmptyAddress(
+                          onAdd: () => context.go('/account/addresses'),
+                        )
+                      : const SizedBox.shrink();
+                }
+                // The live store ships only to saved addresses, so pick one;
+                // the demo keeps free-form fields and waits for a choice.
+                if (remote &&
+                    !locked &&
+                    !details.addresses.any((a) => a.id == addressId)) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) selectAddress(details.addresses.first);
+                  });
+                }
+                return Column(
+                  children: [
+                    for (final a in details.addresses)
+                      _ChoiceTile(
+                        selected: a.id == addressId,
+                        onTap: locked ? null : () => selectAddress(a),
+                        icon: Icons.location_on_outlined,
+                        title: '${a.recipient} · ${a.phone}',
+                        subtitle: a.address,
+                        badge: a.label,
                       ),
-                      label: const Text('Thêm địa chỉ vào sổ'),
-                    )
-                  : DropdownButtonFormField<String>(
-                      key: ValueKey(
-                        details.addresses
-                            .map((a) => '${a.id}:${a.label}')
-                            .join('|'),
-                      ),
-                      isExpanded: true,
-                      initialValue:
-                          details.addresses.any((a) => a.id == addressId)
-                          ? addressId
-                          : null,
-                      decoration: const InputDecoration(
-                        labelText: 'Chọn địa chỉ đã lưu',
-                      ),
-                      items: details.addresses
-                          .map(
-                            (a) => DropdownMenuItem(
-                              value: a.id,
-                              child: Text(
-                                '${a.label} — ${a.recipient}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: locked
-                          ? null
-                          : (id) {
-                              final selected = details.addresses.firstWhere(
-                                (a) => a.id == id,
-                              );
-                              name.text = selected.recipient;
-                              addressId = selected.id;
-                              phone.text = selected.phone;
-                              address.text = selected.address;
-                              if (email.text.isEmpty) {
-                                email.text = profile.email;
-                              }
-                              setState(() {});
-                            },
-                    ),
-              loading: () => const Text('Đang tải sổ địa chỉ…', style: T.small),
+                  ],
+                );
+              },
+              loading: () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Text('Đang tải sổ địa chỉ…', style: T.small),
+              ),
               error: (_, _) => TextButton(
                 onPressed: () => ref.invalidate(accountDetailsProvider),
                 child: const Text('Tải lại sổ địa chỉ'),
               ),
             ),
-            const SizedBox(height: 20),
+          if (!remote) ...[
+            if (profile != null) const SizedBox(height: 8),
+            AppField(
+              label: 'Họ và tên',
+              readOnly: locked,
+              controller: name,
+              validator: requiredValue,
+            ),
+            const SizedBox(height: 16),
+            AppField(
+              label: 'Email',
+              readOnly: locked,
+              controller: email,
+              validator: emailValidator,
+              keyboardType: TextInputType.emailAddress,
+            ),
+            const SizedBox(height: 16),
+            AppField(
+              label: 'Số điện thoại',
+              readOnly: locked,
+              controller: phone,
+              keyboardType: TextInputType.phone,
+              validator: (v) => RegExp(r'^0\d{9}$').hasMatch(v?.trim() ?? '')
+                  ? null
+                  : 'Nhập 10 chữ số, bắt đầu bằng 0.',
+            ),
+            const SizedBox(height: 16),
+            AppField(
+              label: 'Địa chỉ đầy đủ',
+              readOnly: locked,
+              controller: address,
+              maxLines: 2,
+              validator: (v) => (v?.trim().length ?? 0) >= 8
+                  ? null
+                  : 'Nhập số nhà, đường và tỉnh/thành.',
+            ),
           ],
-          AppField(
-            label: 'Họ và tên',
-            readOnly: remote || locked,
-            controller: name,
-            validator: requiredValue,
-          ),
-          const SizedBox(height: 16),
-          AppField(
-            label: 'Email',
-            readOnly: remote || locked,
-            controller: email,
-            validator: emailValidator,
-            keyboardType: TextInputType.emailAddress,
-          ),
-          const SizedBox(height: 16),
-          AppField(
-            label: 'Số điện thoại',
-            readOnly: remote || locked,
-            controller: phone,
-            keyboardType: TextInputType.phone,
-            validator: (v) => RegExp(r'^0\d{9}$').hasMatch(v?.trim() ?? '')
+          const SizedBox(height: 32),
+          const _SectionTitle('Hình thức giao hàng'),
+          _ChoiceTile(
+            selected: !express,
+            onTap: locked
                 ? null
-                : 'Nhập 10 chữ số, bắt đầu bằng 0.',
-          ),
-          const SizedBox(height: 16),
-          AppField(
-            label: 'Địa chỉ đầy đủ',
-            readOnly: remote || locked,
-            controller: address,
-            maxLines: 2,
-            validator: (v) => (v?.trim().length ?? 0) >= 8
-                ? null
-                : 'Nhập số nhà, đường và tỉnh/thành.',
-          ),
-          const SizedBox(height: 24),
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            value: express,
-            onChanged: locked
-                ? null
-                : (v) => setState(() {
-                    express = v ?? false;
+                : () => setState(() {
+                    express = false;
                     quote = null;
                   }),
-            title: const Text('Giao nhanh · 50.000đ'),
-            subtitle: Text(
-              remote
-                  ? 'Cửa hàng sẽ xác nhận lịch giao sau khi tiếp nhận đơn.'
-                  : 'Thời gian giao minh họa: 1–2 ngày',
-              style: T.small,
-            ),
+            icon: Icons.local_shipping_outlined,
+            title: 'Giao tiêu chuẩn',
+            subtitle: standardFee == 0
+                ? 'Đơn của bạn được miễn phí giao hàng'
+                : 'Miễn phí cho đơn từ ${money(BrandConfig.freeShippingAt)}',
+            trailing: standardFee == 0 ? 'Miễn phí' : money(standardFee),
           ),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
-            isExpanded: true,
-            initialValue: payment,
-            decoration: const InputDecoration(
-              labelText: 'Phương thức thanh toán',
-            ),
-            items:
-                (remote
-                        ? [
-                            for (final entry in checkoutPaymentMethods.entries)
-                              if (entry.value == 'cod' ||
-                                  payment == entry.key ||
-                                  (methods?.asData?.value.enabled(
-                                        entry.value,
-                                      ) ??
-                                      false))
-                                entry.key,
-                          ]
-                        : ['COD demo', 'Thẻ / ví điện tử demo'])
-                    .map((p) => DropdownMenuItem(value: p, child: Text(p)))
-                    .toList(),
-            onChanged: locked ? null : (v) => setState(() => payment = v!),
+          _ChoiceTile(
+            selected: express,
+            onTap: locked
+                ? null
+                : () => setState(() {
+                    express = true;
+                    quote = null;
+                  }),
+            icon: Icons.bolt_rounded,
+            title: 'Giao nhanh',
+            subtitle: remote
+                ? 'Ưu tiên xử lý; cửa hàng xác nhận lịch giao khi tiếp nhận đơn'
+                : 'Thời gian giao minh họa: 1–2 ngày',
+            trailing: money(BrandConfig.expressFee),
           ),
+          const SizedBox(height: 32),
+          const _SectionTitle('Phương thức thanh toán'),
+          for (final p in paymentChoices)
+            _ChoiceTile(
+              selected: payment == p,
+              onTap: locked ? null : () => setState(() => payment = p),
+              icon: _paymentIcon(paymentMethodFor(p)),
+              title: _paymentTitle(p, remote),
+              subtitle: _paymentSubtitle(paymentMethodFor(p), remote),
+            ),
+          if (remote && onlineChoices == 0 && methods?.isLoading == true)
+            const Text('Đang kiểm tra thanh toán trực tuyến…', style: T.small),
           if (remote) ...[
-            const SizedBox(height: 20),
+            const SizedBox(height: 32),
+            const _SectionTitle('Ưu đãi'),
             TextFormField(
               controller: coupon,
               readOnly: locked,
-              decoration: const InputDecoration(labelText: 'Mã khuyến mãi'),
               maxLength: 32,
+              textCapitalization: TextCapitalization.characters,
               onChanged: (_) => setState(() => quote = null),
-            ),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                AppButton(
-                  'Áp dụng mã',
-                  outlined: true,
-                  busy: quoting,
-                  onPressed: locked ? null : applyCoupon,
-                ),
-                TextButton(
-                  onPressed: locked
-                      ? null
-                      : () => setState(() {
-                          coupon.clear();
-                          quote = null;
-                        }),
-                  child: const Text('Xóa mã'),
-                ),
-              ],
-            ),
-            if (coupon.text.trim().isNotEmpty && couponCode == null)
-              const Text(
-                'Áp dụng mã để xác nhận giảm giá. Thay đổi giỏ hàng hoặc giao hàng cần áp dụng lại.',
-                style: T.small,
+              onFieldSubmitted: (_) => locked ? null : applyCoupon(),
+              decoration: InputDecoration(
+                labelText: 'Mã khuyến mãi',
+                hintText: 'Nhập mã nếu có',
+                counterText: '',
+                helperText: couponCode != null
+                    ? 'Đã áp dụng mã $couponCode'
+                    : null,
+                suffixIcon: coupon.text.trim().isEmpty
+                    ? null
+                    : Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (couponCode == null)
+                              TextButton(
+                                onPressed: locked || quoting
+                                    ? null
+                                    : applyCoupon,
+                                child: quoting
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Text('Áp dụng'),
+                              ),
+                            IconButton(
+                              tooltip: 'Xóa mã',
+                              onPressed: locked
+                                  ? null
+                                  : () => setState(() {
+                                      coupon.clear();
+                                      quote = null;
+                                    }),
+                              icon: const Icon(Icons.close_rounded, size: 18),
+                            ),
+                          ],
+                        ),
+                      ),
               ),
+            ),
           ],
-          if (remote && onlineChoices == 0)
-            Text(
-              methods?.isLoading == true
-                  ? 'Đang kiểm tra thanh toán trực tuyến…'
-                  : 'Thanh toán trực tuyến chưa sẵn sàng. Bạn vẫn có thể chọn COD.',
-              style: T.small,
-            ),
-          if (remote && paymentMethodFor(payment) != 'cod')
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                '$payment là thanh toán thử nghiệm. Sau khi đặt hàng, mở trang thanh toán trong chi tiết đơn và kiểm tra kết quả khi hoàn tất.',
-                style: T.small,
+          if (!remote) ...[
+            const SizedBox(height: 20),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              value: confirmed,
+              onChanged: locked
+                  ? null
+                  : (v) => setState(() => confirmed = v ?? false),
+              title: const Text(
+                'Tôi hiểu đây là đơn mô phỏng, không thanh toán thật.',
+                style: T.body,
               ),
             ),
-          const SizedBox(height: 20),
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            value: confirmed,
-            onChanged: locked
-                ? null
-                : (v) => setState(() => confirmed = v ?? false),
-            title: Text(
-              remote
-                  ? 'Tôi xác nhận thông tin nhận hàng và phương thức thanh toán.'
-                  : 'Tôi hiểu đây là đơn mô phỏng, không thanh toán thật.',
-              style: T.body,
-            ),
-          ),
+          ],
           if (error != null)
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
+              padding: const EdgeInsets.only(top: 16),
               child: Text(error!, style: const TextStyle(color: T.danger)),
             ),
         ],
@@ -473,8 +515,8 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
             ? 'Kiểm tra lại đơn vừa đặt'
             : remote
             ? (paymentMethodFor(payment) == 'cod'
-                  ? 'Đặt hàng COD'
-                  : 'Đặt hàng với $payment')
+                  ? 'Đặt hàng'
+                  : 'Thanh toán với ${paymentProviderName(paymentMethodFor(payment))}')
             : 'Tạo đơn hàng demo',
         busy: busy,
         onPressed: quoting || (cart.cart.locked && !cart.checkoutPending)
@@ -576,59 +618,265 @@ class _OrderSuccessPageState extends ConsumerState<OrderSuccessPage> {
       return CommerceFeedback(loadState, onRetry: () => store.loadOrder(id));
     }
     final order = store.orders.where((o) => o.id == id).firstOrNull;
-    return PageBody(
-      child: Column(
-        children: [
-          StatePanel(
-            title: order == null
-                ? (store.remote
-                      ? 'Không tìm thấy đơn hàng'
-                      : 'Không tìm thấy đơn trong phiên này')
-                : (store.remote
-                      ? 'Đã tiếp nhận đơn hàng'
-                      : 'Đã tạo đơn demo $id'),
-            message: order == null
-                ? (store.remote
-                      ? 'Kiểm tra lại mã đơn trong lịch sử tài khoản.'
-                      : 'Dữ liệu demo được xóa khi tải lại trang.')
-                : (store.remote
-                      ? '${order.displayCode} · ${order.status}\n${order.draft.payment}'
-                      : 'Đơn hàng mô phỏng – chưa thanh toán thật'),
-            icon: Icons.check_circle_outline,
-            action: AppButton(
-              'Tiếp tục khám phá',
-              onPressed: () => context.go('/shop'),
-            ),
+    final online =
+        order != null &&
+        store.remote &&
+        onlinePaymentProviders.contains(order.paymentProvider);
+    final awaitingPayment =
+        online &&
+        !const [
+          'PAID',
+          'PARTIALLY_REFUNDED',
+          'REFUNDED',
+        ].contains(order.paymentStatus);
+    final links = Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      alignment: WrapAlignment.center,
+      children: [
+        if (order != null && store.remote)
+          AppButton(
+            'Xem đơn hàng',
+            outlined: awaitingPayment,
+            onPressed: () => context.go('/account/orders/$id'),
           ),
-          if (order != null && store.remote)
-            PaymentPanel(key: ValueKey(order.id), order: order),
-          if (order != null)
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520),
-              child: CartSummary(
-                automaticSavings: order.items.fold<int>(
-                  0,
-                  (sum, i) =>
-                      sum +
-                      (i.discounted
-                          ? (i.originalUnitPrice! - i.unitPrice) * i.quantity
-                          : 0),
-                ),
-                remote: store.remote,
-                paymentMethod: order.paymentProvider,
-                discount: order.discount,
-                couponCode: order.couponCode,
-                subtotal: order.subtotal,
-                shipping: order.shipping,
-                action: AppButton(
-                  'Xem chi tiết đơn',
-                  outlined: true,
-                  onPressed: () => context.go('/account/orders/$id'),
-                ),
+        AppButton(
+          'Tiếp tục mua sắm',
+          outlined: true,
+          onPressed: () => context.go('/shop'),
+        ),
+      ],
+    );
+    return PageBody(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Column(
+            children: [
+              StatePanel(
+                title: order == null
+                    ? (store.remote
+                          ? 'Không tìm thấy đơn hàng'
+                          : 'Không tìm thấy đơn trong phiên này')
+                    : !store.remote
+                    ? 'Đã tạo đơn demo $id'
+                    : awaitingPayment
+                    ? 'Đơn hàng ${order.displayCode} đã được tạo'
+                    : 'Đặt hàng thành công',
+                message: order == null
+                    ? (store.remote
+                          ? 'Kiểm tra lại mã đơn trong lịch sử tài khoản.'
+                          : 'Dữ liệu demo được xóa khi tải lại trang.')
+                    : !store.remote
+                    ? 'Đơn hàng mô phỏng – chưa thanh toán thật'
+                    : awaitingPayment
+                    ? 'Hoàn tất thanh toán để cửa hàng xác nhận và chuẩn bị giao hàng.'
+                    : online
+                    ? 'Mã đơn ${order.displayCode}. Đã nhận thanh toán, cửa hàng sẽ sớm xác nhận đơn.'
+                    : 'Mã đơn ${order.displayCode}. Bạn sẽ thanh toán khi nhận hàng; cửa hàng sẽ liên hệ xác nhận.',
+                icon: awaitingPayment
+                    ? Icons.receipt_long_outlined
+                    : Icons.check_circle_outline,
+                action: awaitingPayment ? null : links,
               ),
-            ),
-        ],
+              if (online) PaymentPanel(key: ValueKey(order.id), order: order),
+              if (awaitingPayment) links,
+              if (order != null) ...[
+                const SizedBox(height: 24),
+                CartSummary(
+                  automaticSavings: order.items.fold<int>(
+                    0,
+                    (sum, i) =>
+                        sum +
+                        (i.discounted
+                            ? (i.originalUnitPrice! - i.unitPrice) * i.quantity
+                            : 0),
+                  ),
+                  remote: store.remote,
+                  paymentMethod: order.paymentProvider,
+                  discount: order.discount,
+                  couponCode: order.couponCode,
+                  subtotal: order.subtotal,
+                  shipping: order.shipping,
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
+}
+
+IconData _paymentIcon(String method) => switch (method) {
+  'cod' => Icons.payments_outlined,
+  'vnpay' => Icons.qr_code_2_rounded,
+  _ => Icons.account_balance_wallet_outlined,
+};
+
+String _paymentTitle(String label, bool remote) {
+  if (!remote) return label;
+  return switch (paymentMethodFor(label)) {
+    'cod' => 'Thanh toán khi nhận hàng (COD)',
+    'zalopay' => 'Ví ZaloPay',
+    'momo' => 'Ví MoMo',
+    'vnpay' => 'VNPay',
+    _ => label,
+  };
+}
+
+String? _paymentSubtitle(String method, bool remote) {
+  if (!remote) return null;
+  return method == 'cod'
+      ? 'Trả tiền mặt cho nhân viên giao hàng'
+      : 'Chuyển sang ${paymentProviderName(method)} để thanh toán · môi trường thử nghiệm';
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.text, {this.trailing});
+  final String text;
+  final Widget? trailing;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            text,
+            style: T.body.copyWith(fontSize: 17, fontWeight: FontWeight.w600),
+          ),
+        ),
+        ?trailing,
+      ],
+    ),
+  );
+}
+
+/// Selectable card used for address, delivery and payment choices.
+class _ChoiceTile extends StatelessWidget {
+  const _ChoiceTile({
+    required this.selected,
+    required this.onTap,
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.trailing,
+    this.badge,
+  });
+  final bool selected;
+  final VoidCallback? onTap;
+  final IconData icon;
+  final String title;
+  final String? subtitle, trailing, badge;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Semantics(
+      selected: selected,
+      inMutuallyExclusiveGroup: true,
+      button: true,
+      child: Material(
+        color: selected ? T.soft : T.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: T.radius,
+          side: BorderSide(
+            color: selected ? T.accent : T.line,
+            width: selected ? 1.6 : 1,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Icon(
+                  selected
+                      ? Icons.radio_button_checked_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  size: 20,
+                  color: selected ? T.accent : T.controlLine,
+                ),
+                const SizedBox(width: 14),
+                Icon(icon, size: 20, color: T.muted),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(
+                            title,
+                            style: T.body.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          if (badge != null && badge!.isNotEmpty)
+                            DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: T.canvas,
+                                borderRadius: const BorderRadius.all(
+                                  Radius.circular(999),
+                                ),
+                                border: Border.all(color: T.line),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                child: Text(badge!, style: T.small),
+                              ),
+                            ),
+                        ],
+                      ),
+                      if (subtitle != null) Text(subtitle!, style: T.small),
+                    ],
+                  ),
+                ),
+                if (trailing != null) ...[
+                  const SizedBox(width: 12),
+                  Text(
+                    trailing!,
+                    style: T.body.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _EmptyAddress extends StatelessWidget {
+  const _EmptyAddress({required this.onAdd});
+  final VoidCallback onAdd;
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      borderRadius: T.radius,
+      border: Border.all(color: T.line),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Bạn chưa có địa chỉ nhận hàng.', style: T.body),
+        const SizedBox(height: 12),
+        AppButton(
+          'Thêm địa chỉ',
+          icon: Icons.add_location_alt_outlined,
+          outlined: true,
+          onPressed: onAdd,
+        ),
+      ],
+    ),
+  );
 }

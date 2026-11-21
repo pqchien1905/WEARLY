@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { MomoProvider } from './momo.provider';
 import { ZalopayProvider } from './zalopay.provider';
-import { WalletGateway, WalletProvider, walletProviders } from './wallet-gateway';
+import {
+  WalletGateway,
+  WalletProvider,
+  walletProviders,
+} from './wallet-gateway';
 
 /** Lookup for the e-wallet gateways by their persisted payment provider name. */
 @Injectable()

@@ -95,6 +95,13 @@ enum AdminAuditAction {
   RETURN_RECEIVED
   REFUND_CREATED
   REFUND_UPDATED
+  PAYMENT_RECONCILED
+  MAIL_UPDATED
+  NEWSLETTER_UPDATED
+  NEWSLETTER_QUEUED
+  ORDER_CLASSIFIED
+  REVIEW_HIDDEN
+  REVIEW_RESTORED
 }
 // Historical identifiers intentionally survive changes to the referenced entities.
 // Do not copy request bodies or credentials into activity history.
@@ -149,6 +156,7 @@ model User {
   images ImageAsset[]
   stylePreference StylePreference?
   addressCreateReceipts AddressCreateReceipt[]
+  supportTickets SupportTicket[]
 }
 model PasswordResetToken {
   id String @id @default(uuid()) @db.Uuid
@@ -206,6 +214,9 @@ model Address {
   recipient String
   phone String
   address String
+  // Delivery pin from the map picker; null when the customer did not pin.
+  latitude Float?
+  longitude Float?
   isDefault Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -227,6 +238,21 @@ model NewsletterSubscription {
   email String @unique @db.VarChar(254)
   consentedAt DateTime @default(now())
   createdAt DateTime @default(now())
+  unsubscribedAt DateTime?
+  unsubscribeToken String @unique @default(uuid()) @db.Uuid
+  mail MailOutbox[]
+}
+model NewsletterCampaign {
+  id String @id @default(uuid()) @db.Uuid
+  requestKey String @unique @db.Uuid
+  subject String @db.VarChar(200)
+  body String @db.Text
+  version Int @default(0)
+  queuedAt DateTime?
+  recipientCount Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  mail MailOutbox[]
 }
 model Category {
   id String @id @default(uuid()) @db.Uuid
@@ -382,6 +408,7 @@ model CartItem {
   @@unique([cartId, variantId])
 }
 model Order {
+  isTest Boolean @default(false)
   mail MailOutbox[]
   id String @id @default(uuid()) @db.Uuid
   code String @unique @default(dbgenerated("next_order_code()"))
@@ -418,7 +445,7 @@ model OrderEvent {
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
   status OrderStatus
   version Int
-  actorId String @db.Uuid
+  actorId String? @db.Uuid
   note String @default("") @db.VarChar(300)
   createdAt DateTime @default(now())
   @@unique([orderId, version])
@@ -517,6 +544,8 @@ model Payment {
 }
 model PaymentAttempt {
   id String @id @default(uuid()) @db.Uuid
+  // Immutable origin, independent of the order's current payment method.
+  provider String?
   reference String @unique @db.VarChar(32)
   paymentId String @db.Uuid
   payment Payment @relation(fields: [paymentId], references: [id])
@@ -628,6 +657,9 @@ model Review {
   product Product @relation(fields: [productId], references: [id])
   rating Int
   comment String
+  // Moderation hides a review from the storefront; the author still sees it.
+  hiddenAt DateTime?
+  hiddenReason String? @db.VarChar(120)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@unique([userId, productId])
@@ -737,6 +769,8 @@ enum MailStatus {
   PROCESSING
   SENT
   FAILED
+  HELD
+  CANCELLED
 }
 model SupportTicket {
   id String @id @default(uuid()) @db.Uuid
@@ -747,17 +781,23 @@ model SupportTicket {
   message String @db.VarChar(3000)
   status SupportStatus @default(OPEN)
   version Int @default(0)
+  // Set only when a signed-in customer submits; public tickets stay unlinked.
+  userId String? @db.Uuid
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
   replies SupportReply[]
   mail MailOutbox[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([status, createdAt, id])
+  @@index([userId, createdAt, id])
 }
 model SupportReply {
   id String @id @default(uuid()) @db.Uuid
   ticketId String @db.Uuid
   ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   actorId String @db.Uuid
+  // A follow-up written by the ticket's customer rather than by staff.
+  fromCustomer Boolean @default(false)
   requestKey String @db.Uuid
   payloadHash String @db.Char(64)
   message String @db.VarChar(3000)
@@ -772,6 +812,11 @@ model MailOutbox {
   recipient String @db.VarChar(254)
   subject String @db.VarChar(200)
   body String @db.Text
+  subscriptionId String? @db.Uuid
+  subscription NewsletterSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  campaignId String? @db.Uuid
+  campaign NewsletterCampaign? @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  deliveryApprovedAt DateTime?
   orderId String? @db.Uuid
   order Order? @relation(fields: [orderId], references: [id], onDelete: Cascade)
   supportId String? @db.Uuid
@@ -791,4 +836,6 @@ model MailOutbox {
   @@index([status, leaseUntil])
   @@index([orderId, createdAt])
   @@index([supportId, createdAt])
+  @@index([subscriptionId])
+  @@index([campaignId])
 }

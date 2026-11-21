@@ -54,6 +54,16 @@ export class VnpayProvider {
       .update(value, 'utf8')
       .digest('hex');
   }
+  assertConfigured() {
+    if (
+      ['VNPAY_TMN_CODE', 'VNPAY_HASH_SECRET'].some(
+        (key) => !this.config.get<string>(key)?.trim(),
+      )
+    )
+      throw new ServiceUnavailableException(
+        'VNPay credentials are not configured',
+      );
+  }
   private verify(value: string, signature: string | undefined) {
     if (
       !signature ||
@@ -119,7 +129,7 @@ export class VnpayProvider {
     );
   }
   verifyIpn(input: Record<string, unknown>): VnpayEvent {
-    this.assertAvailable();
+    this.assertConfigured();
     const fields = this.fields(input),
       { vnp_SecureHash, ...signed } = fields;
     delete signed.vnp_SecureHashType;
@@ -155,7 +165,7 @@ export class VnpayProvider {
     };
   }
   async query(attempt: VnpayAttempt): Promise<VnpayEvent> {
-    this.assertAvailable();
+    this.assertConfigured();
     const data: Record<string, string> = {
       vnp_RequestId: randomUUID().replaceAll('-', ''),
       vnp_Version: '2.1.0',
@@ -259,7 +269,7 @@ export class VnpayProvider {
     return request.amount === request.originalAmount ? '02' : '03';
   }
   async refund(request: VnpayRefund): Promise<VnpayRefundEvent> {
-    this.assertAvailable();
+    this.assertConfigured();
     const data: Record<string, string> = {
       vnp_RequestId: request.requestId,
       vnp_Version: '2.1.0',
@@ -282,7 +292,7 @@ export class VnpayProvider {
     request: VnpayRefund,
     transactionNo: string,
   ): Promise<VnpayRefundEvent> {
-    this.assertAvailable();
+    this.assertConfigured();
     this.refundType(request);
     if (
       !/^[1-9]\d{0,14}$/.test(transactionNo) ||

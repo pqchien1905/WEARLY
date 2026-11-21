@@ -35,8 +35,8 @@ export class RefundsService {
   ) {}
   private assertAvailable(provider: string) {
     const wallet = this.wallets.get(provider);
-    if (wallet) wallet.assertAvailable();
-    else this.gateway.assertAvailable();
+    if (wallet) wallet.assertConfigured();
+    else this.gateway.assertConfigured();
   }
   private send(provider: string, request: VnpayRefund) {
     const wallet = this.wallets.get(provider);
@@ -45,9 +45,12 @@ export class RefundsService {
   private async publicRow(refundId: string) {
     const row = await this.db.refund.findUniqueOrThrow({
       where: { id: refundId },
-      include: { payment: { select: { provider: true } } },
+      include: {
+        payment: { select: { provider: true } },
+        attempt: { select: { provider: true } },
+      },
     });
-    return publicRefund(row, row.payment.provider);
+    return publicRefund(row, row.attempt?.provider ?? row.payment.provider);
   }
   private async order(
     tx: Prisma.TransactionClient,
@@ -160,7 +163,7 @@ export class RefundsService {
             'REFUND_AMOUNT_CHANGED',
             'Reload the available refund entitlement',
           );
-        if (p.provider === 'cod') {
+        if (source.provider === 'cod') {
           if (!dto.reference || dto.paymentAttemptId)
             fail(
               400,
@@ -175,14 +178,14 @@ export class RefundsService {
               'REFUND_REFERENCE_USED',
               'Refund receipt reference already exists',
             );
-        } else if (isOnlineProvider(p.provider)) {
+        } else if (isOnlineProvider(source.provider)) {
           if (!dto.paymentAttemptId || dto.reference)
             fail(
               400,
               'REFUND_SOURCE_INVALID',
-              `Select a verified ${providerLabel(p.provider)} payment`,
+              `Select a verified ${providerLabel(source.provider)} payment`,
             );
-          this.assertAvailable(p.provider);
+          this.assertAvailable(source.provider);
         } else
           fail(
             409,
@@ -197,13 +200,13 @@ export class RefundsService {
             requestKey: dto.requestKey,
             payloadHash: hash,
             providerRequestId:
-              this.wallets.get(p.provider)?.refundRequestId(new Date()) ??
+              this.wallets.get(source.provider)?.refundRequestId(new Date()) ??
               randomUUID().replaceAll('-', ''),
             amount: source.available,
             actorId,
             reference: dto.reference ?? null,
-            status: p.provider === 'cod' ? 'SUCCEEDED' : 'REVIEW',
-            completedAt: p.provider === 'cod' ? new Date() : null,
+            status: source.provider === 'cod' ? 'SUCCEEDED' : 'REVIEW',
+            completedAt: source.provider === 'cod' ? new Date() : null,
           },
         });
         await this.refreshPayment(tx, p.id);
@@ -212,7 +215,7 @@ export class RefundsService {
           data: { version: { increment: 1 } },
         });
         await recordAdminActivity(tx, actorId, 'REFUND_CREATED', row.id, {
-          after: { ...row, provider: p.provider },
+          after: { ...row, provider: source.provider },
         });
         if (row.status === 'SUCCEEDED')
           await queueOrderMail(
@@ -224,8 +227,8 @@ export class RefundsService {
           );
         return {
           row,
-          provider: p.provider,
-          ...(isOnlineProvider(p.provider)
+          provider: source.provider,
+          ...(isOnlineProvider(source.provider)
             ? { request: this.request(order, row) }
             : {}),
         };
@@ -265,7 +268,9 @@ export class RefundsService {
         row = order.payment?.refunds.find((r) => r.id === refundId);
       if (!row) throw new NotFoundException();
       if (['SUCCEEDED', 'FAILED'].includes(row.status)) return { row };
-      const provider = order.payment!.provider;
+      const provider =
+        order.payment!.attempts.find((a) => a.id === row.attemptId)?.provider ??
+        'cod';
       if (!row.attemptId || !isOnlineProvider(provider))
         fail(
           409,
@@ -380,15 +385,36 @@ export class RefundsService {
         },
       });
       await this.refreshPayment(tx, row.paymentId);
+      if (event.status === 'SUCCEEDED' && row.attemptId) {
+        const refunded = await tx.refund.aggregate({
+          where: { attemptId: row.attemptId, status: 'SUCCEEDED' },
+          _sum: { amount: true },
+        });
+        const attempt = order.payment!.attempts.find(
+          (a) => a.id === row.attemptId,
+        )!;
+        if (refunded._sum.amount?.eq(attempt.amount))
+          await tx.paymentAttempt.update({
+            where: { id: attempt.id },
+            data: { reviewRequired: false },
+          });
+      }
       await tx.order.update({
         where: { id },
         data: { version: { increment: 1 } },
       });
       await recordAdminActivity(tx, actorId, 'REFUND_UPDATED', row.id, {
-        before: { ...row, provider: order.payment!.provider },
+        before: {
+          ...row,
+          provider:
+            order.payment!.attempts.find((a) => a.id === row.attemptId)
+              ?.provider ?? 'cod',
+        },
         after: {
           ...row,
-          provider: order.payment!.provider,
+          provider:
+            order.payment!.attempts.find((a) => a.id === row.attemptId)
+              ?.provider ?? 'cod',
           status: event.status,
         },
       });
@@ -398,7 +424,7 @@ export class RefundsService {
           id,
           'refund:' + row.id,
           'Đã ghi nhận hoàn tiền',
-          `${providerLabel(order.payment!.provider)} sandbox xác nhận hoàn ${row.amount.toFixed(0)} VND. Mã hoàn tiền: ${row.id}.`,
+          `${providerLabel(order.payment!.attempts.find((a) => a.id === row.attemptId)?.provider ?? 'cod')} sandbox xác nhận hoàn ${row.amount.toFixed(0)} VND. Mã hoàn tiền: ${row.id}.`,
         );
     });
   }

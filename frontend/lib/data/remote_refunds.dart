@@ -60,6 +60,7 @@ class RefundSource {
       throw invalidCommerce;
     }
     attemptId = d['attemptId'];
+    provider = d['provider'] as String?;
     primary = d['primary'];
     if (d['pending'] != null && d['pending'] is! bool) throw invalidCommerce;
     pending = d['pending'] ?? false;
@@ -76,6 +77,7 @@ class RefundSource {
     }
   }
   late final String? attemptId;
+  late final String? provider;
   late final bool primary;
   late final bool pending;
   late final int collected, entitled, refunded, reserved, available;

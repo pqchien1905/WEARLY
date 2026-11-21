@@ -9,6 +9,32 @@ import '../../core/widgets/primitives.dart';
 
 enum ReviewEditorResult { saved, deleted, reload }
 
+/// Tells the author why their review is not shown on the product page.
+class ReviewModerationNotice extends StatelessWidget {
+  const ReviewModerationNotice({super.key, this.reason});
+  final String? reason;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    container: true,
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.visibility_off_outlined, size: 18, color: T.warning),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            'Đánh giá đang bị ẩn khỏi trang sản phẩm'
+            '${reason == null || reason!.isEmpty ? '' : ': $reason'}. '
+            'Sửa nội dung không tự hiển thị lại; hãy liên hệ cửa hàng nếu cần.',
+            style: T.small.copyWith(color: T.warning),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 class ReviewEditor extends ConsumerStatefulWidget {
   const ReviewEditor({
     super.key,

@@ -6,10 +6,26 @@ import 'api_providers.dart';
 import '../domain/staff_permissions.dart';
 
 final supportRepositoryProvider = Provider((ref) {
+  // A new account (or signing out) never inherits another's pending request.
+  ref.watch(accountProvider.select((u) => u?.id));
   final repo = RemoteSupportRepository(ref.watch(apiClientProvider));
   ref.onDispose(repo.dispose);
   return repo;
 });
+final mySupportProvider = FutureProvider.autoDispose
+    .family<Map<String, dynamic>, int>(
+      (ref, page) => ref.watch(supportRepositoryProvider).mine(page: page),
+    );
+final mySupportDetailProvider = FutureProvider.autoDispose
+    .family<Map<String, dynamic>, String>(
+      (ref, id) => ref.watch(supportRepositoryProvider).mineDetail(id),
+    );
+final customerSupportProvider = FutureProvider.autoDispose
+    .family<Map<String, dynamic>, String>(
+      (ref, userId) => ref
+          .watch(adminSupportRepositoryProvider)
+          .list(userId: userId, limit: 20),
+    );
 final adminSupportRepositoryProvider = Provider((ref) {
   final user = ref.watch(adminAccountProvider.select((u) => (u?.id, u?.role)));
   if (!ref.watch(remoteApiProvider) || !canStaff(user.$2, 'support.manage')) {

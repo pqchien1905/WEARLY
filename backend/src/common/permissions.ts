@@ -17,6 +17,7 @@ export const capabilities = [
   'content.manage',
   'support.manage',
   'mail.read',
+  'mail.manage',
   'staff.manage',
 ] as const;
 export type Capability = (typeof capabilities)[number];

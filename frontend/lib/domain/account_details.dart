@@ -7,8 +7,14 @@ class DeliveryAddress {
     required this.recipient,
     required this.phone,
     required this.address,
+    this.latitude,
+    this.longitude,
   });
   final String id, label, recipient, phone, address;
+
+  /// Delivery pin chosen on the map; both null when not pinned.
+  final double? latitude, longitude;
+  bool get pinned => latitude != null && longitude != null;
 }
 
 class StylePreferences {

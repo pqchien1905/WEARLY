@@ -134,10 +134,26 @@ const schema = z
       .max(100000000)
       .default(100000),
     VNPAY_ENABLED: z.enum(['true', 'false']).default('false'),
+    PAYMENT_RESERVATION_MINUTES: z.coerce
+      .number()
+      .int()
+      .min(120)
+      .max(10080)
+      .default(180),
+    MAIL_MAX_AGE_HOURS: z.coerce.number().int().min(1).max(720).default(24),
     VNPAY_TMN_CODE: z.string().default(''),
     VNPAY_HASH_SECRET: z.string().default(''),
     VNPAY_RETURN_URL: z.string().default(''),
     VNPAY_WEB_RETURN_URL: z.string().default(''),
+    // Address suggestions and map-pin lookup (OpenStreetMap-based by default).
+    // The API proxies them so the provider can change without a client update.
+    GEO_ENABLED: z.enum(['true', 'false']).default('true'),
+    GEO_SUGGEST_URL: z.url().default('https://photon.komoot.io/api/'),
+    GEO_REVERSE_URL: z
+      .url()
+      .default('https://nominatim.openstreetmap.org/reverse'),
+    // Public services ask for an identifying client name; never a person's data.
+    GEO_USER_AGENT: z.string().min(3).max(120).default('WearlyShop/1.0'),
     // E-wallet sandboxes. The storefront return page is shared by both wallets.
     PAYMENT_WEB_RETURN_URL: z.string().default(''),
     MOMO_ENABLED: z.enum(['true', 'false']).default('false'),
