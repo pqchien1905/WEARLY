@@ -222,7 +222,8 @@ describe('Administration with PostgreSQL', () => {
       const publicList = await request(app.getHttpServer())
         .get('/api/v1/' + kind)
         .expect(200);
-      expect(publicList.body).toContainEqual(
+      // Empty taxonomies remain manageable, but do not clutter storefront filters.
+      expect(publicList.body).not.toContainEqual(
         expect.objectContaining({ id, slug, name: winner.name }),
       );
       // Existing products retain IDs and slug links when their taxonomy is renamed.
@@ -259,6 +260,20 @@ describe('Administration with PostgreSQL', () => {
     }
     const result = await call('get', 'admin/summary').expect(200);
     expect(result.body.products).toBe(await db.product.count());
+    const days = result.body.dailySales as {
+      day: string;
+      orders: number;
+      total: string;
+    }[];
+    expect(days).toHaveLength(14);
+    expect(days.map((d) => d.day)).toEqual(
+      [...days.map((d) => d.day)].sort(),
+    );
+    for (const d of days) {
+      expect(d.day).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(d.total).toMatch(/^\d+$/);
+      expect(Number.isInteger(d.orders)).toBe(true);
+    }
     expect(result.body.customers).toBe(
       await db.user.count({ where: { role: 'CUSTOMER' } }),
     );
@@ -286,7 +301,7 @@ describe('Administration with PostgreSQL', () => {
       .send(credentials)
       .expect(201);
     const shopper = await call('post', 'auth/login')
-      .send({ email: `admin-${suffix}@example.test`, password: credentials.password })
+      .send({ email: `customer-${suffix}@example.test`, password: credentials.password })
       .expect(201);
     expect(staff.body.user.role).toBe('ADMIN');
     expect(staff.body.refreshToken).not.toBe(shopper.body.refreshToken);

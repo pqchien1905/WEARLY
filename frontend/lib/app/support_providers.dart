@@ -38,3 +38,22 @@ final supportDetailProvider = FutureProvider.autoDispose
 final adminMailProvider = FutureProvider.autoDispose(
   (ref) => ref.watch(adminSupportRepositoryProvider).mail(),
 );
+
+final supportPagesProvider = FutureProvider.autoDispose
+    .family<Map<String, dynamic>, ({int page, int limit})>(
+      (ref, key) => ref
+          .watch(adminSupportRepositoryProvider)
+          .list(page: key.page, limit: key.limit),
+    );
+final supportInboxProvider = FutureProvider.autoDispose
+    .family<Map<String, dynamic>, ({int page, int limit, String? status})>(
+      (ref, key) => ref
+          .watch(adminSupportRepositoryProvider)
+          .list(page: key.page, limit: key.limit, status: key.status),
+    );
+final adminMailPagesProvider = FutureProvider.autoDispose
+    .family<Map<String, dynamic>, ({int page, int limit})>(
+      (ref, key) => ref
+          .watch(adminSupportRepositoryProvider)
+          .mail(page: key.page, limit: key.limit),
+    );

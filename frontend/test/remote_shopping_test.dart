@@ -6,6 +6,7 @@ import 'package:http/testing.dart';
 import 'package:nep_storefront/app/app.dart';
 import 'package:nep_storefront/app/account_state.dart';
 import 'package:nep_storefront/app/api_providers.dart';
+import 'package:nep_storefront/app/commerce_state.dart';
 import 'package:nep_storefront/core/network/api_client.dart';
 import 'remote_account_test.dart' show sessionJson;
 import 'remote_commerce_test.dart' show cartJson, orderJson;
@@ -154,7 +155,8 @@ void main() {
       expect(find.text('Chưa tải được dữ liệu'), findsOneWidget);
       router.go('/account/orders/order-1');
       await tester.pumpAndSettle();
-      expect(find.text('Chi tiết đơn order-1'), findsOneWidget);
+      expect(find.text('Chi tiết đơn hàng'), findsOneWidget);
+      expect(find.text('order-1'), findsOneWidget);
       router.go('/cart');
       await tester.pumpAndSettle();
       expect(find.text('Chưa tải được dữ liệu'), findsOneWidget);
@@ -233,6 +235,11 @@ void main() {
           remoteApiProvider.overrideWithValue(true),
           apiClientProvider.overrideWithValue(api),
           sessionTokensProvider.overrideWithValue(api.tokens),
+          // This flow exercises the manual "re-check" path explicitly.
+          checkoutRetryPolicyProvider.overrideWithValue((
+            retries: 0,
+            delay: Duration.zero,
+          )),
         ],
       );
       addTearDown(() {

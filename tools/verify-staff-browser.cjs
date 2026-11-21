@@ -26,7 +26,7 @@ module.exports=async function verify({root,url,email,warehouseEmail,supportEmail
     await page.goto('http://127.0.0.1:4183/#/admin/staff');await semantics();await login(email);
     await grant(warehouseEmail,'Kho');await grant(supportEmail,'Hỗ trợ');
     await page.screenshot({path:path.join(output,'staff-desktop.png')});
-    await page.getByRole('button',{name:'Đăng xuất quản trị',exact:true}).click();await route('/admin');
+    await (async()=>{await page.getByRole('button',{name:'Tài khoản quản trị',exact:true}).click();await page.getByRole('menuitem',{name:'Đăng xuất',exact:true}).or(page.getByRole('button',{name:'Đăng xuất',exact:true})).first().click();})();await route('/admin');
     const warehouseToken=await login(warehouseEmail);
     await page.getByText('Biến thể & kho',{exact:true}).last().waitFor();
     await button('Điều chỉnh kho');await fill('Số lượng thay đổi','2');await fill('Lý do','Kiểm thử phân quyền kho');await button('Lưu thay đổi');
@@ -37,7 +37,7 @@ module.exports=async function verify({root,url,email,warehouseEmail,supportEmail
     await denied('admin/staff',warehouseToken);
     await page.screenshot({path:path.join(output,'warehouse-order-mobile.png')});
     await route('/admin/staff');await page.getByText('Bạn chưa có quyền truy cập',{exact:true}).waitFor();await page.screenshot({path:path.join(output,'denied-mobile.png')});
-    await page.getByRole('button',{name:'Đăng xuất quản trị',exact:true}).click();await route('/admin/support/'+ticketId);
+    await (async()=>{await page.getByRole('button',{name:'Tài khoản quản trị',exact:true}).click();await page.getByRole('menuitem',{name:'Đăng xuất',exact:true}).or(page.getByRole('button',{name:'Đăng xuất',exact:true})).first().click();})();await route('/admin/support/'+ticketId);
     const supportToken=await login(supportEmail);await fill('Nội dung trả lời','Bạn có thể xem bảng size để chọn kích cỡ phù hợp.');await button('Lưu và gửi trả lời');
     await page.getByText('Đã lưu trả lời; thư đang được xử lý.',{exact:true}).waitFor();
     await denied('admin/staff',supportToken);

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +10,10 @@ import '../../core/design/tokens.dart';
 import '../../core/widgets/primitives.dart';
 import '../product_detail/review_editor.dart';
 import 'account_navigation.dart';
+import 'account_components.dart';
+
+part 'review_list.dart';
+part 'review_filters.dart';
 
 class CustomerReviewsPage extends ConsumerWidget {
   const CustomerReviewsPage({super.key});
@@ -17,6 +22,9 @@ class CustomerReviewsPage extends ConsumerWidget {
     final remote = ref.watch(remoteApiProvider);
     final account = ref.watch(accountProvider);
     final repository = ref.watch(ownerReviewRepositoryProvider);
+    if (remote && account != null && repository != null) {
+      return _ReviewHistory(key: ValueKey((account.id, repository.generation)));
+    }
     return AccountFrame(
       title: 'Đánh giá của tôi',
       current: '/account/reviews',
@@ -26,9 +34,7 @@ class CustomerReviewsPage extends ConsumerWidget {
               message:
                   'Đăng nhập trong cửa hàng trực tuyến để xem các đánh giá bạn đã viết.',
             )
-          : account == null || repository == null
-          ? const LoginRequired(next: '/account/reviews')
-          : _ReviewHistory(key: ValueKey((account.id, repository.generation))),
+          : const LoginRequired(next: '/account/reviews'),
     );
   }
 }
@@ -41,15 +47,48 @@ class _ReviewHistory extends ConsumerStatefulWidget {
 
 class _ReviewHistoryState extends ConsumerState<_ReviewHistory> {
   int page = 1;
+  int? rating;
+  String query = '';
+  final search = TextEditingController();
+  Timer? debounce;
+  OwnedReviewPage? snapshot;
+  OwnedReviewKey? snapshotKey;
+  String? notice;
+  bool dialogOpen = false;
+  OwnedReviewKey get requestKey => (page: page, query: query, rating: rating);
+  bool get filtered => query.isNotEmpty || rating != null;
+
   void reload() {
-    ref.invalidate(ownedReviewsProvider);
-    setState(() => page = 1);
+    setState(() => notice = null);
+    ref.invalidate(ownedReviewsProvider(requestKey));
+  }
+
+  void applySearch() {
+    debounce?.cancel();
+    if (query == search.text.trim()) return;
+    setState(() {
+      query = search.text.trim();
+      page = 1;
+      notice = null;
+    });
+  }
+
+  void clearFilters() {
+    debounce?.cancel();
+    search.clear();
+    setState(() {
+      query = '';
+      rating = null;
+      page = 1;
+      notice = null;
+    });
   }
 
   Future<void> edit(OwnedReview review, {bool deleting = false}) async {
     final repository = ref.read(ownerReviewRepositoryProvider);
-    if (repository == null) return;
-    await showDialog<void>(
+    if (repository == null || dialogOpen) return;
+    setState(() => dialogOpen = true);
+    final result = await showDialog<ReviewEditorResult>(
       context: context,
       barrierDismissible: false,
       builder: (_) => ReviewEditor(
@@ -57,189 +96,226 @@ class _ReviewHistoryState extends ConsumerState<_ReviewHistory> {
         repository: repository,
         previous: review,
         deleting: deleting,
+        productName: review.product?.name ?? 'Sản phẩm không còn mở bán',
       ),
     );
-    if (mounted) setState(() => page = 1);
+    if (!mounted) return;
+    setState(() {
+      dialogOpen = false;
+      notice = switch (result) {
+        ReviewEditorResult.saved => 'Đã lưu thay đổi đánh giá.',
+        ReviewEditorResult.deleted => 'Đã xóa đánh giá.',
+        _ => null,
+      };
+    });
   }
 
   @override
-  Widget build(BuildContext context) => Align(
-    alignment: Alignment.centerLeft,
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 840),
+  Widget build(BuildContext context) {
+    final key = requestKey;
+    final result = ref.watch(ownedReviewsProvider(key));
+    if (result is AsyncData<OwnedReviewPage?> && !result.isLoading) {
+      snapshot = result.value;
+      snapshotKey = key;
+    }
+    final data = snapshotKey == key ? snapshot : null;
+    final busy = result.isLoading;
+    final current = !busy && !result.hasError;
+    final pages = data == null || data.total == 0
+        ? 1
+        : (data.total / data.limit).ceil();
+    // Deleting the last row (or changing its rating) can remove the last page.
+    if (current && data != null && page > pages) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && requestKey == key) setState(() => page = pages);
+      });
+    }
+    return AccountFrame(
+      title: 'Đánh giá của tôi',
+      current: '/account/reviews',
       child: SizedBox(
         width: double.infinity,
-        child: ref
-            .watch(ownedReviewsProvider(page))
-            .when(
-              skipLoadingOnRefresh: false,
-              skipLoadingOnReload: false,
-              loading: () => const Padding(
-                padding: EdgeInsets.symmetric(vertical: 32),
-                child: Text('Đang tải đánh giá…', style: T.body),
-              ),
-              error: (error, _) => StatePanel(
-                title: 'Chưa tải được đánh giá',
-                message: accountError(error),
-                action: AppButton('Tải lại', onPressed: reload),
-              ),
-              data: (data) {
-                if (data == null) return const SizedBox.shrink();
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Những trải nghiệm bạn đã chia sẻ sau khi nhận hàng.',
-                      style: T.body,
-                    ),
-                    const SizedBox(height: 16),
-                    Wrap(
-                      spacing: 20,
-                      runSpacing: 8,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Text('${data.total} đánh giá', style: T.small),
-                        TextButton.icon(
-                          onPressed: reload,
-                          icon: const Icon(Icons.refresh, size: 18),
-                          label: const Text('Tải lại'),
-                        ),
-                      ],
-                    ),
-                    const Divider(height: 32),
-                    if (data.total == 0)
-                      StatePanel(
-                        title: 'Bạn chưa viết đánh giá nào',
-                        message:
-                            'Mở sản phẩm trong đơn đã giao để chia sẻ trải nghiệm của bạn.',
-                        action: AppButton(
-                          'Xem đơn hàng',
-                          onPressed: () => context.go('/account/orders'),
-                        ),
-                      )
-                    else if (data.items.isEmpty)
-                      StatePanel(
-                        title: 'Trang này không còn đánh giá',
-                        message:
-                            'Danh sách vừa thay đổi. Trở lại trang đầu để xem đánh giá hiện có.',
-                        action: AppButton('Về trang đầu', onPressed: reload),
-                      )
-                    else
-                      for (final review in data.items) ...[
-                        _HistoryRow(
-                          key: ValueKey('review-${review.id}'),
-                          review: review,
-                          onEdit: () => edit(review),
-                          onDelete: () => edit(review, deleting: true),
-                        ),
-                        const Divider(height: 40),
-                      ],
-                    if (page > 1 || data.hasNext)
-                      Wrap(
-                        spacing: 16,
-                        runSpacing: 12,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          AppButton(
-                            'Trang trước',
-                            outlined: true,
-                            onPressed: page > 1
-                                ? () => setState(() => page--)
-                                : null,
-                          ),
-                          Text('Trang $page', style: T.small),
-                          AppButton(
-                            'Trang sau',
-                            outlined: true,
-                            onPressed: data.hasNext
-                                ? () => setState(() => page++)
-                                : null,
-                          ),
-                        ],
-                      ),
-                  ],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _ReviewFilters(
+              search: search,
+              rating: rating,
+              onChanged: () {
+                setState(() {});
+                debounce?.cancel();
+                debounce = Timer(
+                  const Duration(milliseconds: 350),
+                  applySearch,
                 );
               },
+              onSubmitted: applySearch,
+              onRating: (value) {
+                debounce?.cancel();
+                setState(() {
+                  rating = value;
+                  query = search.text.trim();
+                  page = 1;
+                  notice = null;
+                });
+              },
+              onClear: clearFilters,
             ),
-      ),
-    ),
-  );
-}
-
-class _HistoryRow extends StatelessWidget {
-  const _HistoryRow({
-    super.key,
-    required this.review,
-    required this.onEdit,
-    required this.onDelete,
-  });
-  final OwnedReview review;
-  final VoidCallback onEdit, onDelete;
-  @override
-  Widget build(BuildContext context) {
-    final date = review.createdAt.toLocal();
-    final product = review.product;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          product?.name ?? 'Sản phẩm không còn mở bán',
-          style: T.display(22),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 16,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Semantics(
-              label: '${review.rating} trên 5 sao',
-              child: ExcludeSemantics(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+            const SizedBox(height: 20),
+            if (notice != null) ...[
+              Semantics(
+                liveRegion: true,
+                child: AccountNotice(
+                  text: notice!,
+                  icon: Icons.check_circle_outline,
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+            if (data != null) ...[
+              AccountToolbar(
+                label: '${data.total} đánh giá${filtered ? ' phù hợp' : ''}',
+                actions: [
+                  TextButton.icon(
+                    onPressed: () => context.go('/account/orders'),
+                    icon: const Icon(Icons.shopping_bag_outlined, size: 18),
+                    label: const Text('Xem đơn hàng'),
+                  ),
+                  TextButton.icon(
+                    onPressed: busy ? null : reload,
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: Text(busy ? 'Đang tải lại…' : 'Tải lại'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+            if (busy && data == null)
+              const AccountLoading(label: 'Đang tải đánh giá…')
+            else if (busy) ...[
+              const LinearProgressIndicator(
+                semanticsLabel: 'Đang tải lại đánh giá',
+              ),
+              const SizedBox(height: 16),
+            ],
+            if (result.hasError) ...[
+              AccountCard(
+                title: data == null
+                    ? 'Chưa tải được đánh giá'
+                    : 'Chưa cập nhật được danh sách',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    for (var star = 1; star <= 5; star++)
-                      Icon(
-                        star <= review.rating
-                            ? Icons.star_rounded
-                            : Icons.star_outline_rounded,
-                        color: T.accent,
-                        size: 22,
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(accountError(result.error!), style: T.body),
+                    ),
+                    if (data != null) ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Đang hiển thị dữ liệu đã tải. Tải lại để tiếp tục sửa hoặc xóa.',
+                        style: T.small,
                       ),
+                    ],
+                    const SizedBox(height: 16),
+                    AppButton(
+                      data == null ? 'Tải lại' : 'Thử lại',
+                      onPressed: reload,
+                      outlined: true,
+                    ),
                   ],
                 ),
               ),
-            ),
-            Text('${date.day}/${date.month}/${date.year}', style: T.small),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Text(review.comment, style: T.body),
-        if (!review.canEdit) ...[
-          const SizedBox(height: 12),
-          const Text(
-            'Hiện chưa thể sửa đánh giá này. Bạn vẫn có thể xóa.',
-            style: T.small,
-          ),
-        ],
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 12,
-          runSpacing: 8,
-          children: [
-            if (product != null)
-              TextButton(
-                onPressed: () => context.go(
-                  '/products/${Uri.encodeComponent(product.slug)}',
+              const SizedBox(height: 16),
+            ],
+            if (data != null) ...[
+              if (data.total == 0)
+                AccountEmptyState(
+                  title: filtered
+                      ? 'Không có đánh giá phù hợp'
+                      : 'Bạn chưa viết đánh giá nào',
+                  icon: filtered
+                      ? Icons.search_off_outlined
+                      : Icons.rate_review_outlined,
+                  message: filtered
+                      ? 'Thử từ khóa khác hoặc bỏ bộ lọc số sao để xem thêm đánh giá.'
+                      : 'Mở sản phẩm trong đơn đã giao để chia sẻ trải nghiệm của bạn.',
+                  action: filtered
+                      ? AppButton(
+                          'Bỏ bộ lọc',
+                          onPressed: clearFilters,
+                          outlined: true,
+                        )
+                      : null,
+                )
+              else if (data.items.isEmpty)
+                StatePanel(
+                  title: 'Trang này không còn đánh giá',
+                  message:
+                      'Danh sách vừa thay đổi. Tải lại để xem đánh giá hiện có.',
+                  action: AppButton(
+                    'Tải lại danh sách',
+                    onPressed: busy ? null : reload,
+                  ),
+                )
+              else
+                _ReviewList(
+                  reviews: data.items,
+                  onEdit: current && !dialogOpen
+                      ? (review) => edit(review)
+                      : null,
+                  onDelete: current && !dialogOpen
+                      ? (review) => edit(review, deleting: true)
+                      : null,
                 ),
-                child: const Text('Xem sản phẩm'),
+            ],
+            if (page > 1 || (data?.hasNext ?? false)) ...[
+              const SizedBox(height: 24),
+              Wrap(
+                spacing: 16,
+                runSpacing: 12,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  AppButton(
+                    'Trang trước',
+                    outlined: true,
+                    onPressed: page > 1 && !busy
+                        ? () => setState(() {
+                            page--;
+                            notice = null;
+                          })
+                        : null,
+                  ),
+                  Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      data == null ? 'Trang $page' : 'Trang $page / $pages',
+                      style: T.small,
+                    ),
+                  ),
+                  AppButton(
+                    'Trang sau',
+                    outlined: true,
+                    onPressed: current && (data?.hasNext ?? false)
+                        ? () => setState(() {
+                            page++;
+                            notice = null;
+                          })
+                        : null,
+                  ),
+                ],
               ),
-            if (review.canEdit)
-              TextButton(onPressed: onEdit, child: const Text('Sửa đánh giá')),
-            TextButton(onPressed: onDelete, child: const Text('Xóa đánh giá')),
+            ],
           ],
         ),
-      ],
+      ),
     );
+  }
+
+  @override
+  void dispose() {
+    debounce?.cancel();
+    search.dispose();
+    super.dispose();
   }
 }

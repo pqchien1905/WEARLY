@@ -74,9 +74,9 @@ module.exports=async function verify({root,url,email,password,fixture,photo,call
     await page.getByText('Gemini đang giới hạn lượt dùng. Yêu cầu này đã kết thúc.',{exact:true}).waitFor();
     await page.getByText(/Đã dùng 3 \/ 3/).waitFor();assert.equal(callCount(),3);
     assert(await page.getByRole('button',{name:'Thử lượt mới',exact:true}).isDisabled());
-    await button('Xem lịch sử thử đồ');await page.getByText('Lịch sử thử đồ',{exact:true}).waitFor();
+    await button('Xem lịch sử thử đồ');await page.getByRole('heading',{name:'Lịch sử thử đồ',level:1,exact:true}).waitFor();
     await button('Xem ảnh thử đồ');await page.getByRole('img',{name:'Ảnh thử đồ riêng tư',exact:true}).waitFor();
-    await button('Xóa ảnh và các kết quả');await page.getByText('Bạn chưa có yêu cầu thử đồ còn trong thời gian lưu.',{exact:true}).waitFor();
+    await button('Xóa ảnh và các kết quả');await button('Xác nhận xóa');await page.getByText('Bạn chưa có yêu cầu thử đồ còn trong thời gian lưu.',{exact:true}).waitFor();
     assert.equal(await deletedRead('uploads/images/'+imageId+'/content'),404);
     assert.equal(await deletedRead('ai/try-on/jobs/'+job.id+'/result'),404);
     disable();await page.goto(entry);await semantics();await page.getByText('Gemini chưa được cấu hình',{exact:true}).waitFor();

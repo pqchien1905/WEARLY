@@ -86,7 +86,7 @@ Nếu bộ nhớ trang web bị chặn, không bắt đầu lượt mới để 
 Ảnh đang được lưu có trạng thái riêng để kiểm tra. Nếu lần tải ảnh chưa tới máy
 chủ, chọn lại đúng ảnh, đồng ý lưu rồi tiếp tục bằng mã cũ; không tự tải ảnh từ
 thiết bị. Không tự tạo lượt Gemini khi tải lại trang. Lịch sử `/account/try-ons` hiển thị
-tối đa20 lượt gần nhất còn trong thời gian lưu, tải ảnh khi bạn bấm xem.
+tối đa20 lượt gần nhất trong 24giờ chưa bị xóa, tải ảnh khi bạn bấm xem.
 Đi từ trang chi tiết sản phẩm sẽ chọn sản phẩm đó cho lượt mới; đường dẫn tới
 một yêu cầu cụ thể vẫn khôi phục đúng yêu cầu và trang phục cũ.
 
@@ -100,6 +100,32 @@ thiết bị khác không thể thu hồi.
 khi máy chủ ghi nhận xóa. Dọn ảnh vật lý ở MinIO được thử lại khi lưu trữ lỗi,
 kể cả đối tượng đến muộn. Việc xóa tại cửa hàng không thu hồi dữ liệu đã gửi tới
 Google. `store:false` không thay thế chính sách xử lý dữ liệu của nhà cung cấp.
+
+Lịch sử hiển thị tên/ảnh catalog, màu, size, trạng thái và thời gian GMT+7. API
+`GET /ai/try-on/jobs` và `GET /ai/try-on/jobs/:id` bổ sung `size`, `color` và
+`product` (`name`, `slug`, `image`, `tryOnSupported`); sản phẩm ngừng công bố trả
+`product: null`, vẫn giữ SKU lịch sử. Ảnh catalog không phải ảnh kết quả AI.
+Các bộ lọc phân biệt có ảnh, đang xử lý, chưa thành công và không còn ảnh.
+Lượt đang xử lý được đọc lại mỗi 10giây; không tự tạo thêm lượt AI. Lỗi tải lần đầu
+có nút thử lại; lỗi làm mới giữ danh sách cũ kèm thông báo rõ ràng.
+
+Trong lịch sử, “Xóa ảnh và các kết quả” mở xác nhận trước khi gửi DELETE, giải
+thích rằng tất cả lượt dùng chung ảnh đều bị ảnh hưởng, kể cả lượt đang được lọc
+ẩn. “Tải ảnh xuống” tải bytes đã xác thực; Blob tạm của trình duyệt được thu hồi
+sau khi bắt đầu tải. “Thử lại trang phục” chỉ mở phòng thử với sản phẩm tương ứng.
+
+Kiểm tra riêng lịch sử với API và frontend local đang chạy:
+
+```powershell
+node tools/verify-tryon-history-browser.cjs
+```
+
+Script tạo tài khoản và đối tượng lưu trữ kiểm thử riêng, dùng ảnh catalog có sẵn
+làm fixture, không gọi Gemini, rồi dọn đúng dữ liệu vừa tạo. Kết quả/ảnh tại
+`.tools/tryon-history-redesign/`. Bao gồm tải đúng bytes, xóa nhóm, lỗi/thử lại,
+cập nhật trạng thái và 320/375/768/1440/1920/2560px. Kiểm thử Flutter bổ sung chữ
+200%; API metadata/quyền sở hữu được kiểm tra trong `tryon-history.e2e-spec.ts`
+trên database `_test`.
 
 Ảnh trang phục chỉ lấy từ tài sản catalog đã xác minh thuộc sản phẩm hoặc ảnh
 seed cục bộ hợp lệ. URL bên ngoài chưa nhập vào kho ảnh quản lý sẽ không chạy thử

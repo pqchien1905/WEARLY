@@ -13,6 +13,7 @@ import '../features/info/info_page.dart';
 import '../features/info/support_pages.dart';
 import '../features/info/collection_page.dart';
 import 'config.dart';
+import 'content_navigation.dart';
 import '../domain/staff_permissions.dart';
 import 'account_state.dart';
 import 'api_providers.dart';
@@ -26,7 +27,9 @@ import '../features/ai_stylist/stylist_page.dart';
 import '../features/virtual_tryon/tryon_page.dart';
 import '../features/virtual_tryon/tryon_results.dart';
 import '../features/account/account_page.dart';
+import '../features/account/account_settings_page.dart';
 import '../features/account/reset_password_page.dart';
+import '../features/account/forgot_password_page.dart';
 import '../features/account/orders_page.dart';
 import '../features/account/reviews_page.dart';
 import '../features/account/address_page.dart';
@@ -41,6 +44,14 @@ GoRoute appRoute({
   required Widget Function(BuildContext, GoRouterState) builder,
 }) => GoRoute(
   path: path,
+  onExit: path == '/admin/content'
+      ? (context, state) async =>
+            await ProviderScope.containerOf(
+              context,
+              listen: false,
+            ).read(contentNavigationProvider).check?.call() ??
+            true
+      : null,
   pageBuilder: (c, s) => NoTransitionPage(
     key: ValueKey(s.uri.toString()),
     child: SingleChildScrollView(
@@ -87,6 +98,15 @@ GoRouter createRouter({String initialLocation = '/'}) {
           },
         ).toString();
       }
+      // The demo-only settings page has no API counterpart; staff roles and
+      // access are managed on the staff page instead.
+      if (scope.read(remoteApiProvider) &&
+          state.uri.path == '/admin/settings') {
+        final role = scope.read(adminAccountProvider)?.role;
+        return canVisitAdmin(role, '/admin/staff')
+            ? '/admin/staff'
+            : staffHome(role);
+      }
       if (scope.read(remoteApiProvider) && state.uri.path == '/admin') {
         final destination = staffHome(scope.read(adminAccountProvider)?.role);
         if (destination != '/admin') return destination;
@@ -127,8 +147,22 @@ GoRouter createRouter({String initialLocation = '/'}) {
             builder: (_, s) => AdminProductForm(id: s.pathParameters['id']),
           ),
           appRoute(
+            path: '/admin/products/:id',
+            builder: (_, _) => const StatePanel(
+              title: 'Chi tiết sản phẩm',
+              message: 'Chi tiết quản trị sử dụng dữ liệu API.',
+            ),
+          ),
+          appRoute(
             path: '/admin/inventory',
             builder: (_, _) => const AdminProductsPage(inventory: true),
+          ),
+          appRoute(
+            path: '/admin/inventory/:id',
+            builder: (_, _) => const StatePanel(
+              title: 'Chi tiết tồn kho',
+              message: 'Chi tiết kho sử dụng dữ liệu API.',
+            ),
           ),
           appRoute(
             path: '/admin/orders',
@@ -142,7 +176,22 @@ GoRouter createRouter({String initialLocation = '/'}) {
             path: '/admin/customers',
             builder: (_, _) => const AdminCustomersPage(),
           ),
-          for (final path in ['/admin/categories', '/admin/brands'])
+          appRoute(
+            path: '/admin/customers/:id',
+            builder: (_, _) => const StatePanel(
+              title: 'Hồ sơ khách hàng',
+              message: 'Chi tiết khách hàng có trong chế độ kết nối API.',
+            ),
+          ),
+          for (final path in [
+            '/admin/categories/:id',
+            '/admin/categories',
+            '/admin/brands/:id',
+            '/admin/brands',
+            '/admin/promotions/:id',
+            '/admin/collections/:id',
+            '/admin/collections',
+          ])
             appRoute(
               path: path,
               builder: (_, _) => const StatePanel(
@@ -189,7 +238,7 @@ GoRouter createRouter({String initialLocation = '/'}) {
             builder: (c, _) => StatePanel(
               title: 'Bạn chưa có quyền truy cập',
               message:
-                  'Trạng thái 403 mô phỏng. Khi kết nối máy chủ, quyền truy cập được xác minh ở đó.',
+                  'Tài khoản hiện tại không được mở trang này. Hãy đăng nhập bằng tài khoản phù hợp hoặc quay lại cửa hàng.',
               icon: Icons.lock_outline,
               action: AppButton('Về cửa hàng', onPressed: () => c.go('/')),
             ),
@@ -210,13 +259,23 @@ GoRouter createRouter({String initialLocation = '/'}) {
               },
             ),
           ),
-          for (final path in ['/login', '/register', '/forgot-password'])
+          appRoute(
+            path: '/forgot-password',
+            builder: (_, s) => ForgotPasswordPage(
+              fromAccount: s.uri.queryParameters['from'] == 'account',
+            ),
+          ),
+          for (final path in ['/login', '/register'])
             appRoute(
               path: path,
               builder: (_, s) =>
                   AuthPage(key: ValueKey(s.uri.path), mode: s.uri.path),
             ),
           appRoute(path: '/account', builder: (_, _) => const AccountPage()),
+          appRoute(
+            path: '/account/settings',
+            builder: (_, _) => const AccountSettingsPage(),
+          ),
           appRoute(
             path: '/account/reviews',
             builder: (_, _) => const CustomerReviewsPage(),
@@ -282,11 +341,12 @@ GoRouter createRouter({String initialLocation = '/'}) {
           appRoute(path: '/faq', builder: (_, _) => const FaqPage()),
           appRoute(
             path: '/collections',
-            builder: (_, _) => const CollectionPage(),
+            builder: (_, s) => CollectionPage(uri: s.uri),
           ),
           appRoute(
             path: '/collections/:slug',
-            builder: (_, s) => CollectionPage(slug: s.pathParameters['slug']),
+            builder: (_, s) =>
+                CollectionPage(slug: s.pathParameters['slug'], uri: s.uri),
           ),
           for (final page in [
             '/about',
@@ -334,7 +394,9 @@ class _NepAppState extends ConsumerState<NepApp> {
             title: BrandConfig.title,
             debugShowCheckedModeBanner: false,
             theme: buildTheme(),
-            home: Scaffold(
+            // Session restoration needs no temporary Navigator. GoRouter keeps
+            // the requested deep link until both sessions have been restored.
+            builder: (_, _) => Scaffold(
               body: SafeArea(
                 child: Center(
                   child: bootstrap.hasError

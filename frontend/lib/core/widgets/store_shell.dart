@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,9 +9,9 @@ import '../../app/api_providers.dart';
 import '../../app/providers.dart';
 import '../design/tokens.dart';
 import '../design/motion.dart';
+import '../design/store_header_style.dart';
 import 'primitives.dart';
-import '../../app/commerce_state.dart';
-import '../../features/cart/cart_page.dart';
+import 'store_header_actions.dart';
 import '../../features/product_detail/product_page.dart';
 
 class StoreShell extends ConsumerStatefulWidget {
@@ -24,7 +25,10 @@ class _StoreShellState extends ConsumerState<StoreShell> {
   bool announcement = true;
   @override
   Widget build(BuildContext context) {
-    final mobile = MediaQuery.sizeOf(context).width < 1200;
+    final viewportWidth = MediaQuery.sizeOf(context).width;
+    final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
+    final mobile = viewportWidth < 1200 || viewportWidth < 1200 * textScale;
+    final stackedActions = viewportWidth < 600;
     final path = GoRouterState.of(context).uri.path;
     return Scaffold(
       bottomNavigationBar:
@@ -110,7 +114,7 @@ class _StoreShellState extends ConsumerState<StoreShell> {
                       textAlign: TextAlign.center,
                       style: T.small.copyWith(
                         color: T.surface,
-                        fontSize: mobile ? 10 : 12,
+                        fontSize: mobile ? 11 : 12,
                       ),
                     ),
                   ),
@@ -128,6 +132,7 @@ class _StoreShellState extends ConsumerState<StoreShell> {
                 ],
               ),
             ),
+          StoreUtilityBar(path: path, horizontalPadding: mobile ? 12 : 48),
           DecoratedBox(
             decoration: const BoxDecoration(
               color: T.surface,
@@ -139,89 +144,87 @@ class _StoreShellState extends ConsumerState<StoreShell> {
                 child: Padding(
                   padding: EdgeInsets.symmetric(
                     horizontal: mobile ? 12 : 48,
-                    vertical: mobile ? 10 : 16,
+                    vertical: StoreHeaderStyle.verticalPadding,
                   ),
-                  child: Row(
+                  child: Column(
                     children: [
-                      if (mobile)
-                        Builder(
-                          builder: (c) => IconButton(
-                            tooltip: 'Mở menu',
-                            icon: const Icon(Icons.menu),
-                            onPressed: () => Scaffold.of(c).openDrawer(),
+                      Row(
+                        children: [
+                          if (mobile)
+                            Builder(
+                              builder: (c) => IconButton(
+                                tooltip: 'Mở menu',
+                                icon: const Icon(Icons.menu),
+                                onPressed: () => Scaffold.of(c).openDrawer(),
+                              ),
+                            ),
+                          InkWell(
+                            onTap: () => context.go('/'),
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxWidth: MediaQuery.sizeOf(context).width < 380
+                                    ? 100
+                                    : 140,
+                              ),
+                              child: const BrandMark(),
+                            ),
                           ),
-                        ),
-                      InkWell(
-                        onTap: () => context.go('/'),
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 140),
-                          child: const BrandMark(),
-                        ),
-                      ),
-                      const Spacer(),
-                      if (!mobile) ...[
-                        for (final item in navItems)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            child: Semantics(
-                              selected: _navSelected(path, item.$2),
-                              child: AnimatedContainer(
-                                duration: Motion.duration(context, Motion.fast),
-                                curve: Motion.curve,
-                                decoration: BoxDecoration(
-                                  border: Border(
-                                    bottom: BorderSide(
-                                      color: _navSelected(path, item.$2)
-                                          ? T.accent
-                                          : Colors.transparent,
-                                      width: 2,
+                          const Spacer(),
+                          if (!mobile) ...[
+                            for (final item in navItems)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
+                                child: Semantics(
+                                  selected: _navSelected(path, item.$2),
+                                  child: AnimatedContainer(
+                                    duration: Motion.duration(
+                                      context,
+                                      Motion.fast,
+                                    ),
+                                    curve: Motion.curve,
+                                    decoration: BoxDecoration(
+                                      border: Border(
+                                        bottom: BorderSide(
+                                          color: _navSelected(path, item.$2)
+                                              ? T.accent
+                                              : Colors.transparent,
+                                          width: 2,
+                                        ),
+                                      ),
+                                    ),
+                                    child: TextButton(
+                                      style: TextButton.styleFrom(
+                                        foregroundColor:
+                                            _navSelected(path, item.$2)
+                                            ? T.accent
+                                            : T.ink,
+                                      ),
+                                      onPressed: () => context.go(item.$2),
+                                      child: Text(item.$1),
                                     ),
                                   ),
                                 ),
-                                child: TextButton(
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: _navSelected(path, item.$2)
-                                        ? T.accent
-                                        : T.ink,
-                                  ),
-                                  onPressed: () => context.go(item.$2),
-                                  child: Text(item.$1),
-                                ),
+                              ),
+                            const Spacer(),
+                          ],
+                          if (stackedActions)
+                            SizedBox(
+                              width: 132,
+                              child: StoreHeaderActions(
+                                compact: true,
+                                openSearch: () => showSearchPanel(context),
+                              ),
+                            )
+                          else
+                            SizedBox(
+                              width: StoreHeaderStyle.actionsWidth,
+                              child: StoreHeaderActions(
+                                openSearch: () => showSearchPanel(context),
                               ),
                             ),
-                          ),
-                        const Spacer(),
-                      ],
-                      IconButton(
-                        tooltip: 'Tìm kiếm',
-                        icon: const Icon(Icons.search),
-                        onPressed: () => showSearchPanel(context),
-                      ),
-                      if (!mobile) ...[
-                        IconButton(
-                          tooltip: 'Yêu thích',
-                          icon: const Icon(Icons.favorite_border),
-                          onPressed: () => context.go('/wishlist'),
-                        ),
-                        IconButton(
-                          tooltip: 'Tài khoản',
-                          icon: const Icon(Icons.person_outline),
-                          onPressed: () => context.go('/account'),
-                        ),
-                      ],
-                      IconButton(
-                        tooltip: 'Giỏ hàng',
-                        icon: Consumer(
-                          builder: (_, ref, _) {
-                            final count = ref.watch(commerceProvider).count;
-                            return Badge(
-                              isLabelVisible: count > 0,
-                              label: Text('$count'),
-                              child: const Icon(Icons.shopping_bag_outlined),
-                            );
-                          },
-                        ),
-                        onPressed: () => showCartDrawer(context),
+                        ],
                       ),
                     ],
                   ),
@@ -300,9 +303,11 @@ class SearchPanel extends ConsumerStatefulWidget {
 
 class _SearchPanelState extends ConsumerState<SearchPanel> {
   final controller = TextEditingController();
+  Timer? debounce;
   String query = '';
   @override
   void dispose() {
+    debounce?.cancel();
     controller.dispose();
     super.dispose();
   }
@@ -346,7 +351,12 @@ class _SearchPanelState extends ConsumerState<SearchPanel> {
               TextField(
                 autofocus: true,
                 controller: controller,
-                onChanged: (v) => setState(() => query = v),
+                onChanged: (v) {
+                  debounce?.cancel();
+                  debounce = Timer(const Duration(milliseconds: 250), () {
+                    if (mounted) setState(() => query = v.trim());
+                  });
+                },
                 onSubmitted: (_) => search(),
                 decoration: InputDecoration(
                   labelText: 'Tìm tên sản phẩm, chất liệu',
@@ -415,6 +425,44 @@ class StoreFooter extends ConsumerStatefulWidget {
 class _StoreFooterState extends ConsumerState<StoreFooter> {
   final form = GlobalKey<FormState>();
   final email = TextEditingController();
+  bool consent = false, subscribing = false, subscribed = false;
+  String? subscriptionError;
+  Future<void> subscribe() async {
+    if (subscribing || !form.currentState!.validate()) return;
+    if (!consent) {
+      setState(
+        () => subscriptionError = 'Bạn cần đồng ý nhận tin trước khi đăng ký.',
+      );
+      return;
+    }
+    setState(() {
+      subscribing = true;
+      subscriptionError = null;
+    });
+    try {
+      if (ref.read(remoteApiProvider)) {
+        await ref
+            .read(apiClientProvider)
+            .request(
+              'POST',
+              'content/newsletter',
+              authenticated: false,
+              body: {'email': email.text.trim(), 'consent': true},
+            );
+      }
+      if (mounted) {
+        setState(() {
+          subscribed = true;
+          email.clear();
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => subscriptionError = '$e');
+    } finally {
+      if (mounted) setState(() => subscribing = false);
+    }
+  }
+
   @override
   void dispose() {
     email.dispose();
@@ -422,7 +470,7 @@ class _StoreFooterState extends ConsumerState<StoreFooter> {
   }
 
   @override
-  Widget build(BuildContext context) => ColoredBox(
+  Widget build(BuildContext context) => Material(
     color: T.canvas,
     child: PageBody(
       vertical: 48,
@@ -447,7 +495,7 @@ class _StoreFooterState extends ConsumerState<StoreFooter> {
                       const SizedBox(height: 16),
                       const StoreContentText(
                         field: 'tagline',
-                        fallback: 'Bản demo chạy local',
+                        fallback: 'Tủ đồ đương đại, theo cách bạn.',
                         style: T.body,
                       ),
                       const SizedBox(height: 16),
@@ -504,21 +552,53 @@ class _StoreFooterState extends ConsumerState<StoreFooter> {
                               label: 'Email của bạn',
                               controller: email,
                               validator: emailValidator,
+                              keyboardType: TextInputType.emailAddress,
+                              readOnly: subscribing || subscribed,
+                              onSubmitted: (_) => subscribe(),
+                            ),
+                            CheckboxListTile(
+                              contentPadding: EdgeInsets.zero,
+                              controlAffinity: ListTileControlAffinity.leading,
+                              value: consent,
+                              onChanged: subscribing || subscribed
+                                  ? null
+                                  : (v) => setState(() => consent = v ?? false),
+                              title: const Text(
+                                'Tôi đồng ý nhận tin về sản phẩm và bộ sưu tập.',
+                                style: T.small,
+                              ),
                             ),
                             const SizedBox(height: 12),
                             AppButton(
-                              'Đăng ký bản tin demo',
+                              subscribed ? 'Đã đăng ký' : 'Đăng ký nhận tin',
                               outlined: true,
-                              onPressed: () {
-                                if (form.currentState!.validate()) {
-                                  toast(
-                                    context,
-                                    'Đã đăng ký mô phỏng. Email không được gửi hoặc lưu.',
-                                  );
-                                  email.clear();
-                                }
-                              },
+                              busy: subscribing,
+                              onPressed: subscribed ? null : subscribe,
                             ),
+                            if (subscriptionError != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 12),
+                                child: Semantics(
+                                  liveRegion: true,
+                                  child: Text(
+                                    subscriptionError!,
+                                    style: T.small.copyWith(color: T.danger),
+                                  ),
+                                ),
+                              ),
+                            if (subscribed)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 12),
+                                child: Semantics(
+                                  liveRegion: true,
+                                  child: Text(
+                                    ref.watch(remoteApiProvider)
+                                        ? 'Đã lưu đăng ký nhận tin của bạn. Cảm ơn bạn đã đồng hành cùng WEARLY.'
+                                        : 'Đăng ký mô phỏng, không lưu hoặc gửi email.',
+                                    style: T.small,
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       ),
@@ -533,15 +613,18 @@ class _StoreFooterState extends ConsumerState<StoreFooter> {
             spacing: 24,
             runSpacing: 12,
             children: [
-              const Text('© 2026 · Bản demo chạy local', style: T.small),
-              const Text(
-                'Catalog & ảnh minh họa. Chưa bán hàng thực tế.',
+              const Text('© 2026 WEARLY', style: T.small),
+              Text(
+                ref.watch(remoteApiProvider)
+                    ? 'Phong cách riêng, lựa chọn của bạn.'
+                    : 'Catalog & ảnh minh họa. Chưa bán hàng thực tế.',
                 style: T.small,
               ),
-              TextButton(
-                onPressed: () => context.go('/design-system'),
-                child: const Text('Design system'),
-              ),
+              if (!ref.watch(remoteApiProvider))
+                TextButton(
+                  onPressed: () => context.go('/design-system'),
+                  child: const Text('Design system'),
+                ),
             ],
           ),
         ],

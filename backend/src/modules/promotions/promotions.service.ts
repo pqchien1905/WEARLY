@@ -1,4 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import { automaticOffers, automaticPrice } from './automatic-pricing';
 import { PrismaService } from '../../database/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
 import { transaction, lockUser } from '../../common/transaction';
@@ -6,6 +8,14 @@ import { fail } from '../../common/errors';
 import { discountFor, shippingFee, totalForItems } from '../../common/money';
 import { recordAdminActivity } from '../admin/audit';
 import { cartInclude } from '../cart/cart.service';
+import { can } from '../../common/permissions';
+import { AdminPromotionsQueryDto } from './promotions-query.dto';
+import {
+  listPromotions,
+  promotionsSummary,
+  promotionDetail,
+  promotionHistory,
+} from './promotions-workspace';
 import { PageDto } from '../products/dto/query-products.dto';
 import {
   CreatePromotionDto,
@@ -15,6 +25,49 @@ import {
 @Injectable()
 export class PromotionsService {
   constructor(private readonly db: PrismaService) {}
+  private async targeting(
+    tx: Prisma.TransactionClient,
+    value: {
+      application: string;
+      scope: string;
+      name: string;
+      minSubtotal: string | Prisma.Decimal;
+      usageLimit?: number | null;
+      perUserLimit: number;
+    },
+    productIds: string[],
+  ) {
+    if (
+      value.application === 'AUTOMATIC' &&
+      (!value.name.trim() ||
+        !new Prisma.Decimal(value.minSubtotal).eq(0) ||
+        value.usageLimit != null ||
+        value.perUserLimit !== 1)
+    )
+      fail(
+        400,
+        'PROMOTION_INVALID',
+        'Khuyến mãi tự động cần tên, không có điều kiện đơn tối thiểu hoặc giới hạn lượt.',
+      );
+    if (value.scope === 'PRODUCTS' && productIds.length === 0)
+      fail(400, 'PROMOTION_INVALID', 'Chọn ít nhất một sản phẩm áp dụng.');
+    if (value.scope === 'ALL' && productIds.length > 0)
+      fail(
+        400,
+        'PROMOTION_INVALID',
+        'Phạm vi toàn bộ không nhận danh sách sản phẩm riêng.',
+      );
+    if (
+      productIds.length &&
+      (await tx.product.count({ where: { id: { in: productIds } } })) !==
+        productIds.length
+    )
+      fail(
+        400,
+        'PROMOTION_INVALID',
+        'Một số sản phẩm không còn tồn tại. Hãy chọn lại.',
+      );
+  }
   private validate(value: {
     kind: string;
     amount: string | Prisma.Decimal;
@@ -22,6 +75,15 @@ export class PromotionsService {
     startsAt?: Date | null;
     expiresAt?: Date | null;
   }) {
+    for (const date of [value.startsAt, value.expiresAt]) {
+      if (
+        date &&
+        (!Number.isFinite(date.getTime()) ||
+          date.getUTCFullYear() < 1 ||
+          date.getUTCFullYear() > 9999)
+      )
+        fail(400, 'PROMOTION_INVALID', 'Invalid promotion date');
+    }
     try {
       discountFor('1', value);
     } catch {
@@ -40,15 +102,77 @@ export class PromotionsService {
         : {}),
     };
   }
+  private async actor(tx: Prisma.TransactionClient, actorId: string) {
+    await lockUser(tx, actorId);
+    const user = await tx.user.findUnique({
+      where: { id: actorId },
+      select: { active: true, role: true },
+    });
+    if (!user?.active || !can(user.role, 'promotions.manage'))
+      fail(403, 'FORBIDDEN', 'Không có quyền quản lý khuyến mãi.');
+  }
+  private async write<T>(
+    operation: (tx: Prisma.TransactionClient) => Promise<T>,
+  ) {
+    try {
+      return await transaction(this.db, operation);
+    } catch (e) {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2002'
+      )
+        fail(409, 'PROMOTION_CODE_EXISTS', 'Mã khuyến mãi đã tồn tại.');
+      throw e;
+    }
+  }
+  remove(actorId: string, id: string, expectedVersion: number) {
+    return this.write(async (tx) => {
+      await this.actor(tx, actorId);
+      await tx.$queryRaw`SELECT id FROM "Coupon" WHERE id=${id}::uuid FOR UPDATE`;
+      const before = await tx.coupon.findUnique({ where: { id } });
+      if (!before) throw new NotFoundException();
+      if (before.version !== expectedVersion)
+        fail(
+          409,
+          'VERSION_CONFLICT',
+          'Promotion changed; reload before deleting',
+        );
+      if (
+        (await tx.couponRedemption.count({ where: { couponId: id } })) ||
+        (await tx.orderItem.count({ where: { automaticPromotionId: id } }))
+      )
+        fail(
+          409,
+          'PROMOTION_IN_USE',
+          'Mã đã có lịch sử đơn hàng. Hãy ngừng áp dụng để giữ lịch sử.',
+        );
+      await tx.coupon.delete({ where: { id } });
+      await recordAdminActivity(tx, actorId, 'PROMOTION_DELETED', id, {
+        before,
+      });
+      return { id, deleted: true };
+    });
+  }
   create(actorId: string, dto: CreatePromotionDto) {
-    return transaction(this.db, async (tx) => {
+    return this.write(async (tx) => {
+      await this.actor(tx, actorId);
+      const { productIds, ...fields } = dto;
       const data = {
-        ...dto,
+        ...fields,
+        code:
+          dto.code || `AUTO_${randomUUID().replaceAll('-', '').slice(0, 27)}`,
+        name: dto.name.trim(),
         startsAt: dto.startsAt ? new Date(dto.startsAt) : null,
         expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
       };
       this.validate(data);
-      const coupon = await tx.coupon.create({ data });
+      await this.targeting(tx, data, productIds);
+      const coupon = await tx.coupon.create({
+        data: {
+          ...data,
+          products: { create: productIds.map((productId) => ({ productId })) },
+        },
+      });
       await recordAdminActivity(tx, actorId, 'PROMOTION_CREATED', coupon.id, {
         after: coupon,
       });
@@ -56,11 +180,25 @@ export class PromotionsService {
     });
   }
   update(actorId: string, id: string, dto: UpdatePromotionDto) {
-    return transaction(this.db, async (tx) => {
+    return this.write(async (tx) => {
+      await this.actor(tx, actorId);
       await tx.$queryRaw`SELECT id FROM "Coupon" WHERE id=${id}::uuid FOR UPDATE`;
-      const existing = await tx.coupon.findUnique({ where: { id } });
+      const existing = await tx.coupon.findUnique({
+        where: { id },
+        include: { products: true },
+      });
       if (!existing) throw new NotFoundException();
-      const { expectedVersion, startsAt, expiresAt, ...fields } = dto;
+      const { expectedVersion, startsAt, expiresAt, productIds, ...fields } =
+        dto;
+      if (
+        fields.application != null &&
+        fields.application !== existing.application
+      )
+        fail(
+          400,
+          'PROMOTION_INVALID',
+          'Không đổi cách áp dụng của chương trình đã tạo; hãy tạo chương trình mới.',
+        );
       if (existing.version !== expectedVersion)
         fail(
           409,
@@ -76,6 +214,9 @@ export class PromotionsService {
         'active',
         'minSubtotal',
         'perUserLimit',
+        'application',
+        'scope',
+        'name',
       ] as const)
         if (field in data && data[field] === null)
           fail(
@@ -84,9 +225,27 @@ export class PromotionsService {
             'Required promotion value cannot be null',
           );
       this.validate({ ...existing, ...data });
+      const targets =
+        productIds ??
+        (data.scope === 'ALL' ? [] : existing.products.map((p) => p.productId));
+      // A deleted product cascades out of the target list. Administrators must
+      // still be able to turn off that program after its last product is gone.
+      const disablingOnly =
+        data.active === false &&
+        Object.keys(data).length === 1 &&
+        productIds === undefined;
+      if (!disablingOnly)
+        await this.targeting(tx, { ...existing, ...data }, targets);
       const updated = await tx.coupon.update({
         where: { id },
-        data: { ...data, version: { increment: 1 } },
+        data: {
+          ...data,
+          version: { increment: 1 },
+          products: {
+            deleteMany: {},
+            create: targets.map((productId) => ({ productId })),
+          },
+        },
       });
       await recordAdminActivity(tx, actorId, 'PROMOTION_UPDATED', id, {
         before: existing,
@@ -95,41 +254,34 @@ export class PromotionsService {
       return updated;
     });
   }
-  async list(q: PageDto) {
-    const [items, total] = await this.db.$transaction([
-      this.db.coupon.findMany({
-        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
-        skip: (q.page - 1) * q.limit,
-        take: q.limit,
-        include: {
-          _count: { select: { redemptions: { where: { releasedAt: null } } } },
-        },
-      }),
-      this.db.coupon.count(),
-    ]);
-    return { items, total, page: q.page, limit: q.limit };
+  list(q: AdminPromotionsQueryDto) {
+    return listPromotions(this.db, q);
   }
-  async get(id: string) {
-    const coupon = await this.db.coupon.findUnique({
-      where: { id },
-      include: {
-        _count: { select: { redemptions: { where: { releasedAt: null } } } },
-      },
-    });
-    if (!coupon) throw new NotFoundException();
-    return coupon;
+  summary() {
+    return promotionsSummary(this.db);
+  }
+  get(id: string) {
+    return promotionDetail(this.db, id);
+  }
+  history(id: string, q: PageDto) {
+    return promotionHistory(this.db, id, q);
   }
   async discount(
     tx: Prisma.TransactionClient,
     userId: string,
     code: string,
     subtotal: Prisma.Decimal,
+    items?: { productId: string; price: Prisma.Decimal; quantity: number }[],
   ) {
     await tx.$queryRaw`SELECT id FROM "Coupon" WHERE code=${code} FOR UPDATE`;
-    const coupon = await tx.coupon.findUnique({ where: { code } }),
+    const coupon = await tx.coupon.findUnique({
+        where: { code },
+        include: { products: true },
+      }),
       now = new Date();
     if (
       !coupon ||
+      coupon.application !== 'CODE' ||
       !coupon.active ||
       (coupon.startsAt && coupon.startsAt > now) ||
       (coupon.expiresAt && coupon.expiresAt <= now) ||
@@ -151,10 +303,24 @@ export class PromotionsService {
       personal >= coupon.perUserLimit
     )
       fail(409, 'PROMOTION_LIMIT_REACHED', 'Promotion usage limit reached');
+    const eligible =
+      coupon.scope === 'ALL'
+        ? subtotal
+        : totalForItems(
+            (items ?? []).filter((i) =>
+              coupon.products.some((p) => p.productId === i.productId),
+            ),
+          );
+    if (eligible.lte(0))
+      fail(
+        409,
+        'PROMOTION_UNAVAILABLE',
+        'Giỏ hàng không có sản phẩm thuộc khuyến mãi.',
+      );
     return {
       couponId: coupon.id,
       code: coupon.code,
-      discount: discountFor(subtotal, coupon),
+      discount: discountFor(eligible, coupon),
     };
   }
   preview(userId: string, dto: PreviewPromotionDto) {
@@ -171,14 +337,22 @@ export class PromotionsService {
           'VERSION_CONFLICT',
           'Cart changed; reload before applying promotion',
         );
-      const subtotal = totalForItems(
-          cart.items.map((i) => ({
-            price: i.variant.price,
-            quantity: i.quantity,
-          })),
-        ),
+      const offers = await automaticOffers(tx);
+      const items = cart.items.map((i) => ({
+        productId: i.variant.productId,
+        price: automaticPrice(i.variant.productId, i.variant.price, offers)
+          .price,
+        quantity: i.quantity,
+      }));
+      const subtotal = totalForItems(items),
         shipping = shippingFee(subtotal, dto.shippingMethod);
-      const discount = await this.discount(tx, userId, dto.code, subtotal);
+      const discount = await this.discount(
+        tx,
+        userId,
+        dto.code,
+        subtotal,
+        items,
+      );
       return {
         code: discount.code,
         discount: discount.discount,

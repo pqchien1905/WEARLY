@@ -19,7 +19,7 @@ Map<String, Object?> page(List items) => {
   'items': items,
   'total': items.length,
   'page': 1,
-  'limit': 20,
+  'limit': 10,
 };
 Map<String, Object?> staff({String id = 'staff-1'}) => {
   'id': id,
@@ -125,7 +125,13 @@ void main() {
     final paths = <String>[];
     await setup(tester, 'SUPPORT', '/admin', (r) async {
       paths.add(r.url.path);
-      return jsonResponse({'items': [], 'nextCursor': null});
+      return jsonResponse({
+        'items': [],
+        'nextCursor': null,
+        'total': 0,
+        'page': 1,
+        'limit': 10,
+      });
     });
     expect(find.text('Hỗ trợ khách hàng'), findsWidgets);
     expect(find.text('Biến thể & kho'), findsNothing);
@@ -286,6 +292,9 @@ void main() {
               },
       ),
     );
+    await tester.ensureVisible(find.text('Nhật ký hoạt động'));
+    await tester.tap(find.text('Nhật ký hoạt động'));
+    await tester.pumpAndSettle();
     expect(find.text('Số lượng: 5 → 3'), findsOneWidget);
   });
 }

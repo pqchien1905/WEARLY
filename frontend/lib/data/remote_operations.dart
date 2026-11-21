@@ -105,6 +105,8 @@ class OperationsSnapshot {
       work = data['work'] == null ? null : OperationsWork(data['work']),
       geminiConfigured = data['providers']['gemini']['configured'] as bool,
       vnpayConfigured = data['providers']['vnpay']['configured'] as bool,
+      momoConfigured = data['providers']['momo']?['configured'] == true,
+      zalopayConfigured = data['providers']['zalopay']?['configured'] == true,
       stylistModel = data['providers']['gemini']['stylistModel'] as String,
       tryOnModel = data['providers']['gemini']['tryOnModel'] as String {
     if (!RegExp(r'^gemini-[a-z0-9.-]{1,70}$').hasMatch(stylistModel) ||
@@ -135,7 +137,11 @@ class OperationsSnapshot {
       tryOnModel;
   final bool? schemaReady;
   final int? migrations;
-  final bool workerLive, geminiConfigured, vnpayConfigured;
+  final bool workerLive,
+      geminiConfigured,
+      vnpayConfigured,
+      momoConfigured,
+      zalopayConfigured;
   final DateTime? lastHeartbeat;
   final OperationsQueue? tryOnQueue, recoveryQueue;
   final OperationsWork? work;

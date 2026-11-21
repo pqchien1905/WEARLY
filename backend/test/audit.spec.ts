@@ -19,11 +19,18 @@ describe('Safe administrative audit snapshots', () => {
         role: 'SUPPORT',
         active: true,
         staffVersion: 3,
+        passwordChanged: true,
+        password: 'never log this password',
         passwordHash: 'secret',
         phone: '123',
         email: 'private@example.test',
       }),
-    ).toEqual({ role: 'SUPPORT', active: true, staffVersion: 3 });
+    ).toEqual({
+      role: 'SUPPORT',
+      active: true,
+      staffVersion: 3,
+      passwordChanged: true,
+    });
   });
   it('preserves exact money and dates while dropping invalid or nested scalars', () => {
     const date = new Date('2026-10-22T00:00:00Z');

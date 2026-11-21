@@ -11,7 +11,7 @@ import '../../core/design/tokens.dart';
 
 import '../../core/widgets/primitives.dart';
 
-import 'account_navigation.dart';
+export 'account_profile_page.dart';
 
 class AuthPage extends ConsumerStatefulWidget {
   const AuthPage({super.key, required this.mode});
@@ -24,7 +24,8 @@ class _AuthPageState extends ConsumerState<AuthPage> {
   final form = GlobalKey<FormState>();
   final name = TextEditingController(),
       email = TextEditingController(),
-      password = TextEditingController();
+      password = TextEditingController(),
+      confirm = TextEditingController();
   bool obscure = true;
   bool busy = false;
   String? error;
@@ -60,6 +61,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
         );
         if (mounted) {
           password.clear();
+          confirm.clear();
           final next = GoRouterState.of(context).uri.queryParameters['next'];
           context.go(loginDestination(next));
         }
@@ -76,6 +78,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     name.dispose();
     email.dispose();
     password.dispose();
+    confirm.dispose();
     super.dispose();
   }
 
@@ -101,7 +104,9 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                         : register
                         ? 'Tủ đồ mới, của bạn.'
                         : 'Đăng nhập khách hàng',
-                    style: T.display(40),
+                    style: T.display(
+                      MediaQuery.sizeOf(context).width < 600 ? 32 : 40,
+                    ),
                   ),
                   const SizedBox(height: 24),
                   DemoNotice(
@@ -117,6 +122,9 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                       label: 'Tên của bạn',
                       controller: name,
                       validator: requiredValue,
+                      readOnly: busy,
+                      autofillHints: const [AutofillHints.name],
+                      textInputAction: TextInputAction.next,
                     ),
                     const SizedBox(height: 16),
                   ],
@@ -125,18 +133,30 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                     controller: email,
                     validator: emailValidator,
                     keyboardType: TextInputType.emailAddress,
+                    readOnly: busy,
+                    autofillHints: const [AutofillHints.email],
+                    textInputAction: TextInputAction.next,
                   ),
                   if (!forgot) ...[
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: password,
                       obscureText: obscure,
+                      readOnly: busy,
+                      autofillHints: [
+                        register
+                            ? AutofillHints.newPassword
+                            : AutofillHints.password,
+                      ],
+                      textInputAction: register
+                          ? TextInputAction.next
+                          : TextInputAction.done,
+                      onFieldSubmitted: register ? null : (_) => submit(),
                       validator: (v) =>
-                          (v?.length ?? 0) >= (remote ? 12 : 8) &&
-                              (v?.length ?? 0) <= 128
+                          (v?.length ?? 0) >= 8 && (v?.length ?? 0) <= 128
                           ? null
                           : remote
-                          ? 'Mật khẩu cần từ 12 đến 128 ký tự.'
+                          ? 'Mật khẩu cần từ 8 đến 128 ký tự.'
                           : 'Nhập ít nhất 8 ký tự cho mật khẩu demo.',
                       decoration: InputDecoration(
                         labelText: remote ? 'Mật khẩu' : 'Mật khẩu demo',
@@ -151,6 +171,24 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                         ),
                       ),
                     ),
+                    if (register) ...[
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        key: const ValueKey('register-confirm'),
+                        controller: confirm,
+                        obscureText: obscure,
+                        readOnly: busy,
+                        autofillHints: const [AutofillHints.newPassword],
+                        textInputAction: TextInputAction.done,
+                        onFieldSubmitted: (_) => submit(),
+                        validator: (v) => v == password.text
+                            ? null
+                            : 'Hai mật khẩu chưa khớp.',
+                        decoration: const InputDecoration(
+                          labelText: 'Nhập lại mật khẩu',
+                        ),
+                      ),
+                    ],
                   ],
                   const SizedBox(height: 24),
                   SizedBox(
@@ -214,8 +252,21 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                     spacing: 16,
                     children: [
                       TextButton(
-                        onPressed: () =>
-                            context.go(register ? '/login' : '/register'),
+                        onPressed: busy
+                            ? null
+                            : () {
+                                final next = GoRouterState.of(
+                                  context,
+                                ).uri.queryParameters['next'];
+                                context.go(
+                                  Uri(
+                                    path: register ? '/login' : '/register',
+                                    queryParameters: next == null
+                                        ? null
+                                        : {'next': loginDestination(next)},
+                                  ).toString(),
+                                );
+                              },
                         child: Text(
                           register
                               ? 'Đã có tài khoản? Đăng nhập'
@@ -258,7 +309,10 @@ class _AuthFrame extends StatelessWidget {
           Expanded(
             child: Container(
               padding: const EdgeInsets.all(40),
-              color: T.soft,
+              decoration: const BoxDecoration(
+                color: T.soft,
+                borderRadius: T.heroRadius,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -281,10 +335,10 @@ class _AuthFrame extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
                   Text(
-                    'YOUR EVERYDAY, REIMAGINED.',
+                    'Cảm hứng mới cho mỗi ngày.',
                     style: T.small.copyWith(
                       color: T.accent,
-                      letterSpacing: 1.4,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
@@ -299,201 +353,4 @@ class _AuthFrame extends StatelessWidget {
       );
     },
   );
-}
-
-class AccountPage extends ConsumerStatefulWidget {
-  const AccountPage({super.key});
-  @override
-  ConsumerState<AccountPage> createState() => _AccountPageState();
-}
-
-class _AccountPageState extends ConsumerState<AccountPage> {
-  final form = GlobalKey<FormState>();
-  final name = TextEditingController(),
-      phone = TextEditingController(),
-      address = TextEditingController();
-  String? seededIdentity;
-  bool busy = false;
-  String? error;
-  @override
-  void dispose() {
-    name.dispose();
-    phone.dispose();
-    address.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final remote = ref.watch(remoteApiProvider);
-    final user = ref.watch(accountProvider);
-    if (user == null) {
-      seededIdentity = null;
-      return StatePanel(
-        title: 'Góc riêng của bạn.',
-        message: remote
-            ? 'Đăng nhập để xem hồ sơ, địa chỉ và đơn hàng đã lưu.'
-            : 'Mở phiên tài khoản demo để lưu thông tin. Bạn vẫn có thể đặt hàng không cần đăng nhập.',
-        icon: Icons.person_outline,
-        action: Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            AppButton(
-              remote ? 'Đăng nhập' : 'Đăng nhập demo',
-              onPressed: () => context.go('/login'),
-            ),
-            AppButton(
-              remote ? 'Xem đơn hàng' : 'Xem đơn trong phiên',
-              outlined: true,
-              onPressed: () => context.go('/account/orders'),
-            ),
-          ],
-        ),
-      );
-    }
-    final identity = '${user.id}:${user.email}';
-    if (seededIdentity != identity) {
-      name.text = user.name;
-      phone.text = user.phone;
-      address.text = user.address;
-      seededIdentity = identity;
-    }
-    return PageBody(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Chào ${user.name}.', style: T.display(40)),
-          const SizedBox(height: 24),
-          const AccountNavigation(current: '/account'),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              TextButton(
-                onPressed: busy
-                    ? null
-                    : () async {
-                        try {
-                          await ref.read(accountProvider.notifier).signOut();
-                          if (context.mounted) {
-                            toast(
-                              context,
-                              remote
-                                  ? 'Đã đăng xuất.'
-                                  : 'Đã kết thúc phiên tài khoản demo.',
-                            );
-                          }
-                        } catch (_) {
-                          if (context.mounted) {
-                            toast(
-                              context,
-                              'Máy chủ chưa xác nhận đăng xuất. Kiểm tra kết nối và thử đăng xuất lại.',
-                            );
-                          }
-                        }
-                      },
-                child: const Text('Đăng xuất'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 32),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 640),
-            child: Form(
-              key: form,
-              child: Column(
-                children: [
-                  DemoNotice(
-                    text: remote
-                        ? 'Thông tin được lưu trong tài khoản của bạn.'
-                        : 'Hồ sơ chỉ lưu trong bộ nhớ phiên trình duyệt. Không phải tài khoản bảo mật thật.',
-                  ),
-                  const SizedBox(height: 24),
-                  AppField(
-                    label: 'Họ và tên',
-                    controller: name,
-                    validator: requiredValue,
-                  ),
-                  const SizedBox(height: 16),
-                  AppField(
-                    label: 'Điện thoại (không bắt buộc)',
-                    controller: phone,
-                    validator: (v) =>
-                        v == null ||
-                            v.isEmpty ||
-                            RegExp(r'^0\d{9}$').hasMatch(v)
-                        ? null
-                        : 'Nhập số điện thoại 10 chữ số.',
-                  ),
-                  const SizedBox(height: 16),
-                  if (!remote)
-                    AppField(
-                      label: 'Địa chỉ (không bắt buộc)',
-                      controller: address,
-                      maxLines: 2,
-                    ),
-                  if (remote)
-                    TextButton(
-                      onPressed: () => context.go('/account/addresses'),
-                      child: const Text('Quản lý địa chỉ nhận hàng'),
-                    ),
-                  const SizedBox(height: 24),
-                  AppButton(
-                    remote ? 'Lưu hồ sơ' : 'Lưu hồ sơ demo',
-                    busy: busy,
-                    onPressed: () async {
-                      if (form.currentState!.validate()) {
-                        setState(() {
-                          busy = true;
-                          error = null;
-                        });
-                        try {
-                          await ref
-                              .read(accountProvider.notifier)
-                              .save(
-                                UserProfile(
-                                  name: name.text.trim(),
-                                  email: user.email,
-                                  phone: phone.text,
-                                  address: address.text,
-                                ),
-                              );
-                          if (context.mounted) {
-                            toast(
-                              context,
-                              remote
-                                  ? 'Đã lưu hồ sơ.'
-                                  : 'Đã lưu hồ sơ trong phiên demo.',
-                            );
-                          }
-                        } catch (e) {
-                          if (mounted) setState(() => error = '$e');
-                        } finally {
-                          if (mounted) setState(() => busy = false);
-                        }
-                      }
-                    },
-                  ),
-                  if (error != null)
-                    Semantics(
-                      liveRegion: true,
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 16),
-                        child: Text(
-                          error!,
-                          style: const TextStyle(color: T.danger),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 48),
-        ],
-      ),
-    );
-  }
 }

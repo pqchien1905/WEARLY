@@ -7,11 +7,13 @@ import { PrismaService } from '../../database/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
 import { lockUser, transaction } from '../../common/transaction';
 import { catalogInclude, productJson } from '../products/products.service';
+import { automaticOffers } from '../promotions/automatic-pricing';
 const LIMIT = 200;
 @Injectable()
 export class WishlistService {
   constructor(private readonly db: PrismaService) {}
   private async snapshot(tx: Prisma.TransactionClient, userId: string) {
+    const offers = await automaticOffers(tx);
     const rows = await tx.wishlistItem.findMany({
       where: { userId },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -22,7 +24,7 @@ export class WishlistService {
         productId: row.productId,
         product:
           row.product.active && row.product.variants.length
-            ? productJson(row.product)
+            ? productJson(row.product, offers)
             : null,
       })),
       limit: LIMIT,

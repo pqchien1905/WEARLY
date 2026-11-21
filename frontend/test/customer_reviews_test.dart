@@ -44,6 +44,7 @@ Future<ProviderContainer> mountHistory(
   bool guest = false,
   bool staffOnly = false,
   bool remote = true,
+  bool settle = true,
 }) async {
   var logins = 0;
   final api = ApiClient(
@@ -117,11 +118,16 @@ Future<ProviderContainer> mountHistory(
       child: MaterialApp.router(theme: buildTheme(), routerConfig: router),
     ),
   );
-  await tester.pumpAndSettle();
+  if (settle) {
+    await tester.pumpAndSettle();
+  } else {
+    await tester.pump();
+  }
   return container;
 }
 
 Future<void> tapVisible(WidgetTester tester, Finder finder) async {
+  await tester.pump();
   await tester.ensureVisible(finder);
   await tester.tap(finder);
   await tester.pumpAndSettle();
@@ -320,12 +326,17 @@ void main() {
     tester,
   ) async {
     final late = Completer<http.Response>();
-    final container = await mountHistory(tester, (r) async {
-      if (r.headers['Authorization'] == 'Bearer customer1-access') {
-        return late.future;
-      }
-      return jsonResponse(historyJson([]));
-    });
+    final container = await mountHistory(
+      tester,
+      (r) async {
+        if (r.headers['Authorization'] == 'Bearer customer1-access') {
+          return late.future;
+        }
+        return jsonResponse(historyJson([]));
+      },
+      // The loading indicator animates while this request is deliberately pending.
+      settle: false,
+    );
     expect(find.text('Đang tải đánh giá…'), findsOneWidget);
     await container.read(accountProvider.notifier).signOut();
     await tester.pumpAndSettle();

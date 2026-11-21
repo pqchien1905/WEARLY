@@ -52,7 +52,10 @@ Map<String, Object?> remoteJob({String status = 'completed'}) => {
   'estimatedCostVnd': '3000',
   'resultAvailable': status == 'completed',
   'createdAt': '2026-10-22T12:00:00Z',
-  'expiresAt': '2026-10-23T12:00:00Z',
+  'expiresAt': DateTime.now()
+      .toUtc()
+      .add(const Duration(hours: 1))
+      .toIso8601String(),
 };
 Map<String, Object?> tryonStatus({bool configured = true, int remaining = 3}) =>
     {
@@ -739,10 +742,13 @@ void main() {
       await t.pump();
       expect(bytesRequested, 1);
       final remove = find
-          .widgetWithText(OutlinedButton, 'Xóa ảnh và các kết quả')
+          .widgetWithText(TextButton, 'Xóa ảnh và các kết quả')
           .first;
       await t.ensureVisible(remove);
       await t.tap(remove);
+      await t.pump();
+      expect(deletes, 0);
+      await t.tap(find.text('Xác nhận xóa'));
       await t.pumpAndSettle();
       expect(deletes, 1);
       expect(find.byType(PrivateRemoteImage), findsNothing);

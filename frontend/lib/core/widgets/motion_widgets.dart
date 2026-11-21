@@ -61,6 +61,8 @@ class _InteractivePhotoState extends State<InteractivePhoto> {
   @override
   Widget build(BuildContext context) => Material(
     color: T.photo,
+    borderRadius: T.imageRadius,
+    clipBehavior: Clip.antiAlias,
     child: InkWell(
       onTap: widget.onTap,
       onHover: (value) => setState(() => hovered = value),
@@ -70,10 +72,10 @@ class _InteractivePhotoState extends State<InteractivePhoto> {
         children: [
           ClipRect(
             child: AnimatedScale(
-              scale: hovered && !Motion.reduced(context) ? 1.025 : 1,
-              duration: Motion.duration(context),
+              scale: hovered && !Motion.reduced(context) ? 1.035 : 1,
+              duration: Motion.duration(context, Motion.image),
               curve: Motion.curve,
-              child: widget.child,
+              child: RepaintBoundary(child: widget.child),
             ),
           ),
           if (focused)
@@ -81,6 +83,7 @@ class _InteractivePhotoState extends State<InteractivePhoto> {
               child: IgnorePointer(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
+                    borderRadius: T.imageRadius,
                     border: Border.all(color: T.accent, width: 3),
                   ),
                 ),

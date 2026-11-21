@@ -60,11 +60,9 @@ void main() {
     await t.tap(find.text('Xóa bộ lọc'));
     await t.pumpAndSettle();
     expect(find.text('WRL-0001'), findsOneWidget);
-    final statusField = find.byType(DropdownButtonFormField<String>);
+    final statusField = find.widgetWithText(ChoiceChip, 'Đang giao (1)');
     await t.ensureVisible(statusField);
     await t.tap(statusField);
-    await t.pumpAndSettle();
-    await t.tap(find.text('Đang giao').last);
     await t.pumpAndSettle();
     expect(find.text('WRL-0001'), findsNothing);
     expect(find.text('WRL-0002'), findsOneWidget);

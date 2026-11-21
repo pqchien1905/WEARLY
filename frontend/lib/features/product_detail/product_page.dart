@@ -1,10 +1,11 @@
+import '../../core/widgets/promotion_price.dart';
 import 'package:flutter/material.dart';
 import '../../core/widgets/wishlist_button.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/providers.dart';
 import '../../core/design/tokens.dart';
-import '../../core/format.dart';
+import '../../core/design/motion.dart';
 import '../../core/widgets/primitives.dart';
 import '../../core/widgets/product_card.dart';
 import '../../domain/catalog.dart';
@@ -63,6 +64,7 @@ class _ProductDetailState extends ConsumerState<ProductDetail> {
   @override
   Widget build(BuildContext context) {
     final p = widget.product;
+    final remote = ref.watch(remoteApiProvider);
     final variants = p.variants.where((v) => v.color == color).toList();
     final selected = variants.where((v) => v.size == size).firstOrNull;
     final mobile = MediaQuery.sizeOf(context).width < 800;
@@ -95,9 +97,11 @@ class _ProductDetailState extends ConsumerState<ProductDetail> {
         const SizedBox(height: 16),
         Text(p.name, style: T.display(mobile ? 32 : 40)),
         const SizedBox(height: 20),
-        Text(
-          money(selected?.price ?? p.price),
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w500),
+        PromotionPrice(
+          price: selected?.price ?? p.price,
+          original: (selected ?? p.cheapestVariant).originalPrice,
+          name: (selected ?? p.cheapestVariant).promotionName,
+          large: true,
         ),
         const SizedBox(height: 20),
         Text(p.description, style: T.body.copyWith(color: T.muted)),
@@ -108,7 +112,7 @@ class _ProductDetailState extends ConsumerState<ProductDetail> {
               if (target != null) {
                 Scrollable.ensureVisible(
                   target,
-                  duration: const Duration(milliseconds: 250),
+                  duration: Motion.duration(context),
                 );
               }
             },
@@ -196,8 +200,8 @@ class _ProductDetailState extends ConsumerState<ProductDetail> {
         const SizedBox(height: 16),
         Text(
           selected == null
-              ? 'Chọn size để xem tồn kho demo.'
-              : 'Còn ${selected.stock} sản phẩm · Tồn kho demo',
+              ? 'Chọn size để xem số lượng còn hàng.'
+              : 'Còn ${selected.stock} sản phẩm${remote ? '' : ' · Tồn kho demo'}',
           style: T.small.copyWith(
             color: selected == null ? T.muted : T.success,
           ),
@@ -223,7 +227,7 @@ class _ProductDetailState extends ConsumerState<ProductDetail> {
           children: [
             if (p.tryOn)
               AppButton(
-                'Thử đồ (bản demo)',
+                remote ? 'Thử đồ với AI' : 'Thử đồ (bản demo)',
                 outlined: true,
                 icon: Icons.checkroom_outlined,
                 onPressed: () =>
@@ -256,7 +260,9 @@ class _ProductDetailState extends ConsumerState<ProductDetail> {
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 16),
                 child: Text(
-                  '${p.material}. Giặt nhẹ với nước lạnh, phơi trong bóng râm. Thông tin minh họa.',
+                  remote
+                      ? p.material
+                      : '${p.material}. Giặt nhẹ với nước lạnh, phơi trong bóng râm. Thông tin minh họa.',
                   style: T.body,
                 ),
               ),
@@ -327,14 +333,17 @@ class _ProductDetailState extends ConsumerState<ProductDetail> {
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(24),
-          color: T.canvas,
+          decoration: const BoxDecoration(
+            color: T.canvas,
+            borderRadius: T.panelRadius,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Phối món đồ này theo cách của bạn.', style: T.display(28)),
               const SizedBox(height: 12),
-              const Text(
-                'Mang thiết kế đang xem đến Stylist để gợi ý cách phối theo dịp, size và ngân sách. Trải nghiệm mô phỏng.',
+              Text(
+                'Mang thiết kế đang xem đến Stylist để gợi ý cách phối theo dịp, size và ngân sách.${remote ? '' : ' Trải nghiệm mô phỏng.'}',
                 style: T.body,
               ),
               const SizedBox(height: 20),

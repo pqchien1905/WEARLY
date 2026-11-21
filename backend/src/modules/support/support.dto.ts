@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
+import { AdminPageDto } from '../../common/admin-page.dto';
 import {
   IsEmail,
   IsIn,
@@ -46,7 +47,7 @@ export class StatusSupportDto {
   @ApiProperty({ enum: ['OPEN', 'CLOSED'] }) @IsIn(['OPEN', 'CLOSED']) status!:
     'OPEN' | 'CLOSED';
 }
-export class ListSupportDto {
+export class ListSupportDto extends AdminPageDto {
   @ApiPropertyOptional()
   @ValidateIf((_o, v) => v !== undefined)
   @IsUUID()

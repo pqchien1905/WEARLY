@@ -74,7 +74,7 @@ class MyReview {
   late final ProductReview? review;
 }
 
-typedef ReviewedProduct = ({String name, String slug});
+typedef ReviewedProduct = ({String name, String slug, String? image});
 
 class OwnedReview extends ProductReview {
   OwnedReview.fromJson(Object? value) : super.fromJson(value) {
@@ -84,7 +84,11 @@ class OwnedReview extends ProductReview {
     final detail = json['product'] as Map?;
     product = detail == null
         ? null
-        : (name: detail['name'] as String, slug: detail['slug'] as String);
+        : (
+            name: detail['name'] as String,
+            slug: detail['slug'] as String,
+            image: detail['image'] as String?,
+          );
     if (productId.isEmpty ||
         (canEdit && product == null) ||
         (product != null && (product!.name.isEmpty || product!.slug.isEmpty))) {
@@ -151,11 +155,20 @@ class OwnerReviewRepository {
     return _decode(() => MyReview.fromJson(result));
   }
 
-  Future<OwnedReviewPage> history(int page) async {
+  Future<OwnedReviewPage> history(
+    int page, {
+    String query = '',
+    int? rating,
+  }) async {
     _check();
     final result = await api.get(
       'users/me/reviews',
-      query: {'page': '$page', 'limit': '5'},
+      query: {
+        'page': '$page',
+        'limit': '5',
+        if (query.trim().isNotEmpty) 'q': query.trim(),
+        if (rating != null) 'rating': '$rating',
+      },
     );
     _check();
     return _decode(() => OwnedReviewPage.fromJson(result));

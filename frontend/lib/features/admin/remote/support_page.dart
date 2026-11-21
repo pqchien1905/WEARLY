@@ -1,3 +1,4 @@
+export 'mail_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,8 +7,12 @@ import '../../../core/design/tokens.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/widgets/primitives.dart';
 import '../../../data/remote_support.dart';
+import '../../../data/remote_admin.dart';
+import 'admin_pagination.dart';
 import 'admin_widgets.dart';
 import 'admin_providers.dart' show staffRoleProvider, canStaff;
+import 'admin_presentation.dart';
+import 'operations_widgets.dart';
 
 class RemoteSupportPage extends ConsumerStatefulWidget {
   const RemoteSupportPage({super.key});
@@ -16,86 +21,163 @@ class RemoteSupportPage extends ConsumerStatefulWidget {
 }
 
 class _RemoteSupportPageState extends ConsumerState<RemoteSupportPage> {
-  String? cursor;
-  final previous = <String?>[];
+  int page = 1, limit = 10;
+  String? status;
   @override
   Widget build(BuildContext context) {
-    final provider = supportListProvider(cursor);
+    final provider = supportInboxProvider((
+      page: page,
+      limit: limit,
+      status: status,
+    ));
+    final value = ref.watch(provider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         AdminHeading(
           'Hỗ trợ khách hàng',
-          'Yêu cầu đã được lưu, gồm cả khách chưa đăng nhập.',
+          'Tiếp nhận yêu cầu, theo dõi phản hồi và chăm sóc khách hàng.',
           actions: [
             AppButton(
               'Tải lại',
               outlined: true,
+              icon: Icons.refresh,
+              busy: value.isLoading,
               onPressed: () => ref.invalidate(provider),
             ),
             if (canStaff(ref.watch(staffRoleProvider), 'mail.read'))
               AppButton(
                 'Theo dõi thư',
                 outlined: true,
+                icon: Icons.mail_outline,
                 onPressed: () => context.go('/admin/mail'),
               ),
           ],
         ),
-        AdminAsync(
-          value: ref.watch(provider),
-          reload: () => ref.invalidate(provider),
-          builder: (data) => Column(
+        OperationsPanel(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if ((data['items'] as List).isEmpty)
-                const Text('Chưa có yêu cầu hỗ trợ.'),
-              for (final row in data['items'])
-                AdminCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        row['name'],
-                        style: T.body.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                      SelectableText(row['email']),
-                      const SizedBox(height: 8),
-                      Text(
-                        supportStatusNames[row['status']] ??
-                            'Không rõ trạng thái',
-                      ),
-                      Text('Mã: ${row['id']}', style: T.small),
-                      const SizedBox(height: 12),
-                      AppButton(
-                        'Xem và trả lời',
-                        outlined: true,
-                        onPressed: () =>
-                            context.go('/admin/support/${row['id']}'),
-                      ),
-                    ],
-                  ),
-                ),
+              const AdminSectionTitle('Hộp thư hỗ trợ'),
               Wrap(
-                spacing: 12,
-                runSpacing: 12,
+                spacing: 8,
+                runSpacing: 8,
                 children: [
-                  if (previous.isNotEmpty)
-                    AppButton(
-                      'Trang trước',
-                      outlined: true,
-                      onPressed: () =>
-                          setState(() => cursor = previous.removeLast()),
-                    ),
-                  if (data['nextCursor'] != null)
-                    AppButton(
-                      'Trang tiếp',
-                      outlined: true,
-                      onPressed: () => setState(() {
-                        previous.add(cursor);
-                        cursor = data['nextCursor'];
-                      }),
+                  for (final entry in <String?, String>{
+                    null: 'Tất cả yêu cầu',
+                    ...supportStatusNames,
+                  }.entries)
+                    ChoiceChip(
+                      label: Text(entry.value),
+                      selected: status == entry.key,
+                      onSelected: value.isLoading
+                          ? null
+                          : (_) => setState(() {
+                              status = entry.key;
+                              page = 1;
+                            }),
                     ),
                 ],
+              ),
+              const SizedBox(height: 20),
+              AdminAsync(
+                value: value,
+                reload: () => ref.invalidate(provider),
+                builder: (data) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Text(
+                        '${adminNumber(data['total'])} yêu cầu${status == null ? '' : ' · ${supportStatusNames[status]}'} · Mới nhất trước',
+                        style: T.small,
+                      ),
+                    ),
+                    if ((data['items'] as List).isEmpty)
+                      OperationsEmpty(
+                        title: status == null
+                            ? 'Chưa có yêu cầu hỗ trợ.'
+                            : 'Không có yêu cầu ở trạng thái này',
+                        message: status == null
+                            ? 'Yêu cầu của khách hàng sẽ xuất hiện tại đây.'
+                            : 'Chọn trạng thái khác để xem các yêu cầu còn lại.',
+                        icon: Icons.support_agent_outlined,
+                      )
+                    else
+                      OperationsTable(
+                        headers: const [
+                          'Khách hàng',
+                          'Trạng thái',
+                          'Ngày tiếp nhận',
+                          'Thao tác',
+                        ],
+                        widths: const [3.2, 1.8, 2, 1.8],
+                        rows: [
+                          for (final row in data['items'])
+                            [
+                              OperationsIdentity(
+                                name: row['name'],
+                                email: row['email'],
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  supportStatus(row['status']),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    '${row['_count']?['replies'] ?? 0} phản hồi',
+                                    style: T.small,
+                                  ),
+                                ],
+                              ),
+                              Text(adminDate(row['createdAt']), style: T.small),
+                              _openTicket(context, row['id']),
+                            ],
+                        ],
+                        cards: [
+                          for (final row in data['items'])
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                OperationsIdentity(
+                                  name: row['name'],
+                                  email: row['email'],
+                                ),
+                                const SizedBox(height: 12),
+                                Wrap(
+                                  spacing: 12,
+                                  runSpacing: 8,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    supportStatus(row['status']),
+                                    Text(
+                                      '${row['_count']?['replies'] ?? 0} phản hồi',
+                                      style: T.small,
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Tiếp nhận: ${adminDate(row['createdAt'])}',
+                                  style: T.small,
+                                ),
+                                const SizedBox(height: 8),
+                                _openTicket(context, row['id']),
+                              ],
+                            ),
+                        ],
+                      ),
+                    AdminPagination(
+                      page: AdminPage(data),
+                      loading: value.isLoading,
+                      onPage: (n) => setState(() => page = n),
+                      onPageSize: (n) => setState(() {
+                        limit = n;
+                        page = 1;
+                      }),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -103,7 +185,31 @@ class _RemoteSupportPageState extends ConsumerState<RemoteSupportPage> {
       ],
     );
   }
+
+  Widget _openTicket(BuildContext context, String id) => Align(
+    alignment: Alignment.centerLeft,
+    child: TextButton.icon(
+      onPressed: () => context.go('/admin/support/$id'),
+      icon: const Icon(Icons.arrow_forward, size: 16),
+      iconAlignment: IconAlignment.end,
+      label: const Text('Xem và trả lời'),
+      style: TextButton.styleFrom(
+        minimumSize: const Size(44, 44),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        visualDensity: VisualDensity.standard,
+      ),
+    ),
+  );
 }
+
+Widget supportStatus(String status) => AdminStatus(
+  supportStatusNames[status] ?? 'Không rõ trạng thái',
+  color: switch (status) {
+    'OPEN' => T.warning,
+    'ANSWERED' => T.success,
+    _ => T.muted,
+  },
+);
 
 class RemoteSupportDetail extends ConsumerStatefulWidget {
   const RemoteSupportDetail({super.key, required this.id});
@@ -192,6 +298,9 @@ class _RemoteSupportDetailState extends ConsumerState<RemoteSupportDetail> {
       ref.invalidate(supportDetailProvider(widget.id));
       ref.invalidate(supportListProvider);
       ref.invalidate(adminMailProvider);
+      ref.invalidate(supportPagesProvider);
+      ref.invalidate(supportInboxProvider);
+      ref.invalidate(adminMailPagesProvider);
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -216,7 +325,7 @@ class _RemoteSupportDetailState extends ConsumerState<RemoteSupportDetail> {
       children: [
         AdminHeading(
           'Yêu cầu hỗ trợ',
-          'Trả lời được lưu trước khi gửi tới hộp thư local.',
+          'Trả lời được lưu trước khi gửi tới email của khách hàng.',
           actions: [
             AppButton(
               'Tải lại yêu cầu',
@@ -325,76 +434,4 @@ class _RemoteSupportDetailState extends ConsumerState<RemoteSupportDetail> {
       ],
     );
   }
-}
-
-class RemoteMailPage extends ConsumerWidget {
-  const RemoteMailPage({super.key});
-  @override
-  Widget build(BuildContext context, WidgetRef ref) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      AdminHeading(
-        'Theo dõi thư',
-        'Thư đơn hàng và phản hồi hỗ trợ được giữ trong hộp thư local.',
-        actions: [
-          AppButton(
-            'Tải lại',
-            outlined: true,
-            onPressed: () => ref.invalidate(adminMailProvider),
-          ),
-        ],
-      ),
-      AdminAsync(
-        value: ref.watch(adminMailProvider),
-        reload: () => ref.invalidate(adminMailProvider),
-        builder: (data) => Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              data['enabled']
-                  ? 'Gửi thư local đã bật.'
-                  : 'Gửi thư đang tắt. Các thư đã lưu sẽ chờ đến khi dịch vụ được bật.',
-            ),
-            const SizedBox(height: 12),
-            const SelectableText('Hộp thư trên máy này: http://127.0.0.1:8025'),
-            const SizedBox(height: 20),
-            Wrap(
-              spacing: 20,
-              runSpacing: 8,
-              children: [
-                for (final s in mailStatusNames.entries)
-                  Text('${s.value}: ${data['counts'][s.key] ?? 0}'),
-              ],
-            ),
-            const SizedBox(height: 24),
-            const Text('50 thư gần nhất', style: T.small),
-            const SizedBox(height: 12),
-            for (final row in data['items'])
-              AdminCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      row['subject'],
-                      style: T.body.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                    SelectableText(row['recipient']),
-                    const SizedBox(height: 8),
-                    Text(
-                      mailStatusNames[row['status']] ?? 'Không rõ trạng thái',
-                    ),
-                    Text('Số lần gửi: ${row['attempts']}', style: T.small),
-                    if (row['status'] == 'FAILED')
-                      const Text(
-                        'Kiểm tra hộp thư và dịch vụ gửi thư local. Thư này vẫn được lưu để đối chiếu.',
-                        style: T.small,
-                      ),
-                  ],
-                ),
-              ),
-          ],
-        ),
-      ),
-    ],
-  );
 }

@@ -53,6 +53,7 @@ describe('Local product HTML previews', () => {
           style: '',
           categoryId,
           brandId,
+          images: { create: { url: 'assets/images/shirt.jpg', alt: 'Product fixture' } },
           variants: {
             create: {
               sku: slug,

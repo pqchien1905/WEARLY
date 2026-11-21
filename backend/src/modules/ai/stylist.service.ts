@@ -1,3 +1,8 @@
+import {
+  automaticOffers,
+  automaticPrice,
+  effectivePriceSql,
+} from '../promotions/automatic-pricing';
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { isUUID } from 'class-validator';
@@ -68,19 +73,31 @@ export class StylistService {
     }
     if (!this.gemini.configured)
       fail(503, 'AI_PROVIDER_NOT_CONFIGURED', 'Gemini is not configured');
-    const candidates = await this.db.productVariant.findMany({
-      where: {
-        active: true,
-        size: input.size,
-        ...(input.color ? { color: input.color } : {}),
-        price: { lte: input.budget },
-        inventory: { quantity: { gt: 0 } },
-        product: { active: true },
-      },
-      include: { product: true },
-      orderBy: [{ price: 'asc' }, { sku: 'asc' }],
-      take: 40,
-    });
+    const offers = await automaticOffers(this.db);
+    const candidates = (
+      await this.db.productVariant.findMany({
+        where: {
+          active: true,
+          size: input.size,
+          ...(input.color ? { color: input.color } : {}),
+          id: {
+            in: (
+              await this.db.$queryRaw<{ id: string }[]>(
+                Prisma.sql`SELECT v.id FROM "ProductVariant" v JOIN "Product" p ON p.id=v."productId" JOIN "Inventory" i ON i."variantId"=v.id WHERE v.active=true AND p.active=true AND i.quantity>0 AND v.size=${input.size} AND (${input.color}='' OR v.color=${input.color}) AND ${effectivePriceSql('v')}<=${input.budget} ORDER BY ${effectivePriceSql('v')},v.sku LIMIT 40`,
+              )
+            ).map((v) => v.id),
+          },
+          inventory: { quantity: { gt: 0 } },
+          product: { active: true },
+        },
+        include: { product: true },
+        orderBy: [{ price: 'asc' }, { sku: 'asc' }],
+        take: 40,
+      })
+    ).map((v) => ({
+      ...v,
+      price: automaticPrice(v.productId, v.price, offers).price,
+    }));
     if (!candidates.length)
       fail(
         409,
@@ -181,19 +198,25 @@ export class StylistService {
       },
       include: { product: { include: catalogInclude } },
     });
+    const offers = await automaticOffers(this.db);
     const picks = receipt.picks.map((pick) => {
       const row = rows.find((v) => v.sku === pick.sku);
       if (
         !row ||
-        row.price.toString() !== pick.price ||
+        automaticPrice(row.productId, row.price, offers).price.toString() !==
+          pick.price ||
         row.size !== receipt.size ||
         (receipt.color && row.color !== receipt.color)
       )
         throw new Error('AI_CATALOG_CHANGED');
       return {
         sku: row.sku,
-        price: row.price.toString(),
-        product: productJson(row.product),
+        price: automaticPrice(
+          row.productId,
+          row.price,
+          offers,
+        ).price.toString(),
+        product: productJson(row.product, offers),
       };
     });
     const total = picks.reduce(

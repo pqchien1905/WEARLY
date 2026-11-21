@@ -7,67 +7,306 @@ import '../../app/api_providers.dart';
 import '../../core/network/api_client.dart';
 import '../../core/design/tokens.dart';
 import '../../core/widgets/primitives.dart';
+import '../../core/design/account_tokens.dart';
+import 'account_actions.dart';
+import 'account_components.dart';
+
+const accountDestinations = [
+  ('Hồ sơ', '/account', Icons.person_outline),
+  ('Đơn hàng', '/account/orders', Icons.shopping_bag_outlined),
+  ('Đánh giá của tôi', '/account/reviews', Icons.star_outline_rounded),
+  ('Sổ địa chỉ', '/account/addresses', Icons.location_on_outlined),
+  ('Phong cách của tôi', '/account/style', Icons.tune_outlined),
+  ('Lịch sử thử đồ', '/account/try-ons', Icons.checkroom_outlined),
+  ('Yêu thích', '/wishlist', Icons.favorite_border),
+  ('Cài đặt tài khoản', '/account/settings', Icons.settings_outlined),
+];
+
+String accountLabel(String path) => accountDestinations
+    .firstWhere(
+      (item) => item.$2 == path,
+      orElse: () => accountDestinations.first,
+    )
+    .$1;
+
+String accountDescription(String path) => switch (path) {
+  '/account' => 'Một góc riêng để chăm chút thông tin và phong cách của bạn.',
+  '/account/orders' => 'Theo dõi hành trình của những món đồ bạn đã chọn.',
+  '/account/reviews' =>
+    'Những trải nghiệm của bạn giúp lựa chọn tiếp theo tốt hơn.',
+  '/account/addresses' =>
+    'Lưu những địa chỉ quen thuộc để mỗi lần đặt hàng thuận tiện hơn.',
+  '/account/style' => 'Những lựa chọn nhỏ, tạo nên phong cách rất riêng.',
+  '/account/try-ons' =>
+    'Xem lại những trang phục bạn đã thử và tìm cảm hứng mới.',
+  '/wishlist' => 'Lưu cảm hứng, trở lại khi bạn sẵn sàng.',
+  _ => 'Quản lý thông tin đăng nhập, bảo mật và tùy chọn mua sắm.',
+};
 
 class AccountNavigation extends ConsumerWidget {
-  const AccountNavigation({super.key, required this.current});
+  const AccountNavigation({
+    super.key,
+    required this.current,
+    this.enabled = true,
+  });
   final String current;
+  final bool enabled;
   @override
-  Widget build(BuildContext context, WidgetRef ref) => Wrap(
-    spacing: 8,
-    runSpacing: 8,
+  Widget build(BuildContext context, WidgetRef ref) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      for (final item in [
-        ('Hồ sơ', '/account'),
-        ('Đơn hàng', '/account/orders'),
-        if (ref.watch(remoteApiProvider))
-          ('Đánh giá của tôi', '/account/reviews'),
-        ('Sổ địa chỉ', '/account/addresses'),
-        ('Phong cách của tôi', '/account/style'),
-        ('Lịch sử thử đồ', '/account/try-ons'),
-        ('Yêu thích', '/wishlist'),
-      ])
-        Semantics(
-          selected: current == item.$2,
-          child: TextButton(
-            style: TextButton.styleFrom(
-              backgroundColor: current == item.$2 ? T.soft : Colors.transparent,
-              foregroundColor: current == item.$2 ? T.accent : T.ink,
-              shape: const RoundedRectangleBorder(borderRadius: T.radius),
+      for (final item in accountDestinations)
+        if (item.$2 != '/account/reviews' || ref.watch(remoteApiProvider))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Semantics(
+              selected: current == item.$2,
+              child: TextButton(
+                style: TextButton.styleFrom(
+                  alignment: Alignment.centerLeft,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 16,
+                  ),
+                  minimumSize: const Size(44, AccountTokens.controlHeight),
+                  backgroundColor: current == item.$2
+                      ? AccountTokens.selected
+                      : Colors.transparent,
+                  foregroundColor: current == item.$2
+                      ? AccountTokens.selectedText
+                      : T.muted,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: AccountTokens.radius,
+                  ),
+                ),
+                onPressed: enabled ? () => context.go(item.$2) : null,
+                child: Row(
+                  children: [
+                    Icon(item.$3, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        item.$1,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: current == item.$2
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                    if (current == item.$2)
+                      const Icon(Icons.chevron_right, size: 18),
+                  ],
+                ),
+              ),
             ),
-            onPressed: () => context.go(item.$2),
-            child: Text(item.$1),
           ),
-        ),
     ],
   );
 }
 
-class AccountFrame extends StatelessWidget {
+class AccountFrame extends ConsumerWidget {
   const AccountFrame({
     super.key,
     required this.title,
     required this.current,
     required this.child,
+    this.enabled = true,
   });
   final String title, current;
   final Widget child;
+  final bool enabled;
   @override
-  Widget build(BuildContext context) => PageBody(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: T.display(MediaQuery.sizeOf(context).width < 600 ? 32 : 40),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(accountProvider);
+    final mobile = MediaQuery.sizeOf(context).width < 600;
+    final navigation = AccountNavigation(current: current, enabled: enabled);
+    final sidebar = AccountCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (user != null) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 23,
+                    backgroundColor: T.soft,
+                    child: Text(
+                      user.name.trim().isEmpty
+                          ? 'W'
+                          : user.name.trim().characters.first.toUpperCase(),
+                      style: const TextStyle(
+                        color: T.accent,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 20,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          user.name,
+                          style: T.body.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 2),
+                        const Text('Tài khoản Wearly', style: T.small),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 32),
+          ],
+          navigation,
+          if (user != null) ...[
+            const Divider(height: 24),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: AccountSignOutButton(enabled: enabled),
+            ),
+          ],
+        ],
+      ),
+    );
+    final content = ConstrainedBox(
+      key: const ValueKey('account-content'),
+      constraints: BoxConstraints(
+        minHeight: mobile
+            ? 0
+            : (MediaQuery.sizeOf(context).height - 360)
+                  .clamp(600, double.infinity)
+                  .toDouble(),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Semantics(
+            header: true,
+            headingLevel: 1,
+            child: Text(title, style: AccountTokens.display(mobile ? 28 : 36)),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            accountDescription(current),
+            style: T.body.copyWith(color: T.muted),
+          ),
+          const SizedBox(height: 28),
+          child,
+        ],
+      ),
+    );
+    return ColoredBox(
+      color: AccountTokens.background,
+      child: PageBody(
+        vertical: mobile ? 24 : 32,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 4,
+              children: [
+                TextButton(
+                  onPressed: () => context.go('/'),
+                  child: const Text('Trang chủ', style: T.small),
+                ),
+                const Icon(Icons.chevron_right, size: 14, color: T.muted),
+                TextButton(
+                  onPressed: () => context.go('/account'),
+                  child: const Text('Tài khoản', style: T.small),
+                ),
+                const Icon(Icons.chevron_right, size: 14, color: T.muted),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Text(
+                    accountLabel(current),
+                    style: T.small.copyWith(color: T.accent),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            LayoutBuilder(
+              builder: (_, c) {
+                final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+                if (c.maxWidth >= 920 * scale) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: AccountTokens.sidebarWidth,
+                        child: sidebar,
+                      ),
+                      const SizedBox(width: AccountTokens.gap),
+                      Expanded(child: content),
+                    ],
+                  );
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Material(
+                      color: T.surface,
+                      shape: const RoundedRectangleBorder(
+                        side: BorderSide(color: T.line),
+                        borderRadius: T.radius,
+                      ),
+                      child: ExpansionTile(
+                        // Expansion and the route scroll offset need separate
+                        // PageStorage entries when the responsive tree changes.
+                        key: PageStorageKey('account-menu-$current'),
+                        leading: const Icon(
+                          Icons.menu,
+                          size: 20,
+                          color: T.accent,
+                        ),
+                        title: Text(
+                          accountLabel(current),
+                          style: T.body.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: const Text('Menu tài khoản', style: T.small),
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: T.radius,
+                        ),
+                        collapsedShape: const RoundedRectangleBorder(
+                          borderRadius: T.radius,
+                        ),
+                        childrenPadding: const EdgeInsets.fromLTRB(
+                          12,
+                          0,
+                          12,
+                          12,
+                        ),
+                        children: [
+                          navigation,
+                          if (user != null)
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: AccountSignOutButton(enabled: enabled),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    content,
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 40),
+          ],
         ),
-        const SizedBox(height: 24),
-        AccountNavigation(current: current),
-        const SizedBox(height: 32),
-        child,
-        const SizedBox(height: 40),
-      ],
-    ),
-  );
+      ),
+    );
+  }
 }
 
 class AccountDataView extends ConsumerWidget {
@@ -99,10 +338,7 @@ class AccountDataView extends ConsumerWidget {
         .when(
           skipLoadingOnRefresh: !freshWhileLoading,
           data: builder,
-          loading: () => const Padding(
-            padding: EdgeInsets.all(32),
-            child: Text('Đang mở hồ sơ của bạn…'),
-          ),
+          loading: () => const AccountLoading(label: 'Đang mở hồ sơ của bạn…'),
           error: (error, _) => StatePanel(
             title: 'Chưa mở được hồ sơ',
             message: accountError(error),

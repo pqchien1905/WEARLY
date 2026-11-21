@@ -67,6 +67,7 @@ void main() {
           expect(req.url.queryParameters['maxPrice'], '500000');
           expect(req.url.queryParameters['inStock'], 'true');
           expect(req.url.queryParameters['size'], 'M');
+          expect(req.url.queryParameters['brand'], 'wearly-studio');
           return http.Response(
             jsonEncode({
               'items': [productJson()],
@@ -81,7 +82,14 @@ void main() {
       ),
     );
     final page = await repo.list(
-      const ProductQuery(size: 'M', maxPrice: 500000, inStock: true),
+      ProductQuery.fromParams(
+        const ProductQuery(
+          size: 'M',
+          maxPrice: 500000,
+          inStock: true,
+          brand: 'wearly-studio',
+        ).toParams(),
+      ),
     );
     expect(page.total, 1);
     expect(page.items.single.name, 'Áo cotton');

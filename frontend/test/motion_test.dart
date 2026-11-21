@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nep_storefront/core/widgets/motion_widgets.dart';
+import 'package:nep_storefront/core/widgets/primitives.dart';
 
 void main() {
   Widget host(Widget child, {bool reduced = false}) => MaterialApp(
@@ -11,6 +12,80 @@ void main() {
       child: Scaffold(body: Center(child: child)),
     ),
   );
+
+  testWidgets(
+    'button press preserves layout and busy blocks duplicate submission',
+    (tester) async {
+      var taps = 0;
+      var busy = false;
+      late StateSetter update;
+      await tester.pumpWidget(
+        host(
+          StatefulBuilder(
+            builder: (context, setState) {
+              update = setState;
+              return AppButton(
+                'Lưu thay đổi',
+                busy: busy,
+                onPressed: () {
+                  taps++;
+                  setState(() => busy = true);
+                },
+              );
+            },
+          ),
+        ),
+      );
+      final button = find.byType(AppButton);
+      final rect = tester.getRect(button);
+      final press = await tester.startGesture(rect.center);
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(tester.getRect(button), rect);
+      await press.up();
+      await tester.pump();
+      await tester.tap(button);
+      await tester.pump();
+      expect(taps, 1);
+      expect(find.text('Lưu thay đổi'), findsOneWidget);
+      update(() => busy = false);
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(taps, 2);
+      await tester.pumpWidget(const SizedBox());
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('reduced motion stops button transforms and busy spinner', (
+    tester,
+  ) async {
+    var busy = false;
+    late StateSetter update;
+    await tester.pumpWidget(
+      host(
+        StatefulBuilder(
+          builder: (context, setState) {
+            update = setState;
+            return AppButton('Xác nhận', busy: busy, onPressed: () {});
+          },
+        ),
+        reduced: true,
+      ),
+    );
+    final press = await tester.startGesture(
+      tester.getCenter(find.byType(AppButton)),
+    );
+    await tester.pump();
+    expect(tester.widget<AnimatedScale>(find.byType(AnimatedScale)).scale, 1);
+    await press.up();
+    update(() => busy = true);
+    await tester.pumpAndSettle();
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byIcon(Icons.hourglass_top_rounded), findsOneWidget);
+    expect(tester.hasRunningAnimations, isFalse);
+  });
 
   testWidgets('reduced motion shows route content on the first frame', (
     tester,

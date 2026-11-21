@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import '../core/network/api_client.dart';
 import '../data/remote_catalog.dart';
@@ -8,16 +9,17 @@ import 'api_providers.dart';
 
 final remoteWishlistProvider = ChangeNotifierProvider<RemoteWishlistController>(
   (ref) {
-    final user = ref.watch(accountProvider);
+    final user = ref.watch(accountProvider.select((u) => (u?.id, u?.email)));
     return RemoteWishlistController(
       ref.watch(apiClientProvider),
-      signedIn: user != null,
+      signedIn: user.$1 != null,
     );
   },
 );
 
 class RemoteWishlistController extends ChangeNotifier {
-  RemoteWishlistController(this.api, {required this.signedIn}) {
+  RemoteWishlistController(this.api, {required this.signedIn})
+    : _generation = api.tokens.generation {
     if (signedIn) {
       Future.microtask(() {
         if (!_disposed && !loaded && !loading) refresh().catchError((_) {});
@@ -26,14 +28,16 @@ class RemoteWishlistController extends ChangeNotifier {
   }
   final ApiClient api;
   final bool signedIn;
+  final int _generation;
   Map<String, Product?> _items = {};
   Map<String, Product?> get items => Map.unmodifiable(_items);
   bool loaded = false, loading = false, busy = false, _disposed = false;
+  bool hasSnapshot = false;
   String? error;
   Future<void>? _refreshing;
 
   void _check() {
-    if (_disposed) throw sessionChanged;
+    if (_disposed || api.tokens.generation != _generation) throw sessionChanged;
     if (!signedIn) {
       throw const ApiException(
         'LOGIN_REQUIRED',
@@ -52,7 +56,9 @@ class RemoteWishlistController extends ChangeNotifier {
             : RemoteProductRepository.productFromJson(
                 row['product'] as Map<String, dynamic>,
               );
-        if (result.containsKey(id) || product != null && product.id != id) {
+        if (id.isEmpty ||
+            result.containsKey(id) ||
+            product != null && product.id != id) {
           throw const FormatException();
         }
         result[id] = product;
@@ -87,6 +93,7 @@ class RemoteWishlistController extends ChangeNotifier {
       _check();
       _items = value;
       loaded = true;
+      hasSnapshot = true;
     } catch (e) {
       if (!_disposed) {
         error = '$e';
@@ -122,6 +129,7 @@ class RemoteWishlistController extends ChangeNotifier {
   }
 
   Future<void> _set(String id, bool saved) async {
+    _check();
     _checkIdle();
     busy = true;
     error = null;
@@ -131,11 +139,13 @@ class RemoteWishlistController extends ChangeNotifier {
         await api.request(
           saved ? 'PUT' : 'DELETE',
           'wishlist/${Uri.encodeComponent(id)}',
+          onLateCompletion: _reconcileLateWrite,
         ),
       );
       _check();
       _items = value;
       loaded = true;
+      hasSnapshot = true;
     } catch (e) {
       if (!_disposed) {
         loaded = false;
@@ -148,6 +158,23 @@ class RemoteWishlistController extends ChangeNotifier {
       if (!_disposed) {
         busy = false;
         notifyListeners();
+      }
+    }
+  }
+
+  Future<void> _reconcileLateWrite() async {
+    // A manual read may have started before the timed-out write committed.
+    // Finish that read, then fetch a snapshot after the completion.
+    try {
+      await _refreshing;
+    } catch (_) {
+      /* Retry below. */
+    }
+    if (!_disposed && api.tokens.generation == _generation) {
+      try {
+        await refresh();
+      } catch (_) {
+        /* Explicit retry remains available. */
       }
     }
   }

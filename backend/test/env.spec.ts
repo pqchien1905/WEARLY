@@ -6,6 +6,13 @@ const good = {
   CORS_ORIGINS: 'http://localhost:5173',
 };
 describe('configuration', () => {
+  it('accepts Gemini authorization keys and rejects unsafe header characters', () => {
+    const key = 'AQ.' + 'fixture-key_'.repeat(4);
+    expect(validateEnv({ ...good, GEMINI_API_KEY: key }).GEMINI_API_KEY).toBe(key);
+    for (const invalid of ['short', key + '\r\nInjected: value', key + ' space']) {
+      expect(() => validateEnv({ ...good, GEMINI_API_KEY: invalid })).toThrow();
+    }
+  });
   it('accepts only explicit loopback origins for local metadata links', () => {
     expect(validateEnv(good)).toHaveProperty(
       'LOCAL_API_ORIGIN',
@@ -59,6 +66,31 @@ describe('configuration', () => {
       { SMTP_USER: 'partial-auth' },
     ]) {
       expect(() => validateEnv({ ...local, ...patch })).toThrow();
+    }
+  });
+  it('allows order/support mail through a complete external SMTP configuration', () => {
+    expect(validateEnv(good)).toHaveProperty('MAIL_DELIVERY_ENABLED', 'false');
+    const external = {
+      ...good,
+      MAIL_DELIVERY_ENABLED: 'true',
+      SMTP_HOST: 'smtp.example.test',
+      SMTP_PORT: 465,
+      SMTP_SECURE: 'true',
+      SMTP_FROM: 'store@example.test',
+      SMTP_USER: 'store@example.test',
+      SMTP_PASSWORD: 'app-password',
+    };
+    expect(validateEnv(external)).toHaveProperty(
+      'MAIL_DELIVERY_ENABLED',
+      'true',
+    );
+    for (const patch of [
+      { SMTP_HOST: '' },
+      { SMTP_FROM: 'not-an-email' },
+      { SMTP_PASSWORD: '' },
+      { SMTP_ALLOW_INSECURE_LOCAL: 'true' },
+    ]) {
+      expect(() => validateEnv({ ...external, ...patch })).toThrow();
     }
   });
   it('requires explicit complete sandbox configuration and an allowed storefront return', () => {

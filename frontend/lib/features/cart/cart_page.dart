@@ -1,4 +1,6 @@
+import '../../core/widgets/promotion_price.dart';
 import 'package:flutter/material.dart';
+import '../../core/widgets/purchase_progress.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/commerce_state.dart';
@@ -12,12 +14,35 @@ import '../../core/design/motion.dart';
 import '../../core/format.dart';
 import '../../core/widgets/primitives.dart';
 import '../../core/widgets/product_card.dart';
+import '../../data/remote_payments.dart';
 
-class CartPage extends ConsumerWidget {
+class CartPage extends ConsumerStatefulWidget {
   const CartPage({super.key, this.compact = false});
   final bool compact;
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CartPage> createState() => _CartPageState();
+}
+
+class _CartPageState extends ConsumerState<CartPage> {
+  bool get compact => widget.compact;
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final store = ref.read(commerceProvider);
+      if (store.remote &&
+          store.signedIn &&
+          store.cartState.loaded &&
+          store.cartState.pending == 0 &&
+          !store.cart.locked) {
+        store.refreshCart();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final cart = ref.watch(commerceProvider);
     if (cart.requiresLogin) {
       return LoginRequired(
@@ -29,6 +54,22 @@ class CartPage extends ConsumerWidget {
       return CommerceFeedback(cart.cartState, onRetry: cart.refreshCart);
     }
     final total = cart.cart.subtotal;
+    // The server may already have turned the cart into the unresolved order.
+    if (cart.items.isEmpty && cart.checkoutPending) {
+      return StatePanel(
+        title: 'Đơn vừa đặt đang chờ xác nhận',
+        message:
+            'Chưa nhận được kết quả của lần đặt hàng trước. Kiểm tra lại đơn đó trước khi mua tiếp để tránh tạo đơn trùng.',
+        icon: Icons.receipt_long_outlined,
+        action: AppButton(
+          'Kiểm tra đơn vừa đặt',
+          onPressed: () {
+            if (compact) Navigator.pop(context);
+            context.go('/checkout');
+          },
+        ),
+      );
+    }
     if (cart.items.isEmpty) {
       return StatePanel(
         title: 'Tủ đồ đang chờ bạn.',
@@ -83,9 +124,10 @@ class CartPage extends ConsumerWidget {
                           const SizedBox(height: 8),
                           Text('${item.color} / ${item.size}', style: T.small),
                           const SizedBox(height: 8),
-                          Text(
-                            money(item.unitPrice),
-                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          PromotionPrice(
+                            price: item.unitPrice,
+                            original: item.originalUnitPrice,
+                            name: item.promotionName,
                           ),
                         ],
                       ),
@@ -167,6 +209,14 @@ class CartPage extends ConsumerWidget {
       ],
     );
     final summary = CartSummary(
+      automaticSavings: cart.items.fold<int>(
+        0,
+        (sum, i) =>
+            sum +
+            (i.discounted
+                ? (i.originalUnitPrice! - i.unitPrice) * i.quantity
+                : 0),
+      ),
       remote: cart.remote,
       subtotal: total,
       shipping: total >= BrandConfig.freeShippingAt
@@ -185,6 +235,7 @@ class CartPage extends ConsumerWidget {
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (!compact) const PurchaseProgress(current: 0),
         Text('Giỏ hàng của bạn', style: T.display(compact ? 28 : 40)),
         const SizedBox(height: 12),
         Text(
@@ -233,12 +284,14 @@ class CartSummary extends StatelessWidget {
     this.paymentMethod = 'cod',
     this.discount = 0,
     this.couponCode,
+    this.automaticSavings = 0,
   });
   final int subtotal, shipping;
   final Widget? action;
   final bool remote;
   final String paymentMethod;
   final int discount;
+  final int automaticSavings;
   final String? couponCode;
   @override
   Widget build(BuildContext context) => Container(
@@ -247,7 +300,7 @@ class CartSummary extends StatelessWidget {
     decoration: BoxDecoration(
       color: T.canvas,
       border: Border.all(color: T.line),
-      borderRadius: T.radius,
+      borderRadius: T.panelRadius,
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -255,6 +308,14 @@ class CartSummary extends StatelessWidget {
         Text('Tóm tắt đơn hàng', style: T.display(24)),
         const SizedBox(height: 24),
         _line('Tạm tính', money(subtotal)),
+        if (automaticSavings > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              'Đã bao gồm ưu đãi tự động: tiết kiệm ${money(automaticSavings)}',
+              style: T.small.copyWith(color: T.accent),
+            ),
+          ),
         const SizedBox(height: 16),
         _line('Giao hàng', shipping == 0 ? 'Miễn phí' : money(shipping)),
         const Divider(),
@@ -268,8 +329,8 @@ class CartSummary extends StatelessWidget {
           remote
               ? (paymentMethod == 'free'
                     ? 'Không cần thanh toán.'
-                    : paymentMethod == 'vnpay'
-                    ? 'VNPay sandbox: thanh toán thử nghiệm. Kiểm tra kết quả trong chi tiết đơn hàng.'
+                    : onlinePaymentProviders.contains(paymentMethod)
+                    ? '${paymentProviderName(paymentMethod)} sandbox: thanh toán thử nghiệm. Kiểm tra kết quả trong chi tiết đơn hàng.'
                     : 'Thanh toán COD khi nhận hàng. Tổng tiền được xác nhận khi tạo đơn.')
               : 'Giá và phí vận chuyển mô phỏng, không thu tiền.',
           style: T.small,

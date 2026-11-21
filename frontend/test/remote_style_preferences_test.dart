@@ -30,6 +30,7 @@ Future<ProviderContainer> mountStyle(
   Future<http.Response> Function(http.Request) handle, {
   bool guest = false,
   bool staffOnly = false,
+  double textScale = 1,
 }) async {
   var logins = 0;
   final api = ApiClient(
@@ -94,7 +95,16 @@ Future<ProviderContainer> mountStyle(
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
-      child: MaterialApp.router(theme: buildTheme(), routerConfig: router),
+      child: MaterialApp.router(
+        theme: buildTheme(),
+        routerConfig: router,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child!,
+        ),
+      ),
     ),
   );
   await tester.pumpAndSettle();
@@ -108,14 +118,101 @@ Future<void> tapStyle(WidgetTester tester, Finder finder) async {
 }
 
 Future<void> chooseSize(WidgetTester tester, String size) async {
-  await tapStyle(
-    tester,
-    find.widgetWithText(DropdownButtonFormField<String>, 'Size thường chọn'),
-  );
-  await tapStyle(tester, find.text(size).last);
+  await tapStyle(tester, find.widgetWithText(OutlinedButton, size));
 }
 
 void main() {
+  testWidgets('draft choices reset to the last successful save', (
+    tester,
+  ) async {
+    var current = styleJson(version: 3);
+    var writes = 0;
+    await mountStyle(tester, (r) async {
+      if (r.method == 'PUT') {
+        final body = jsonDecode(r.body) as Map<String, dynamic>;
+        writes++;
+        current = {...body..remove('expectedVersion'), 'version': 3 + writes};
+      }
+      return jsonResponse(current);
+    });
+    await chooseSize(tester, 'L');
+    await tapStyle(tester, find.widgetWithText(OutlinedButton, 'Thanh lịch'));
+    await tapStyle(tester, find.widgetWithText(OutlinedButton, 'Đen'));
+    await tapStyle(tester, find.widgetWithText(OutlinedButton, '2.500.000 ₫'));
+    expect(find.text('Bạn có thay đổi chưa lưu.'), findsOneWidget);
+    await tapStyle(tester, find.text('Lưu hồ sơ phong cách'));
+    expect(current['size'], 'L');
+    expect(current['style'], 'Thanh lịch');
+    expect(current['color'], 'Đen');
+    expect(current['budget'], '2500000');
+    await chooseSize(tester, 'XS');
+    await tapStyle(tester, find.widgetWithText(OutlinedButton, 'Linh hoạt'));
+    await tapStyle(
+      tester,
+      find.widgetWithText(OutlinedButton, 'Không giới hạn màu'),
+    );
+    await tapStyle(tester, find.widgetWithText(OutlinedButton, '800.000 ₫'));
+    await tapStyle(tester, find.text('Hoàn tác thay đổi'));
+    expect(
+      find.textContaining('Size L · Thanh lịch · Màu Đen · 2.500.000 ₫'),
+      findsOneWidget,
+    );
+    expect(find.text('Bạn có thay đổi chưa lưu.'), findsNothing);
+    expect(writes, 1);
+  });
+
+  testWidgets('reload preserves a draft until discard is confirmed', (
+    tester,
+  ) async {
+    var reads = 0;
+    await mountStyle(tester, (_) async {
+      reads++;
+      return jsonResponse(styleJson(version: 1));
+    });
+    await chooseSize(tester, 'L');
+    await tapStyle(tester, find.text('Tải lại hồ sơ'));
+    expect(find.text('Tải lại hồ sơ?'), findsOneWidget);
+    await tapStyle(tester, find.text('Tiếp tục chỉnh sửa'));
+    expect(find.textContaining('Size L ·'), findsOneWidget);
+    expect(reads, 1);
+    await tapStyle(tester, find.text('Tải lại hồ sơ'));
+    await tapStyle(tester, find.text('Bỏ thay đổi và tải lại'));
+    expect(find.textContaining('Size M ·'), findsOneWidget);
+    expect(find.text('Bạn có thay đổi chưa lưu.'), findsNothing);
+    expect(reads, 2);
+  });
+
+  for (final (width, scale) in [
+    (320.0, 1.0),
+    (375.0, 2.0),
+    (768.0, 1.0),
+    (2560.0, 1.0),
+  ]) {
+    testWidgets('style choices reflow at $width with text scale $scale', (
+      tester,
+    ) async {
+      tester.view.physicalSize = Size(width, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await mountStyle(
+        tester,
+        (_) async => jsonResponse(styleJson()),
+        textScale: scale,
+      );
+      await chooseSize(tester, 'XXL');
+      await tapStyle(
+        tester,
+        find.widgetWithText(OutlinedButton, 'Không giới hạn màu'),
+      );
+      await tapStyle(tester, find.text('Cách chọn size phù hợp'));
+      expect(find.text('Chọn size vừa với bạn'), findsOneWidget);
+      await tapStyle(tester, find.text('Đã hiểu'));
+      await tester.ensureVisible(find.text('Lưu hồ sơ phong cách'));
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets(
     'style load failure stays explicit and retries without an editable default',
     (tester) async {

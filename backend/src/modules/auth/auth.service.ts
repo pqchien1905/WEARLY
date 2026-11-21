@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   UnauthorizedException,
@@ -39,12 +40,31 @@ export class AuthService {
       timeCost: 2,
       parallelism: 1,
     });
-    return this.db.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: { email: dto.email, name: dto.name, passwordHash },
+    try {
+      return await this.db.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: { email: dto.email, name: dto.name, passwordHash },
+        });
+        return this.issue(tx, user, randomUUID(), scope, previous);
       });
-      return this.issue(tx, user, randomUUID(), scope, previous);
-    });
+    } catch (error) {
+      // Check after rollback so concurrent signups are covered without treating
+      // unrelated unique constraints (such as session tokens) as email conflicts.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002' &&
+        (await this.db.user.findUnique({
+          where: { email: dto.email },
+          select: { id: true },
+        }))
+      ) {
+        throw new ConflictException({
+          code: 'EMAIL_ALREADY_EXISTS',
+          message: 'An account with this email already exists',
+        });
+      }
+      throw error;
+    }
   }
   async login(
     dto: LoginDto | AdminLoginDto,
@@ -52,12 +72,14 @@ export class AuthService {
     scope?: BrowserScope,
     previous?: string,
   ) {
-    if ((adminOnly && !('username' in dto)) || (!adminOnly && !('email' in dto)))
+    if (
+      (adminOnly && !('username' in dto)) ||
+      (!adminOnly && !('email' in dto))
+    )
       throw new UnauthorizedException('Invalid credentials');
     const user = await this.db.user.findUnique({
-      where: 'username' in dto
-        ? { username: dto.username }
-        : { email: dto.email },
+      where:
+        'username' in dto ? { username: dto.username } : { email: dto.email },
     });
     if (
       !user ||
@@ -67,6 +89,11 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     if (adminOnly && !isStaff(user.role))
       throw new ForbiddenException('Administrator access is required');
+    if (!adminOnly && user.role !== 'CUSTOMER')
+      throw new ForbiddenException({
+        code: 'CUSTOMER_ACCOUNT_REQUIRED',
+        message: 'Use a separate customer account or sign in to administration',
+      });
     return transaction(this.db, async (tx) => {
       await lockUser(tx, user.id);
       const current = await tx.user.findUnique({ where: { id: user.id } });
@@ -74,6 +101,12 @@ export class AuthService {
         throw new UnauthorizedException('Invalid credentials');
       if (adminOnly && !isStaff(current.role))
         throw new ForbiddenException('Administrator access is required');
+      if (!adminOnly && current.role !== 'CUSTOMER')
+        throw new ForbiddenException({
+          code: 'CUSTOMER_ACCOUNT_REQUIRED',
+          message:
+            'Use a separate customer account or sign in to administration',
+        });
       return this.issue(tx, current, randomUUID(), scope, previous);
     });
   }
@@ -155,7 +188,8 @@ export class AuthService {
         session.revokedAt ||
         session.expiresAt <= new Date() ||
         !session.user.active ||
-        (scope === 'admin' && !isStaff(session.user.role))
+        (scope === 'admin' && !isStaff(session.user.role)) ||
+        (scope === 'customer' && session.user.role !== 'CUSTOMER')
       )
         throw new UnauthorizedException();
       return this.access(session.user, session.id);

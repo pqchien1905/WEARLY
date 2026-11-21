@@ -49,6 +49,7 @@ function configuration(input) {
   for (const key of [
     "VNPAY_ENABLED",
     "LOCAL_MAIL_ENABLED",
+    "MAIL_DELIVERY_ENABLED",
     "PASSWORD_RECOVERY_ENABLED",
   ])
     if (input[key] && input[key] !== "false")
@@ -117,6 +118,7 @@ function configuration(input) {
     AI_PROVIDER_URL: "",
     AI_PROVIDER_API_KEY: "",
     LOCAL_MAIL_ENABLED: "false",
+    MAIL_DELIVERY_ENABLED: "false",
     PASSWORD_RECOVERY_ENABLED: "false",
   };
 }

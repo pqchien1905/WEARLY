@@ -125,13 +125,16 @@ void main() {
         return jsonResponse(state);
       });
       await tester.enterText(
-        find.widgetWithText(TextFormField, 'Tiêu đề campaign'),
+        find.widgetWithText(TextFormField, 'Tiêu đề trang chủ'),
         'Campaign <plain>',
       );
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Tên cửa hàng'),
         'New local name',
       );
+      await tester.ensureVisible(find.text('Chính sách'));
+      await tester.tap(find.text('Chính sách'));
+      await tester.pumpAndSettle();
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Nội dung chính sách'),
         'Published policy text',
@@ -157,10 +160,14 @@ void main() {
         findsOneWidget,
       );
       await press(tester, 'Xuất bản nội dung');
+      await press(tester, 'Xác nhận xuất bản');
       expect(writes.length, 2);
       expect(writes.last.url.path, '/api/v1/admin/content/publish');
       expect(find.text('Published policy text'), findsWidgets);
-      expect(find.text('New local name'), findsWidgets);
+      expect(
+        (state['published'] as Map)['details'],
+        containsPair('name', 'New local name'),
+      );
       expect(tester.takeException(), isNull);
     },
   );
@@ -197,6 +204,8 @@ void main() {
       final publish = find.widgetWithText(OutlinedButton, 'Xuất bản nội dung');
       await tester.ensureVisible(publish);
       await tester.tap(publish);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Xác nhận xuất bản'));
       await tester.pump();
       api.tokens.clear();
       visible.value = false;
@@ -241,13 +250,15 @@ void main() {
         }, 409);
       });
       await tester.enterText(
-        find.widgetWithText(TextFormField, 'Tiêu đề campaign'),
+        find.widgetWithText(TextFormField, 'Tiêu đề trang chủ'),
         'My edit',
       );
       await press(tester, 'Lưu bản nháp');
       expect(writes, 1);
       expect(
-        find.text('Dữ liệu đã thay đổi. Tải lại trước khi tiếp tục.'),
+        find.text(
+          'Nội dung đã thay đổi. Tải lại bản đã lưu trước khi tiếp tục.',
+        ),
         findsOneWidget,
       );
       expect(
@@ -260,9 +271,12 @@ void main() {
       );
       expect(writes, 1);
       await press(tester, 'Tải lại bản đã lưu');
+      await press(tester, 'Tải lại');
       expect(find.text('Other editor'), findsOneWidget);
       expect(
-        find.text('Dữ liệu đã thay đổi. Tải lại trước khi tiếp tục.'),
+        find.text(
+          'Nội dung đã thay đổi. Tải lại bản đã lưu trước khi tiếp tục.',
+        ),
         findsNothing,
       );
     },

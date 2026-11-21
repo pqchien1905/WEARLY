@@ -18,6 +18,32 @@ http.Response response(Object data, [int status = 200]) => http.Response(
 );
 const receipt = {'id': 'ticket-1', 'createdAt': '2026-10-22T00:00:00.000Z'};
 void main() {
+  test(
+    'support status filtering and pagination are sent to the server',
+    () async {
+      final queries = <Map<String, String>>[];
+      final api = ApiClient(
+        baseUrl: 'http://localhost/api/v1',
+        client: MockClient((request) async {
+          queries.add(request.url.queryParameters);
+          return response({
+            'items': [],
+            'total': 0,
+            'page': 1,
+            'limit': 20,
+            'nextCursor': null,
+          });
+        }),
+      );
+      addTearDown(api.close);
+      final repo = RemoteSupportRepository(api, admin: true);
+      addTearDown(repo.dispose);
+      await repo.list(status: 'OPEN', page: 2, limit: 20);
+      await repo.list(limit: 20);
+      expect(queries.first, {'status': 'OPEN', 'page': '2', 'limit': '20'});
+      expect(queries.last, {'page': '1', 'limit': '20'});
+    },
+  );
   test('throttled retry retains a possibly committed contact key', () async {
     final writes = <Map<String, dynamic>>[];
     final api = ApiClient(

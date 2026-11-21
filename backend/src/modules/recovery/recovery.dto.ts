@@ -13,6 +13,19 @@ export class ResetPasswordDto {
   @Matches(/^[A-Za-z0-9_-]{43}$/)
   token!: string;
   @IsString()
-  @Length(12, 128)
+  @Length(8, 128)
   password!: string;
+}
+export class ChangePasswordDto {
+  @IsString()
+  @Length(1, 128)
+  currentPassword!: string;
+  @IsString()
+  @Length(8, 128)
+  newPassword!: string;
+}
+export class VerifyResetCodeDto extends ForgotPasswordDto {
+  @IsString()
+  @Matches(/^\d{6}$/)
+  code!: string;
 }

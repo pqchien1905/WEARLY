@@ -10,7 +10,7 @@ import {
   ValidateIf,
 } from 'class-validator';
 import { Role } from '../../generated/prisma/client';
-import { PageDto } from '../products/dto/query-products.dto';
+import { AdminPageDto as PageDto } from '../../common/admin-page.dto';
 export class StaffQueryDto extends PageDto {
   @ValidateIf((_object, value) => value !== undefined)
   @Transform(({ value }: { value: unknown }) =>

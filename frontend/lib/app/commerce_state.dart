@@ -18,6 +18,12 @@ final cartRepositoryProvider = Provider<CartRepository>((ref) {
   ref.onDispose(cart.dispose);
   return cart;
 });
+
+/// Same-key resends after a lost or 5xx checkout response, before the
+/// storefront reports the outcome as uncertain.
+final checkoutRetryPolicyProvider = Provider<({int retries, Duration delay})>(
+  (ref) => (retries: 2, delay: const Duration(milliseconds: 1500)),
+);
 final orderRepositoryProvider = Provider<OrderRepository>((ref) {
   if (!ref.watch(remoteApiProvider)) {
     return MockOrderRepository(
@@ -32,6 +38,10 @@ final orderRepositoryProvider = Provider<OrderRepository>((ref) {
     ref.watch(apiClientProvider),
     ref.watch(cartRepositoryProvider) as RemoteCartRepository,
     email: identity.$2 ?? '',
+    owner: identity.$1,
+    pendingStore: ref.watch(checkoutPendingStoreProvider),
+    autoRetries: ref.watch(checkoutRetryPolicyProvider).retries,
+    retryDelay: ref.watch(checkoutRetryPolicyProvider).delay,
   );
   ref.onDispose(orders.dispose);
   return orders;
@@ -78,6 +88,9 @@ class CommerceController extends ChangeNotifier {
   bool get hasMoreOrders =>
       orderRepository is RemoteOrderRepository &&
       (orderRepository as RemoteOrderRepository).hasMore;
+  int get totalOrders => orderRepository is RemoteOrderRepository
+      ? (orderRepository as RemoteOrderRepository).total
+      : orders.length;
   final VoidCallback? onCatalogChanged;
   bool _disposed = false;
   @override
@@ -100,6 +113,9 @@ class CommerceController extends ChangeNotifier {
       ? (cart as RemoteCartRepository).version
       : null;
   List<Order> get orders => List.unmodifiable(orderRepository.orders);
+  List<Order> get orderHistory => orderRepository is RemoteOrderRepository
+      ? (orderRepository as RemoteOrderRepository).history
+      : orders;
   int get count => items.fold(0, (sum, i) => sum + i.quantity);
   void _requireAccount() {
     if (_disposed) throw sessionChanged;
@@ -136,7 +152,9 @@ class CommerceController extends ChangeNotifier {
   }
 
   Future<void> refreshCart() async {
-    if (checkoutPending) return;
+    // Keep the confirmed snapshot during an unresolved checkout, but still load
+    // once after a reload restored it, or the cart would never finish loading.
+    if (checkoutPending && cartState.loaded) return;
     await _load(cartState, () async {
       if (cart is RemoteCartRepository) {
         await (cart as RemoteCartRepository).refresh();
@@ -144,21 +162,33 @@ class CommerceController extends ChangeNotifier {
     });
   }
 
-  Future<void> refreshOrders() => _load(historyState, () async {
-    if (orderRepository is RemoteOrderRepository) {
-      await (orderRepository as RemoteOrderRepository).refresh();
-    }
-  });
-  Future<void> loadMoreOrders() => _load(historyState, () async {
-    if (orderRepository is RemoteOrderRepository) {
-      await (orderRepository as RemoteOrderRepository).loadMore();
-    }
-  });
-  Future<void> loadOrder(String id) => _load(detailState(id), () async {
-    if (orderRepository is RemoteOrderRepository) {
-      await (orderRepository as RemoteOrderRepository).loadOrder(id);
-    }
-  });
+  Future<void> refreshOrders() async {
+    if (historyState.pending > 0) return;
+    await _load(historyState, () async {
+      if (orderRepository is RemoteOrderRepository) {
+        await (orderRepository as RemoteOrderRepository).refresh();
+      }
+    });
+  }
+
+  Future<void> loadMoreOrders() async {
+    if (historyState.pending > 0 || !hasMoreOrders) return;
+    await _load(historyState, () async {
+      if (orderRepository is RemoteOrderRepository) {
+        await (orderRepository as RemoteOrderRepository).loadMore();
+      }
+    });
+  }
+
+  Future<void> loadOrder(String id) async {
+    if (detailState(id).pending > 0) return;
+    await _load(detailState(id), () async {
+      if (orderRepository is RemoteOrderRepository) {
+        await (orderRepository as RemoteOrderRepository).loadOrder(id);
+      }
+    });
+  }
+
   // Refresh a visible payment result without disposing its checkout link.
   // Errors propagate to the payment panel; the last verified order stays visible.
   Future<void> refreshPaymentOrder(String id) async {

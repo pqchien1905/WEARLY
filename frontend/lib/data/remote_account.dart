@@ -120,6 +120,9 @@ class RemoteAccountRepository implements AccountRepository {
     ),
   );
 
+  Future<UserProfile> readProfile() async =>
+      userFromJson(await api.get('users/me'));
+
   @override
   Future<void> requestPasswordReset(String email) async {
     await api.request(
@@ -127,6 +130,15 @@ class RemoteAccountRepository implements AccountRepository {
       'auth/forgot-password',
       authenticated: false,
       body: {'email': email.trim()},
+    );
+  }
+
+  /// Signed-in change; the server keeps this session and signs out others.
+  Future<void> changePassword(String current, String next) async {
+    await api.request(
+      'POST',
+      'auth/change-password',
+      body: {'currentPassword': current, 'newPassword': next},
     );
   }
 

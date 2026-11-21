@@ -3,74 +3,188 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/account_details.dart';
 import '../../app/account_state.dart';
 import '../../app/api_providers.dart';
+import '../../app/remote_route_gate.dart';
 import '../../core/network/api_client.dart';
+import '../../core/design/account_tokens.dart';
 import '../../core/design/tokens.dart';
 import '../../core/widgets/primitives.dart';
 import 'account_navigation.dart';
+import 'account_components.dart';
 
-class AddressPage extends ConsumerStatefulWidget {
+part 'address_list.dart';
+part 'address_editor.dart';
+
+class AddressPage extends ConsumerWidget {
   const AddressPage({super.key});
   @override
-  ConsumerState<AddressPage> createState() => _AddressPageState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(accountProvider);
+    final remote = ref.watch(remoteApiProvider);
+    if (user == null) {
+      return const AccountFrame(
+        title: 'Sổ địa chỉ',
+        current: '/account/addresses',
+        child: LoginRequired(next: '/account/addresses'),
+      );
+    }
+    return _AddressBook(
+      key: ValueKey((
+        user.id,
+        user.email,
+        remote ? ref.watch(sessionTokensProvider).generation : 0,
+      )),
+    );
+  }
 }
 
-class _AddressPageState extends ConsumerState<AddressPage> {
+class _AddressBook extends ConsumerStatefulWidget {
+  const _AddressBook({super.key});
+  @override
+  ConsumerState<_AddressBook> createState() => _AddressBookState();
+}
+
+class _AddressBookState extends ConsumerState<_AddressBook> {
   bool busy = false;
-  Future<void> edit([DeliveryAddress? address]) async {
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (_) => _AddressEditor(address: address),
-    );
-    if (mounted && saved != true && ref.read(remoteApiProvider)) {
-      ref.invalidate(accountDetailsProvider);
-    }
-    if (mounted && saved == true) {
-      toast(
-        context,
-        ref.read(remoteApiProvider)
-            ? 'Đã lưu địa chỉ.'
-            : 'Đã lưu địa chỉ trong phiên demo.',
-      );
+  AccountDetails? snapshot;
+  String? notice, operationError;
+  late final identity = _addressIdentity(ref);
+  bool get sameSession => _addressIdentity(ref) == identity;
+  bool get fresh =>
+      !ref.read(accountDetailsProvider).isLoading &&
+      !ref.read(accountDetailsProvider).hasError;
+
+  Future<void> reload() async {
+    ref.invalidate(accountDetailsProvider);
+    try {
+      await ref.read(accountDetailsProvider.future);
+    } catch (_) {
+      // The state below retains the last address book and offers a read retry.
     }
   }
 
+  Future<void> edit([DeliveryAddress? address]) async {
+    if (busy || !fresh || !sameSession) return;
+    setState(() {
+      busy = true;
+      notice = null;
+      operationError = null;
+    });
+    final saved = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _AddressEditor(address: address),
+    );
+    if (!mounted || !sameSession) return;
+    setState(() {
+      busy = false;
+      if (saved == true) {
+        notice = ref.read(remoteApiProvider)
+            ? 'Đã lưu địa chỉ.'
+            : 'Đã lưu địa chỉ trong phiên demo.';
+      }
+    });
+  }
+
   Future<void> perform(Future<void> Function() action, String success) async {
-    setState(() => busy = true);
+    if (busy || !fresh || !sameSession) return;
+    setState(() {
+      busy = true;
+      notice = null;
+      operationError = null;
+    });
     try {
       await action();
-      if (mounted) toast(context, success);
+      if (mounted && sameSession) setState(() => notice = success);
     } catch (e) {
-      if (mounted) toast(context, accountError(e));
+      if (mounted && sameSession) {
+        setState(() => operationError = accountError(e));
+        await reload();
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
   }
 
+  Future<void> remove(DeliveryAddress address) async {
+    if (busy || !fresh || !sameSession) return;
+    setState(() => busy = true);
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (_) => _DeleteAddressConfirmation(
+        address: address,
+        isDefault: snapshot?.defaultAddressId == address.id,
+        hasOthers: (snapshot?.addresses.length ?? 0) > 1,
+      ),
+    );
+    if (!mounted || !sameSession) return;
+    setState(() => busy = false);
+    if (yes != true) return;
+    await perform(
+      () => ref.read(accountDetailsProvider.notifier).deleteAddress(address.id),
+      'Đã xóa địa chỉ.',
+    );
+  }
+
   @override
-  Widget build(BuildContext context) => AccountFrame(
-    title: 'Những nơi nhận đồ.',
-    current: '/account/addresses',
-    child: AccountDataView(
-      builder: (data) => Column(
+  Widget build(BuildContext context) {
+    final remote = ref.watch(remoteApiProvider);
+    final result = ref.watch(accountDetailsProvider);
+    if (result is AsyncData<AccountDetails> && !result.isLoading) {
+      snapshot = result.value;
+    }
+    final data = snapshot;
+    final locked = busy || result.isLoading || result.hasError;
+    return AccountFrame(
+      title: 'Sổ địa chỉ',
+      current: '/account/addresses',
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          DemoNotice(
-            text: ref.watch(remoteApiProvider)
-                ? 'Địa chỉ được lưu trong tài khoản. Chọn địa chỉ nhận hàng khi đặt đơn.'
-                : 'Lưu tối đa 5 địa chỉ trong phiên tài khoản demo. Bạn chủ động chọn địa chỉ khi checkout; không có giao hàng thật.',
-          ),
-          const SizedBox(height: 24),
-          AppButton(
-            'Thêm địa chỉ',
-            icon: Icons.add,
-            onPressed:
-                busy ||
-                    (!ref.watch(remoteApiProvider) &&
-                        data.addresses.length >= 5)
-                ? null
-                : () => edit(),
-          ),
-          if (!ref.watch(remoteApiProvider) && data.addresses.length >= 5)
+          if (!remote)
+            const AccountNotice(
+              text:
+                  'Lưu tối đa 5 địa chỉ trong phiên tài khoản demo. Bạn chủ động chọn địa chỉ khi checkout; không có giao hàng thật.',
+            ),
+          if (!remote) const SizedBox(height: 24),
+          if (notice != null || operationError != null) ...[
+            Semantics(
+              liveRegion: true,
+              child: AccountNotice(
+                text: operationError ?? notice!,
+                icon: operationError == null
+                    ? Icons.check_circle_outline
+                    : Icons.info_outline,
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+          if (data != null)
+            AccountToolbar(
+              label: '${data.addresses.length} địa chỉ đã lưu',
+              actions: [
+                TextButton.icon(
+                  onPressed: locked
+                      ? null
+                      : () {
+                          setState(() {
+                            notice = null;
+                            operationError = null;
+                          });
+                          reload();
+                        },
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: Text(result.isLoading ? 'Đang tải lại…' : 'Tải lại'),
+                ),
+                AppButton(
+                  'Thêm địa chỉ',
+                  icon: Icons.add,
+                  onPressed: locked || (!remote && data.addresses.length >= 5)
+                      ? null
+                      : () => edit(),
+                ),
+              ],
+            ),
+          if (!remote && data != null && data.addresses.length >= 5)
             const Padding(
               padding: EdgeInsets.only(top: 12),
               child: Text(
@@ -79,300 +193,160 @@ class _AddressPageState extends ConsumerState<AddressPage> {
               ),
             ),
           const SizedBox(height: 24),
-          if (data.addresses.isEmpty)
-            const StatePanel(
+          if (busy) ...[
+            Semantics(
+              liveRegion: true,
+              child: const Text('Đang xử lý địa chỉ…', style: T.small),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (result.isLoading && data == null)
+            const AccountLoading(label: 'Đang tải sổ địa chỉ…')
+          else if (result.isLoading) ...[
+            const LinearProgressIndicator(
+              semanticsLabel: 'Đang tải lại sổ địa chỉ',
+            ),
+            const SizedBox(height: 16),
+          ],
+          if (result.hasError) ...[
+            AccountCard(
+              title: data == null
+                  ? 'Chưa tải được sổ địa chỉ'
+                  : 'Chưa cập nhật được sổ địa chỉ',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Semantics(
+                    liveRegion: true,
+                    child: Text(accountError(result.error!), style: T.body),
+                  ),
+                  if (data != null) ...[
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Đang hiển thị địa chỉ đã tải. Tải lại trước khi tiếp tục thay đổi.',
+                      style: T.small,
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  AppButton(
+                    'Thử lại',
+                    outlined: true,
+                    onPressed: busy ? null : reload,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+          if (data != null && data.addresses.isEmpty)
+            const AccountEmptyState(
               title: 'Chưa có địa chỉ nhận hàng',
               message:
                   'Thêm địa chỉ nhà hoặc nơi làm việc để điền nhanh ở bước đặt hàng.',
               icon: Icons.location_on_outlined,
             ),
-          LayoutBuilder(
-            builder: (_, c) => Wrap(
-              spacing: 24,
-              runSpacing: 24,
-              children: [
-                for (final a in data.addresses)
-                  SizedBox(
-                    width: c.maxWidth < 750
-                        ? c.maxWidth
-                        : (c.maxWidth - 24) / 2,
-                    child: Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        borderRadius: T.radius,
-                        border: Border.all(
-                          color: a.id == data.defaultAddressId
-                              ? T.accent
-                              : T.line,
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Wrap(
-                            spacing: 16,
-                            runSpacing: 8,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              Text(
-                                a.label,
-                                style: T.body.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              if (a.id == data.defaultAddressId)
-                                Text(
-                                  'Mặc định',
-                                  style: T.small.copyWith(color: T.accent),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          Text(a.recipient),
-                          Text(a.phone, style: T.small),
-                          const SizedBox(height: 8),
-                          Text(a.address),
-                          const SizedBox(height: 16),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              TextButton(
-                                onPressed: busy ? null : () => edit(a),
-                                child: Text('Sửa ${a.label}'),
-                              ),
-                              if (a.id != data.defaultAddressId)
-                                TextButton(
-                                  onPressed: busy
-                                      ? null
-                                      : () => perform(
-                                          () => ref
-                                              .read(
-                                                accountDetailsProvider.notifier,
-                                              )
-                                              .setDefault(a.id),
-                                          'Đã đổi địa chỉ mặc định.',
-                                        ),
-                                  child: const Text('Đặt làm mặc định'),
-                                ),
-                              TextButton(
-                                onPressed: busy
-                                    ? null
-                                    : () async {
-                                        final yes = await confirmAction(
-                                          context,
-                                          'Xóa địa chỉ ${a.label}?',
-                                          ref.read(remoteApiProvider)
-                                              ? 'Địa chỉ sẽ được xóa khỏi tài khoản. Thông tin của đơn đã tạo vẫn được giữ nguyên.'
-                                              : 'Địa chỉ sẽ được xóa khỏi phiên. Thông tin của đơn đã tạo vẫn được giữ nguyên.',
-                                        );
-                                        if (!mounted || !yes) return;
-                                        await perform(
-                                          () => ref
-                                              .read(
-                                                accountDetailsProvider.notifier,
-                                              )
-                                              .deleteAddress(a.id),
-                                          'Đã xóa địa chỉ.',
-                                        );
-                                      },
-                                child: Text(
-                                  'Xóa ${a.label}',
-                                  style: const TextStyle(color: T.danger),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
+          if (data != null && data.addresses.isNotEmpty)
+            _AddressList(
+              data: data,
+              busy: locked,
+              onEdit: edit,
+              onDelete: remove,
+              onDefault: (address) => perform(
+                () => ref
+                    .read(accountDetailsProvider.notifier)
+                    .setDefault(address.id),
+                'Đã đổi địa chỉ mặc định.',
+              ),
             ),
-          ),
         ],
       ),
-    ),
-  );
+    );
+  }
 }
 
-class _AddressEditor extends ConsumerStatefulWidget {
-  const _AddressEditor({this.address});
-  final DeliveryAddress? address;
+Object _addressIdentity(WidgetRef ref) => (
+  ref.read(accountProvider)?.id,
+  ref.read(accountProvider)?.email,
+  ref.read(remoteApiProvider)
+      ? ref.read(apiClientProvider).tokens.generation
+      : 0,
+);
+
+class _DeleteAddressConfirmation extends ConsumerStatefulWidget {
+  const _DeleteAddressConfirmation({
+    required this.address,
+    required this.isDefault,
+    required this.hasOthers,
+  });
+  final DeliveryAddress address;
+  final bool isDefault, hasOthers;
   @override
-  ConsumerState<_AddressEditor> createState() => _AddressEditorState();
+  ConsumerState<_DeleteAddressConfirmation> createState() =>
+      _DeleteAddressConfirmationState();
 }
 
-class _AddressEditorState extends ConsumerState<_AddressEditor> {
-  final form = GlobalKey<FormState>();
-  late final label = TextEditingController(text: widget.address?.label);
-  late final recipient = TextEditingController(text: widget.address?.recipient);
-  late final phone = TextEditingController(text: widget.address?.phone);
-  late final address = TextEditingController(text: widget.address?.address);
-  bool busy = false;
-  bool uncertain = false;
-  final creationKey = newAddressCreationKey();
-  late final String? identity;
-  late final int sessionGeneration;
-  String? error;
+class _DeleteAddressConfirmationState
+    extends ConsumerState<_DeleteAddressConfirmation> {
+  late final identity = _addressIdentity(ref);
   @override
-  void initState() {
-    super.initState();
-    identity = ref.read(accountProvider)?.email;
-    sessionGeneration = ref.read(remoteApiProvider)
-        ? ref.read(apiClientProvider).tokens.generation
-        : 0;
-  }
-
-  @override
-  void dispose() {
-    for (final c in [label, recipient, phone, address]) {
-      c.dispose();
-    }
-    super.dispose();
-  }
-
-  Future<void> save() async {
-    if (!form.currentState!.validate() || busy) return;
-    if (ref.read(accountProvider)?.email != identity ||
-        (ref.read(remoteApiProvider) &&
-            ref.read(apiClientProvider).tokens.generation !=
-                sessionGeneration)) {
-      setState(
-        () => error =
-            'Phiên tài khoản đã thay đổi. Hãy đóng và mở lại sổ địa chỉ.',
-      );
-      return;
-    }
-    setState(() {
-      busy = true;
-      error = null;
-    });
-    try {
-      await ref
-          .read(accountDetailsProvider.notifier)
-          .saveAddress(
-            DeliveryAddress(
-              id: widget.address?.id ?? '',
-              label: label.text,
-              recipient: recipient.text,
-              phone: phone.text,
-              address: address.text,
-            ),
-            creationKey: creationKey,
-          );
-      if (mounted) Navigator.pop(context, true);
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          error = accountError(e);
-          uncertain =
-              widget.address == null &&
-              ref.read(remoteApiProvider) &&
-              (e is! ApiException || e.status != 400);
-        });
-      }
-    } finally {
-      if (mounted) setState(() => busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => Dialog(
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 520),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Form(
-          key: form,
+  Widget build(BuildContext context) {
+    ref.watch(accountProvider);
+    if (_addressIdentity(ref) != identity) return _endedAddressSession(context);
+    return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      title: Text('Xóa địa chỉ ${widget.address.label}?'),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      widget.address == null
-                          ? 'Địa chỉ mới'
-                          : 'Chỉnh sửa địa chỉ',
-                      style: T.display(26),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Đóng địa chỉ',
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
+              Text(
+                '${widget.address.recipient} · ${widget.address.phone}',
+                style: T.body.copyWith(fontWeight: FontWeight.w600),
               ),
-              const SizedBox(height: 24),
-              AppField(
-                label: 'Tên gợi nhớ',
-                hint: 'Nhà, Văn phòng…',
-                controller: label,
-                readOnly: busy || uncertain,
-                validator: requiredValue,
-              ),
+              const SizedBox(height: 8),
+              Text(widget.address.address, style: T.body),
               const SizedBox(height: 16),
-              AppField(
-                label: 'Người nhận',
-                controller: recipient,
-                readOnly: busy || uncertain,
-                validator: requiredValue,
+              const Text(
+                'Thông tin của đơn đã tạo vẫn được giữ nguyên. Địa chỉ đã xóa không thể khôi phục.',
+                style: T.body,
               ),
-              const SizedBox(height: 16),
-              AppField(
-                label: 'Điện thoại nhận hàng',
-                controller: phone,
-                readOnly: busy || uncertain,
-                keyboardType: TextInputType.phone,
-                validator: (v) => RegExp(r'^0\d{9}$').hasMatch(v?.trim() ?? '')
-                    ? null
-                    : 'Nhập số điện thoại 10 chữ số.',
-              ),
-              const SizedBox(height: 16),
-              AppField(
-                label: 'Địa chỉ nhận hàng',
-                controller: address,
-                readOnly: busy || uncertain,
-                maxLines: 3,
-                validator: (v) => (v?.trim().length ?? 0) >= 8
-                    ? null
-                    : 'Nhập địa chỉ đầy đủ, ít nhất 8 ký tự.',
-              ),
-              if (error != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 16),
-                  child: Semantics(
-                    liveRegion: true,
-                    child: Text(
-                      error!,
-                      style: const TextStyle(color: T.danger),
-                    ),
-                  ),
+              if (widget.isDefault && widget.hasOthers) ...[
+                const SizedBox(height: 12),
+                const Text(
+                  'Địa chỉ còn lại được lưu sớm nhất sẽ trở thành mặc định.',
+                  style: T.small,
                 ),
-              const SizedBox(height: 24),
-              if (uncertain)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 16),
-                  child: Text(
-                    'Chưa xác nhận được kết quả. Thử lại cùng yêu cầu để tránh tạo trùng; hoặc đóng để kiểm tra sổ địa chỉ.',
-                  ),
-                ),
-              AppButton(
-                uncertain
-                    ? 'Thử lại yêu cầu này'
-                    : ref.watch(remoteApiProvider)
-                    ? 'Lưu địa chỉ'
-                    : 'Lưu địa chỉ demo',
-                busy: busy,
-                onPressed: save,
-              ),
+              ],
             ],
           ),
         ),
       ),
-    ),
-  );
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Giữ lại'),
+        ),
+        AppButton(
+          'Xác nhận',
+          onPressed: () {
+            if (_addressIdentity(ref) == identity) Navigator.pop(context, true);
+          },
+        ),
+      ],
+    );
+  }
 }
+
+Widget _endedAddressSession(BuildContext context) => AlertDialog(
+  title: const Text('Phiên tài khoản đã thay đổi'),
+  content: const Text('Mở lại sổ địa chỉ để tiếp tục với tài khoản hiện tại.'),
+  actions: [
+    TextButton(
+      onPressed: () => Navigator.pop(context),
+      child: const Text('Đóng'),
+    ),
+  ],
+);

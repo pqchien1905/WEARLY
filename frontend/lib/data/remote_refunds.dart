@@ -6,7 +6,7 @@ import 'remote_payments.dart';
 
 const refundStatusNames = {
   'REVIEW': 'Cần xác minh kết quả hoàn',
-  'PROCESSING': 'VNPay đang xử lý hoàn',
+  'PROCESSING': 'Cổng thanh toán đang xử lý hoàn',
   'SUCCEEDED': 'Đã hoàn tiền',
   'FAILED': 'Yêu cầu hoàn bị từ chối',
 };
@@ -16,7 +16,7 @@ class RefundRecord {
     final d = commerceMap(value);
     if (d['id'] is! String ||
         !refundStatusNames.containsKey(d['status']) ||
-        !['cod', 'vnpay'].contains(d['provider'])) {
+        !['cod', ...onlinePaymentProviders].contains(d['provider'])) {
       throw invalidCommerce;
     }
     id = d['id'];
@@ -88,7 +88,8 @@ class RefundState {
         d['version'] is! int ||
         d['version'] < 0 ||
         d['refunds'] is! List ||
-        !['cod', 'vnpay', 'free', null].contains(d['provider']) ||
+        !(d['provider'] == null ||
+            paymentProviderNames.containsKey(d['provider'])) ||
         (d['paymentStatus'] != null &&
             !paymentStatuses.contains(d['paymentStatus']))) {
       throw invalidCommerce;

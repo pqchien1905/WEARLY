@@ -3,9 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nep_storefront/app/app.dart';
 import 'package:nep_storefront/app/providers.dart';
+import 'package:nep_storefront/app/collection_providers.dart';
 import 'package:nep_storefront/app/commerce_state.dart';
 import 'package:nep_storefront/data/mock_catalog.dart';
 import 'package:nep_storefront/domain/catalog.dart';
+import 'collections_test.dart' show collectionJson;
+import 'remote_catalog_test.dart' show productJson;
 
 void main() {
   testWidgets(
@@ -99,6 +102,25 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            collectionDetailProvider.overrideWith(
+              (ref, location) async => location.endsWith('/missing')
+                  ? null
+                  : CollectionDetail.fromJson({
+                      'collection': {
+                        ...collectionJson(slug: 'everyday'),
+                        'title': 'Everyday, theo cách bạn.',
+                      },
+                      'items': [
+                        {
+                          ...productJson(),
+                          'name': 'Áo cotton không tay Essential',
+                        },
+                      ],
+                      'total': 1,
+                      'page': 1,
+                      'limit': 12,
+                    }),
+            ),
             productRepositoryProvider.overrideWithValue(
               MockProductRepository(latency: Duration.zero),
             ),

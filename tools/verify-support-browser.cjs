@@ -42,8 +42,8 @@ module.exports=async function verify({root,email,customerEmail,password,orderId}
     const reply='Bạn hãy đối chiếu số đo với bảng size ở trang sản phẩm.';
     await fill('Nội dung trả lời',reply);await button('Lưu và gửi trả lời');await page.getByText('Đã lưu trả lời; thư đang được xử lý.',{exact:true}).waitFor();
     const mail=await captured(reply);assert(mail.Text.includes(receipt.id));
-    await button('Tải lại yêu cầu');await page.getByText('Đã gửi đến hộp thư local',{exact:true}).waitFor();
-    await reveal(page.getByText('Đã gửi đến hộp thư local',{exact:true}));await page.screenshot({path:path.join(output,'support-reply-mobile.png')});
+    await button('Tải lại yêu cầu');await page.getByText('Đã gửi thư',{exact:true}).waitFor();
+    await reveal(page.getByText('Đã gửi thư',{exact:true}));await page.screenshot({path:path.join(output,'support-reply-mobile.png')});
     await page.setViewportSize({width:1440,height:1000});await route('/admin/orders/'+orderId);
     await button('Xác nhận đơn');await button('Lưu thay đổi');
     const notice=await captured('Đơn hàng đã được xác nhận');assert(notice.Text.includes(orderId));
@@ -51,7 +51,7 @@ module.exports=async function verify({root,email,customerEmail,password,orderId}
     await route('/admin/support/'+receipt.id);
     const persisted=page.waitForResponse(r=>r.url().endsWith('/admin/support/'+receipt.id)&&r.request().method()==='GET');
     await page.reload();await semantics();assert.equal((await(await persisted).json()).replies[0].message,reply);
-    await page.getByText('Đã gửi đến hộp thư local',{exact:true}).waitFor();await page.screenshot({path:path.join(output,'support-persisted-desktop.png')});
+    await page.getByText('Đã gửi thư',{exact:true}).waitFor();await page.screenshot({path:path.join(output,'support-persisted-desktop.png')});
     assert.deepEqual(errors,[]);assert(!requests.some(r=>r.status>=400&&!isAnonymousRestore(r)));
     console.log('PASS Chrome support: guest receipt, staff reply, native inbox, order notice, mobile/desktop and persisted reload.');return receipt.id;
   }catch(error){if(page){fs.writeFileSync(path.join(output,'failure-aria.txt'),await page.locator('body').ariaSnapshot());await page.screenshot({path:path.join(output,'failure.png')});}throw error;}

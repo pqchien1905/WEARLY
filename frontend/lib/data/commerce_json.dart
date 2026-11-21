@@ -1,5 +1,6 @@
 import '../core/network/api_client.dart';
 import '../domain/commerce.dart';
+import 'remote_payments.dart';
 
 const invalidCommerce = ApiException(
   'INVALID_RESPONSE',
@@ -37,6 +38,10 @@ CartItem commerceItem(Object? value, {bool cart = false}) {
     color: data['color'],
     size: data['size'],
     unitPrice: vnd(data['unitPrice']),
+    originalUnitPrice: data['originalUnitPrice'] == null
+        ? null
+        : vnd(data['originalUnitPrice']),
+    promotionName: data['promotionName'] as String?,
     quantity: quantity,
     stock: stock,
   );
@@ -118,7 +123,9 @@ Order commerceOrder(Object? value, {required String email}) {
   };
   final paymentStatus = switch (payment['status']) {
     'PENDING' =>
-      payment['provider'] == 'vnpay' ? 'Chờ thanh toán' : 'Chưa thu tiền',
+      onlinePaymentProviders.contains(payment['provider'])
+          ? 'Chờ thanh toán'
+          : 'Chưa thu tiền',
     'PAID' => 'Đã thanh toán',
     'PARTIALLY_REFUNDED' => 'Đã hoàn một phần',
     'CANCELLED' => 'Đã hủy',
@@ -126,7 +133,7 @@ Order commerceOrder(Object? value, {required String email}) {
     'REFUNDED' => 'Đã hoàn tiền',
     _ => throw invalidCommerce,
   };
-  if (!['cod', 'vnpay', 'free'].contains(payment['provider'])) {
+  if (!paymentProviderNames.containsKey(payment['provider'])) {
     throw invalidCommerce;
   }
   final discount = vnd(data['discount'] ?? '0');
@@ -135,8 +142,15 @@ Order commerceOrder(Object? value, {required String email}) {
   if (discount > 0 && couponCode == null) throw invalidCommerce;
   final createdAt = DateTime.tryParse(data['createdAt']?.toString() ?? '');
   if (createdAt == null) throw invalidCommerce;
+  final code = data['code'];
+  if (code != null &&
+      (code is! String || !RegExp(r'^[A-Z0-9]{6,20}$').hasMatch(code))) {
+    throw invalidCommerce;
+  }
   final order = Order(
     id: data['id'],
+    code: code as String? ?? '',
+    isSample: address['sampleData'] == true,
     status: status,
     paymentProvider: payment['provider'],
     paymentStatus: payment['status'],
@@ -156,7 +170,7 @@ Order commerceOrder(Object? value, {required String email}) {
       address: address['address'],
       payment: payment['provider'] == 'free'
           ? 'Không cần thanh toán'
-          : '${payment['provider'] == 'vnpay' ? 'VNPay sandbox' : 'COD'} · $paymentStatus',
+          : '${onlinePaymentProviders.contains(payment['provider']) ? '${paymentProviderName(payment['provider'])} sandbox' : 'COD'} · $paymentStatus',
       paymentMethod: payment['provider'],
       discount: discount,
       couponCode: couponCode,

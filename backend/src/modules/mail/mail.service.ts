@@ -13,7 +13,10 @@ export class MailService implements OnModuleDestroy {
     private readonly config: ConfigService,
   ) {}
   enabled() {
-    return this.config.get<string>('LOCAL_MAIL_ENABLED') === 'true';
+    return (
+      this.config.get<string>('LOCAL_MAIL_ENABLED') === 'true' ||
+      this.config.get<string>('MAIL_DELIVERY_ENABLED') === 'true'
+    );
   }
   async claim(): Promise<MailOutbox[]> {
     if (!this.enabled() || this.stopping) return [];
@@ -75,31 +78,54 @@ export class MailService implements OnModuleDestroy {
     if (results.some((r) => r.status === 'rejected'))
       throw new Error('MAIL_SETTLEMENT_PENDING');
   }
-  async overview() {
-    const [counts, items] = await Promise.all([
-      this.db.mailOutbox.groupBy({ by: ['status'], _count: { _all: true } }),
-      this.db.mailOutbox.findMany({
-        take: 50,
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        select: {
-          id: true,
-          recipient: true,
-          subject: true,
-          status: true,
-          attempts: true,
-          lastError: true,
-          sentAt: true,
-          createdAt: true,
-          orderId: true,
-          supportId: true,
-        },
-      }),
-    ]);
-    return {
-      enabled: this.enabled(),
-      counts: Object.fromEntries(counts.map((c) => [c.status, c._count._all])),
-      items,
-    };
+  async overview(query = { page: 1, limit: 10 }) {
+    return this.db.$transaction(
+      async (tx) => {
+        const counts = await tx.mailOutbox.groupBy({
+          by: ['status'],
+          _count: { _all: true },
+        });
+        const total = counts.reduce((sum, c) => sum + c._count._all, 0);
+        const page = Math.min(
+          query.page,
+          Math.max(1, Math.ceil(total / query.limit)),
+        );
+        const items = await tx.mailOutbox.findMany({
+          take: query.limit,
+          skip: (page - 1) * query.limit,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          select: {
+            id: true,
+            recipient: true,
+            subject: true,
+            status: true,
+            attempts: true,
+            lastError: true,
+            sentAt: true,
+            createdAt: true,
+            orderId: true,
+            supportId: true,
+          },
+        });
+        return {
+          enabled: this.enabled(),
+          delivery:
+            this.config.get<string>('LOCAL_MAIL_ENABLED') === 'true'
+              ? 'local'
+              : this.enabled()
+                ? 'smtp'
+                : null,
+          counts: Object.fromEntries(
+            counts.map((c) => [c.status, c._count._all]),
+          ),
+          items,
+          total,
+          page,
+          limit: query.limit,
+        };
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
   }
   onModuleDestroy() {
     this.stop();

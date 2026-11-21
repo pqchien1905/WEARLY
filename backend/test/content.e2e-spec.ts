@@ -7,6 +7,7 @@ import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/bootstrap';
 import { PrismaService } from '../src/database/prisma.service';
 import { ContentService } from '../src/modules/content/content.service';
+import * as audit from '../src/modules/admin/audit';
 
 describe('Store content publication with PostgreSQL', () => {
   let app: INestApplication, db: PrismaService, admin: string, customer: string;
@@ -75,6 +76,8 @@ describe('Store content publication with PostgreSQL', () => {
       ['get', 'admin/content'],
       ['put', 'admin/content'],
       ['post', 'admin/content/publish'],
+      ['post', 'admin/content/restore'],
+      ['get', 'admin/content/history'],
     ] as const) {
       await request(app.getHttpServer())
         [method]('/api/v1/' + path)
@@ -144,9 +147,16 @@ describe('Store content publication with PostgreSQL', () => {
     const before = await db.storeContent.findUniqueOrThrow({
       where: { id: contentId },
     });
-    await expect(
-      app.get(ContentService).publish('invalid-actor', { expectedVersion: 1 }),
-    ).rejects.toThrow();
+    const spy = jest
+      .spyOn(audit, 'recordAdminActivity')
+      .mockRejectedValueOnce(new Error('Audit unavailable'));
+    try {
+      await expect(
+        app.get(ContentService).publish(users[0], { expectedVersion: 1 }),
+      ).rejects.toThrow('Audit unavailable');
+    } finally {
+      spy.mockRestore();
+    }
     expect(
       await db.storeContent.findUniqueOrThrow({ where: { id: contentId } }),
     ).toEqual(before);
@@ -289,5 +299,172 @@ describe('Store content publication with PostgreSQL', () => {
     expect(
       (await request(app.getHttpServer()).get('/api/v1/content')).body.content,
     ).toEqual(published);
+  });
+  it('restores the public snapshot into a new draft revision without republishing', async () => {
+    const before = (await call('get', 'admin/content').expect(200)).body;
+    expect(before.hasUnpublishedChanges).toBe(true);
+    await call('post', 'admin/content/restore')
+      .send({ expectedVersion: before.version - 1 })
+      .expect(409);
+    const responses = await Promise.all([
+      call('post', 'admin/content/restore').send({
+        expectedVersion: before.version,
+      }),
+      call('post', 'admin/content/restore').send({
+        expectedVersion: before.version,
+      }),
+    ]);
+    expect(responses.map((r) => r.status).sort()).toEqual([201, 409]);
+    const restored = responses.find((r) => r.status === 201)!.body;
+    expect(restored).toMatchObject({
+      version: before.version + 1,
+      hasUnpublishedChanges: false,
+      banner: before.published.banner,
+      policy: before.published.policy,
+      details: before.published.details,
+      published: before.published,
+    });
+    expect(restored.updatedAt).toBeTruthy();
+    expect(restored.createdAt).toBeTruthy();
+    const publicResult = await request(app.getHttpServer())
+      .get('/api/v1/content')
+      .expect(200);
+    expect(publicResult.body).toEqual({ content: before.published });
+    expect(publicResult.body.content.updatedAt).toBeUndefined();
+    await call('post', 'admin/content/publish')
+      .send({ expectedVersion: restored.version })
+      .expect(409);
+    await call('post', 'admin/content/restore')
+      .send({ expectedVersion: restored.version })
+      .expect(409);
+  });
+  it('history is paginated, scoped and contains no raw unpublished text', async () => {
+    const result = (
+      await call('get', 'admin/content/history')
+        .query({ page: 999, limit: 2 })
+        .expect(200)
+    ).body;
+    expect(result.page).toBe(Math.ceil(result.total / 2));
+    expect(result.items.length).toBeLessThanOrEqual(2);
+    const all = (
+      await call('get', 'admin/content/history')
+        .query({ limit: 100 })
+        .expect(200)
+    ).body;
+    expect(
+      all.items.some(
+        (i: { action: string }) => i.action === 'CONTENT_DRAFT_RESTORED',
+      ),
+    ).toBe(true);
+    for (const row of all.items) {
+      expect(row.actorId).toBe(users[0]);
+      expect(row.details.after.banner).toBeUndefined();
+      expect(row.details.after.policy).toBeUndefined();
+      expect(row.details.after.details).toBeUndefined();
+    }
+    for (const query of [{ page: 0 }, { limit: 101 }])
+      await call('get', 'admin/content/history').query(query).expect(400);
+  });
+  it('restoration and draft writes roll back atomically when their audit cannot persist', async () => {
+    const current = (await call('get', 'admin/content').expect(200)).body;
+    const draft = (
+      await call('put', 'admin/content')
+        .send({
+          banner: 'A private draft',
+          policy: 'Private policy',
+          expectedVersion: current.version,
+        })
+        .expect(200)
+    ).body;
+    const before = await db.storeContent.findUniqueOrThrow({
+      where: { id: contentId },
+    });
+    for (const action of ['restore', 'save'] as const) {
+      const spy = jest
+        .spyOn(audit, 'recordAdminActivity')
+        .mockRejectedValueOnce(new Error('Audit unavailable'));
+      try {
+        if (action === 'restore')
+          await call('post', 'admin/content/restore')
+            .send({ expectedVersion: draft.version })
+            .expect(500);
+        else
+          await call('put', 'admin/content')
+            .send({
+              banner: 'Another',
+              policy: 'Another',
+              expectedVersion: draft.version,
+            })
+            .expect(500);
+      } finally {
+        spy.mockRestore();
+      }
+      expect(
+        await db.storeContent.findUniqueOrThrow({ where: { id: contentId } }),
+      ).toEqual(before);
+    }
+  });
+  it('allows managers, rejects warehouse/support and rechecks actor role inside mutations', async () => {
+    const u = await request(app.getHttpServer())
+      .post('/api/v1/auth/register')
+      .send({
+        name: 'Manager',
+        email: `manager-${suffix}@example.test`,
+        password: 'Wearly-content-test-2026',
+      })
+      .expect(201);
+    users.push(u.body.user.id);
+    for (const role of ['MANAGER', 'WAREHOUSE', 'SUPPORT'] as const) {
+      await db.user.update({ where: { id: u.body.user.id }, data: { role } });
+      await call('get', 'admin/content', u.body.accessToken).expect(
+        role === 'MANAGER' ? 200 : 403,
+      );
+      await call('get', 'admin/content/history', u.body.accessToken).expect(
+        role === 'MANAGER' ? 200 : 403,
+      );
+      if (role !== 'MANAGER')
+        for (const path of ['publish', 'restore'])
+          await call('post', 'admin/content/' + path, u.body.accessToken)
+            .send({ expectedVersion: 0 })
+            .expect(403);
+    }
+    const current = (await call('get', 'admin/content').expect(200)).body;
+    const service = app.get(ContentService);
+    await expect(
+      service.publish(u.body.user.id, { expectedVersion: current.version }),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      service.restore(u.body.user.id, { expectedVersion: current.version }),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      service.save(u.body.user.id, {
+        expectedVersion: current.version,
+        banner: 'Denied',
+        policy: 'Denied',
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    await db.user.update({
+      where: { id: u.body.user.id },
+      data: { role: 'MANAGER' },
+    });
+    const restored = await call(
+      'post',
+      'admin/content/restore',
+      u.body.accessToken,
+    )
+      .send({ expectedVersion: current.version })
+      .expect(201);
+    expect(restored.body.hasUnpublishedChanges).toBe(false);
+    await db.user.update({
+      where: { id: u.body.user.id },
+      data: { active: false },
+    });
+    await expect(
+      service.save(u.body.user.id, {
+        expectedVersion: restored.body.version,
+        banner: 'Denied',
+        policy: 'Denied',
+      }),
+    ).rejects.toMatchObject({ status: 403 });
   });
 });

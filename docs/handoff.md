@@ -74,7 +74,7 @@ cd 'D:\Fashion Shop'
 .\tools\frontend.ps1 api
 ```
 
-Mở `http://localhost:8080`. Nếu terminal đang ở `frontend`, dùng `..\tools\frontend.ps1 api`. Sau sửa source khi Flutter đang chạy, nhấn `R` viết hoa trong terminal Flutter để hot restart.
+Mở `http://localhost:8080`. Nếu terminal đang ở `frontend`, dùng `..\tools\frontend.ps1 api`. Lệnh mặc định chạy web-server; sau sửa source, nhấn `R` viết hoa trong terminal Flutter rồi tải lại trang. Nhấn `q` để dừng. Cần Chrome debugger thì thêm `-Device chrome` và giữ cửa sổ Chrome do Flutter mở.
 
 PostgreSQL17/pgAdmin đã cài trực tiếp, service ở5432; Memurai ở6379. Docker dùng DB/Redis riêng ở5433/6380, không bắt buộc cho luồng native. Để dùng ảnh/worker, cài mới, cập nhật migrations hoặc chạy lại verification: [setup.md](setup.md). Không chạy seed/migration vào DB khác theo phỏng đoán cổng.
 

@@ -16,6 +16,8 @@ import 'remote_account_test.dart' show sessionJson;
 import 'remote_commerce_test.dart' show orderJson;
 import 'remote_session_test.dart' show jsonResponse;
 import 'tryon_replacement_test.dart' show PhotoPicker;
+import 'collections_test.dart' show collectionJson;
+import 'remote_catalog_test.dart' show productJson;
 
 Map<String, dynamic> adminProduct() => {
   'id': 'p1',
@@ -39,7 +41,7 @@ Map<String, dynamic> pageJson(List items, {int page = 1, int total = 1}) => {
   'items': items,
   'page': page,
   'total': total,
-  'limit': 20,
+  'limit': 10,
 };
 
 void main() {
@@ -59,6 +61,15 @@ void main() {
           return jsonResponse(session);
         }
         if (r.url.path.endsWith('/auth/logout')) return jsonResponse({});
+        if (r.url.path.endsWith('/categories/summary')) {
+          return jsonResponse({
+            'total': 1,
+            'products': 2,
+            'empty': 0,
+            'published': 1,
+            'publishedProducts': 1,
+          });
+        }
         return handle(r);
       }),
     );
@@ -105,6 +116,102 @@ void main() {
   }
 
   testWidgets(
+    'collection editing retains its URL, saves the expected version and refreshes the list',
+    (tester) async {
+      tester.view.physicalSize = const Size(375, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      Map<String, dynamic>? saved;
+      var reads = 0;
+      final row = {
+        ...collectionJson(),
+        'active': true,
+        'position': 0,
+        'version': 4,
+        'coverProductId': 'product-id',
+      };
+      await setup(tester, '/admin/collections', (r) async {
+        expect(r.url.path, startsWith('/api/v1/admin/collections'));
+        if (r.method == 'PATCH') {
+          saved = jsonDecode(r.body) as Map<String, dynamic>;
+          row.addAll(saved!);
+          row['version'] = 5;
+          return jsonResponse(row);
+        }
+        reads++;
+        return jsonResponse(pageJson([row]));
+      }, publicHandle: (r) async => jsonResponse(pageJson([productJson()])));
+      await tester.ensureVisible(find.text('Chỉnh sửa'));
+      await tester.tap(find.text('Chỉnh sửa'));
+      await tester.pumpAndSettle();
+      expect(find.text('Sửa bộ sưu tập'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextField>(
+              find.descendant(
+                of: find.widgetWithText(TextFormField, 'Đường dẫn'),
+                matching: find.byType(TextField),
+              ),
+            )
+            .readOnly,
+        isTrue,
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Tên bộ sưu tập'),
+        'Phong cách đã cập nhật',
+      );
+      await tester.tap(find.text('Lưu thay đổi'));
+      await tester.pumpAndSettle();
+      expect(saved, {
+        'title': 'Phong cách đã cập nhật',
+        'description': 'Các thiết kế hiện có.',
+        'style': 'Tối giản',
+        'position': 0,
+        'active': true,
+        'expectedVersion': 4,
+      });
+      expect(find.text('Phong cách đã cập nhật'), findsOneWidget);
+      expect(reads, greaterThan(1));
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'collection version conflict prevents resubmission until reloaded',
+    (tester) async {
+      var writes = 0;
+      final row = {
+        ...collectionJson(),
+        'active': true,
+        'position': 0,
+        'version': 4,
+        'coverProductId': null,
+      };
+      await setup(tester, '/admin/collections', (r) async {
+        if (r.method == 'PATCH') {
+          writes++;
+          return jsonResponse({
+            'error': {'code': 'COLLECTION_CHANGED'},
+          }, 409);
+        }
+        return jsonResponse(pageJson([row]));
+      }, publicHandle: (r) async => jsonResponse(pageJson([productJson()])));
+      await tester.ensureVisible(find.text('Chỉnh sửa'));
+      await tester.tap(find.text('Chỉnh sửa'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Lưu thay đổi'));
+      await tester.pumpAndSettle();
+      expect(writes, 1);
+      expect(find.text('Lưu thay đổi'), findsNothing);
+      expect(find.text('Tải lại dữ liệu'), findsOneWidget);
+      await tester.tap(find.text('Tải lại dữ liệu'));
+      await tester.pumpAndSettle();
+      expect(find.text('Sửa bộ sưu tập'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'a stale gallery full rejection unlocks removal after canonical reload',
     (tester) async {
       final original = FileSelectorPlatform.instance;
@@ -120,14 +227,24 @@ void main() {
       var uploads = 0;
       await setup(tester, '/admin/products/p1/edit', (r) async {
         if (r.url.path.endsWith('/categories')) {
-          return jsonResponse([
-            {'id': 'c1', 'name': 'Áo'},
-          ]);
+          return jsonResponse({
+            'items': [
+              {'id': 'c1', 'name': 'Áo'},
+            ],
+            'total': 1,
+            'page': 1,
+            'limit': 100,
+          });
         }
         if (r.url.path.endsWith('/brands')) {
-          return jsonResponse([
-            {'id': 'b1', 'name': 'Wearly'},
-          ]);
+          return jsonResponse({
+            'items': [
+              {'id': 'b1', 'name': 'Wearly'},
+            ],
+            'total': 1,
+            'page': 1,
+            'limit': 100,
+          });
         }
         if (r.method == 'POST') {
           uploads++;
@@ -153,6 +270,13 @@ void main() {
       final remove = find.widgetWithText(TextButton, 'Bỏ ảnh').first;
       await tester.ensureVisible(remove);
       await tester.tap(remove);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.widgetWithText(TextButton, 'Bỏ ảnh'),
+        ),
+      );
       await tester.pumpAndSettle();
       expect(find.widgetWithText(TextButton, 'Bỏ ảnh'), findsNWidgets(19));
       expect(
@@ -182,14 +306,24 @@ void main() {
         final keys = <String>[], bodies = <Map<String, dynamic>>[];
         await setup(tester, '/admin/products/p1/edit', (r) async {
           if (r.url.path.endsWith('/categories')) {
-            return jsonResponse([
-              {'id': 'c1', 'name': 'Áo'},
-            ]);
+            return jsonResponse({
+              'items': [
+                {'id': 'c1', 'name': 'Áo'},
+              ],
+              'total': 1,
+              'page': 1,
+              'limit': 100,
+            });
           }
           if (r.url.path.endsWith('/brands')) {
-            return jsonResponse([
-              {'id': 'b1', 'name': 'Wearly'},
-            ]);
+            return jsonResponse({
+              'items': [
+                {'id': 'b1', 'name': 'Wearly'},
+              ],
+              'total': 1,
+              'page': 1,
+              'limit': 100,
+            });
           }
           if (r.method == 'POST' && r.url.path.endsWith('/images')) {
             keys.add(r.headers['idempotency-key']!);
@@ -286,6 +420,8 @@ void main() {
           ))!['stable'],
           'Tên cũ',
         );
+        await tester.ensureVisible(find.byTooltip('Đổi tên Tên cũ'));
+        await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('Đổi tên Tên cũ'));
         await tester.pumpAndSettle();
         await tester.enterText(
@@ -361,6 +497,13 @@ void main() {
       final writes = <Map<String, dynamic>>[];
       await setup(tester, '/admin/$kind', (r) async {
         if (r.method == 'GET') {
+          if (r.url.path.endsWith('/new-id')) {
+            return jsonResponse({
+              ...rows.first,
+              'publishedProducts': 0,
+              'recentProducts': [],
+            });
+          }
           return jsonResponse(pageJson(rows, total: rows.length));
         }
         final body = jsonDecode(r.body) as Map<String, dynamic>;
@@ -394,7 +537,12 @@ void main() {
       await tester.pumpAndSettle();
       expect(writes.single, {'name': 'Mùa thu', 'slug': 'mua-thu'});
       expect(find.text('Mùa thu'), findsOneWidget);
-      await tester.tap(find.byTooltip('Đổi tên Mùa thu'));
+      final rename = kind == 'categories'
+          ? find.text('Đổi tên danh mục')
+          : find.text('Đổi tên thương hiệu');
+      await tester.ensureVisible(rename);
+      await tester.pumpAndSettle();
+      await tester.tap(rename);
       await tester.pumpAndSettle();
       expect(find.widgetWithText(TextFormField, 'Đường dẫn'), findsNothing);
       await tester.enterText(
@@ -436,9 +584,13 @@ void main() {
         'error': {'code': 'VERSION_CONFLICT', 'message': 'Tên đã thay đổi'},
       }, 409);
     });
+    await tester.ensureVisible(find.text('Trang sau'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Trang sau'));
     await tester.pumpAndSettle();
     expect(find.text('Danh mục 2'), findsOneWidget);
+    await tester.ensureVisible(find.byTooltip('Đổi tên Danh mục 2'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Đổi tên Danh mục 2'));
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -453,6 +605,8 @@ void main() {
     await tester.tap(find.text('Tải lại dữ liệu'));
     await tester.pumpAndSettle();
     expect(reads, greaterThan(beforeReload));
+    await tester.ensureVisible(find.byTooltip('Đổi tên Danh mục 2'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Đổi tên Danh mục 2'));
     await tester.pumpAndSettle();
     await container.read(adminAccountProvider.notifier).signOut();
@@ -460,15 +614,17 @@ void main() {
     expect(find.text('Lưu thay đổi'), findsNothing);
     expect(writes, 1);
   });
-  testWidgets('demo-only admin settings disclose unavailability', (
+  testWidgets('demo-only admin settings redirect to staff management', (
     tester,
   ) async {
     await setup(
       tester,
       '/admin/settings',
-      (r) async => throw StateError('No API call expected'),
+      (r) async =>
+          jsonResponse({'items': [], 'total': 0, 'page': 1, 'limit': 20}),
     );
-    expect(find.text('Chức năng quản trị chưa khả dụng'), findsOneWidget);
+    expect(find.text('Chức năng quản trị chưa khả dụng'), findsNothing);
+    expect(find.text('Nhân sự & quyền truy cập'), findsOneWidget);
   });
   testWidgets(
     'mobile products paginate server data and logout removes records',
@@ -542,10 +698,13 @@ void main() {
           ]),
         );
       });
-      await tester.tap(find.widgetWithText(OutlinedButton, 'Điều chỉnh kho'));
+      await tester.ensureVisible(find.byTooltip('Thao tác kho'));
+      await tester.tap(find.byTooltip('Thao tác kho'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(PopupMenuItem<String>, 'Nhập kho'));
       await tester.pumpAndSettle();
       await tester.enterText(
-        find.widgetWithText(TextFormField, 'Số lượng thay đổi'),
+        find.widgetWithText(TextFormField, 'Số lượng nhập'),
         '2',
       );
       await tester.enterText(
@@ -635,7 +794,7 @@ void main() {
       } finally {
         semantics.dispose();
       }
-      expect(find.text('2026-10-21 17:00:00 (UTC+7)'), findsOneWidget);
+      expect(find.text('21/10/2026 · 17:00 (UTC+7)'), findsOneWidget);
       expect(find.textContaining('Đã thanh toán'), findsOneWidget);
       expect(collect, findsNothing);
       expect(tester.takeException(), isNull);
@@ -717,7 +876,8 @@ void main() {
               'codAwaitingSettlementVnd': '30000',
             }),
     );
-    expect(find.text('Tiền đã thu · toàn thời gian'), findsOneWidget);
+    expect(find.text('Tiền đã thu'), findsOneWidget);
+    expect(find.text('Toàn thời gian'), findsOneWidget);
     expect(find.textContaining('520.000'), findsNWidgets(2));
     expect(find.text('COD đã giao, chờ đối soát'), findsOneWidget);
   });
@@ -761,14 +921,24 @@ void main() {
       final server = adminProduct();
       await setup(tester, '/admin/products/p1/edit', (r) async {
         if (r.url.path.endsWith('/categories')) {
-          return jsonResponse([
-            {'id': 'c1', 'name': 'Áo'},
-          ]);
+          return jsonResponse({
+            'items': [
+              {'id': 'c1', 'name': 'Áo'},
+            ],
+            'total': 1,
+            'page': 1,
+            'limit': 100,
+          });
         }
         if (r.url.path.endsWith('/brands')) {
-          return jsonResponse([
-            {'id': 'b1', 'name': 'Wearly'},
-          ]);
+          return jsonResponse({
+            'items': [
+              {'id': 'b1', 'name': 'Wearly'},
+            ],
+            'total': 1,
+            'page': 1,
+            'limit': 100,
+          });
         }
         if (r.method == 'PATCH') {
           writes++;
@@ -806,14 +976,24 @@ void main() {
       final bodies = <Map<String, dynamic>>[];
       await setup(tester, '/admin/products/p1/edit', (r) async {
         if (r.url.path.endsWith('/categories')) {
-          return jsonResponse([
-            {'id': 'c1', 'name': 'Áo'},
-          ]);
+          return jsonResponse({
+            'items': [
+              {'id': 'c1', 'name': 'Áo'},
+            ],
+            'total': 1,
+            'page': 1,
+            'limit': 100,
+          });
         }
         if (r.url.path.endsWith('/brands')) {
-          return jsonResponse([
-            {'id': 'b1', 'name': 'Wearly'},
-          ]);
+          return jsonResponse({
+            'items': [
+              {'id': 'b1', 'name': 'Wearly'},
+            ],
+            'total': 1,
+            'page': 1,
+            'limit': 100,
+          });
         }
         if (r.method == 'PATCH') {
           final body = Map<String, dynamic>.from(jsonDecode(r.body));

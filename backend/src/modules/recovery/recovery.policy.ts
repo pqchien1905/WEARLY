@@ -1,0 +1,3 @@
+export const RECOVERY_CODE_MINUTES = 10;
+export const RECOVERY_CODE_ATTEMPTS = 5;
+export const RECOVERY_GRANT_SECONDS = 600;

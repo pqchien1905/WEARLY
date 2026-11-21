@@ -45,7 +45,7 @@ describe('Private Gemini image transport', () => {
       send.mock.calls as unknown as [string, RequestInit][]
     )[0];
     expect(url).toBe(
-      'https://generativelanguage.googleapis.com/v1/interactions',
+      'https://generativelanguage.googleapis.com/v1beta/interactions',
     );
     expect(options.redirect).toBe('error');
     expect(options.headers).toMatchObject({

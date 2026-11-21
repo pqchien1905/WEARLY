@@ -26,6 +26,90 @@ Map<String, Object?> snapshot({bool saved = true, bool unavailable = false}) =>
 
 void main() {
   test(
+    'refresh failure retains the last snapshot and locks further toggles until reconciled',
+    () async {
+      var fail = false, writes = 0;
+      final api = ApiClient(
+        baseUrl: 'http://localhost/api/v1',
+        client: MockClient((r) async {
+          if (r.method != 'GET') writes++;
+          return fail ? jsonResponse({}, 503) : jsonResponse(snapshot());
+        }),
+      );
+      final c = RemoteWishlistController(api, signedIn: true);
+      addTearDown(() {
+        c.dispose();
+        api.close();
+      });
+      await c.refresh();
+      fail = true;
+      await expectLater(c.refresh(), throwsA(isA<ApiException>()));
+      expect(c.hasSnapshot, isTrue);
+      expect(c.loaded, isFalse);
+      expect(c.items['product-id']?.name, 'Áo cotton');
+      await expectLater(c.toggle('product-id'), throwsA(isA<ApiException>()));
+      expect(writes, 0);
+      fail = false;
+      await c.refresh();
+      expect(c.loaded, isTrue);
+    },
+  );
+  test(
+    'an old controller cannot send requests with a replacement account token',
+    () async {
+      var calls = 0;
+      final api = ApiClient(
+        baseUrl: 'http://localhost/api/v1',
+        client: MockClient((_) async {
+          calls++;
+          return jsonResponse(snapshot());
+        }),
+      );
+      final c = RemoteWishlistController(api, signedIn: true);
+      addTearDown(() {
+        c.dispose();
+        api.close();
+      });
+      await c.refresh();
+      api.tokens.set(accessToken: 'replacement', userId: 'other');
+      await expectLater(c.toggle('product-id'), throwsA(isA<ApiException>()));
+      await expectLater(c.save('another'), throwsA(isA<ApiException>()));
+      expect(calls, 1);
+    },
+  );
+  test(
+    'late completed deletion reconciles after a timeout without replaying the write',
+    () async {
+      final pending = Completer<http.Response>();
+      var saved = true, writes = 0;
+      final api = ApiClient(
+        baseUrl: 'http://localhost/api/v1',
+        timeout: const Duration(milliseconds: 30),
+        client: MockClient((r) async {
+          if (r.method == 'DELETE') {
+            writes++;
+            return pending.future;
+          }
+          return jsonResponse(snapshot(saved: saved));
+        }),
+      );
+      final c = RemoteWishlistController(api, signedIn: true);
+      addTearDown(() {
+        c.dispose();
+        api.close();
+      });
+      await c.refresh();
+      await expectLater(c.toggle('product-id'), throwsA(isA<ApiException>()));
+      expect(c.items, isNotEmpty);
+      saved = false;
+      pending.complete(jsonResponse(snapshot(saved: false)));
+      await Future<void>.delayed(const Duration(milliseconds: 15));
+      expect(c.items, isEmpty);
+      expect(c.loaded, isTrue);
+      expect(writes, 1);
+    },
+  );
+  test(
     'cart save cannot acknowledge a favorite while its removal is pending',
     () async {
       final pending = Completer<http.Response>(), started = Completer<void>();

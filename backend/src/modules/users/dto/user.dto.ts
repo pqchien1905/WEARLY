@@ -1,22 +1,32 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
+import { normalizePhone } from '../profile-identity';
 import {
   IsBoolean,
   ValidateIf,
   IsString,
   MaxLength,
   MinLength,
+  Matches,
 } from 'class-validator';
 export class ProfileDto {
   @ApiProperty({ required: false })
   @ValidateIf((_object, value) => value !== undefined)
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
   @MinLength(1)
   @MaxLength(100)
   name?: string;
   @ApiProperty({ required: false })
   @ValidateIf((_object, value) => value !== undefined)
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? normalizePhone(value) : value,
+  )
   @IsString()
   @MaxLength(30)
+  @Matches(/^(?:\+?\d{7,15})?$/)
   phone?: string;
 }
 export class AddressDto {

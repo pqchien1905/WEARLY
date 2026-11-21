@@ -61,6 +61,53 @@ describe('Persistent guest support', () => {
     jest.restoreAllMocks();
     if (app) await app.close();
   });
+  it('paginates support and mail at ten by default, without duplicates, and clamps stale pages', async () => {
+    const prefix = `paging-${randomUUID()}`;
+    const tickets = Array.from({ length: 12 }, (_, i) => ({
+      id: randomUUID(),
+      requestKey: randomUUID(),
+      payloadHash: '0'.repeat(64),
+      name: `${prefix}-${i}`,
+      email: 'paging@example.test',
+      message: 'Pagination fixture',
+    }));
+    const mails = tickets.map((t) => ({
+      eventKey: t.id,
+      recipient: t.email,
+      subject: prefix,
+      body: 'Pagination fixture',
+      status: 'SENT' as const,
+    }));
+    await db.supportTicket.createMany({ data: tickets });
+    await db.mailOutbox.createMany({ data: mails });
+    try {
+      for (const path of ['admin/support', 'admin/mail']) {
+        const first = (await call('get', path, admin).expect(200)).body;
+        expect(first).toMatchObject({ page: 1, limit: 10 });
+        expect(first.items).toHaveLength(10);
+        const second = (await call('get', `${path}?page=2`, admin).expect(200))
+          .body;
+        expect(second.page).toBe(2);
+        expect(second.items.length).toBeGreaterThan(0);
+        expect(
+          second.items.some((row: { id: string }) =>
+            first.items.some((other: { id: string }) => row.id === other.id),
+          ),
+        ).toBe(false);
+        const last = (
+          await call('get', `${path}?page=10000&limit=20`, admin).expect(200)
+        ).body;
+        expect(last.page).toBe(Math.max(1, Math.ceil(last.total / 20)));
+        expect(last.limit).toBe(20);
+        await call('get', `${path}?limit=0`, admin).expect(400);
+      }
+    } finally {
+      await db.mailOutbox.deleteMany({ where: { subject: prefix } });
+      await db.supportTicket.deleteMany({
+        where: { id: { in: tickets.map((t) => t.id) } },
+      });
+    }
+  });
   it('stores a guest request, returns only a receipt, replays it, and protects its contents', async () => {
     const data = draft(),
       first = await call('post', 'support').send(data).expect(201);

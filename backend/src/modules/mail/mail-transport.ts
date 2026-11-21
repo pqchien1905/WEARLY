@@ -1,5 +1,5 @@
 import { ConfigService } from '@nestjs/config';
-/** Shared transport restrictions; message bodies are always plain text. */
+/** Shared transport restrictions; disable file and URL reads for all mail. */
 export function mailTransportOptions(config: ConfigService) {
   const insecure = config.get<string>('SMTP_ALLOW_INSECURE_LOCAL') === 'true',
     user = config.get<string>('SMTP_USER');

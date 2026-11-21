@@ -9,9 +9,15 @@ import '../../data/remote_payments.dart';
 import '../../domain/commerce.dart';
 
 class PaymentPanel extends ConsumerStatefulWidget {
-  const PaymentPanel({super.key, required this.order, this.onRefresh});
+  const PaymentPanel({
+    super.key,
+    required this.order,
+    this.onRefresh,
+    this.enabled = true,
+  });
   final Order order;
   final Future<void> Function()? onRefresh;
+  final bool enabled;
   @override
   ConsumerState<PaymentPanel> createState() => _PaymentPanelState();
 }
@@ -21,7 +27,7 @@ class _PaymentPanelState extends ConsumerState<PaymentPanel> {
   bool busy = false;
   String? error;
   Future<void> run(bool query) async {
-    if (busy) return;
+    if (busy || !widget.enabled) return;
     setState(() {
       busy = true;
       error = null;
@@ -44,7 +50,11 @@ class _PaymentPanelState extends ConsumerState<PaymentPanel> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.order.paymentProvider != 'vnpay') return const SizedBox.shrink();
+    final provider = widget.order.paymentProvider;
+    if (!onlinePaymentProviders.contains(provider)) {
+      return const SizedBox.shrink();
+    }
+    final gateway = '${paymentProviderName(provider)} sandbox';
     final status = result?.status ?? widget.order.paymentStatus;
     final paid = ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'].contains(status);
     final label = switch (status) {
@@ -60,11 +70,11 @@ class _PaymentPanelState extends ConsumerState<PaymentPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('VNPay sandbox', style: T.display(24)),
+          Text(gateway, style: T.display(24)),
           const SizedBox(height: 12),
           Text(label, style: T.body),
-          const Text(
-            'Thanh toán thử nghiệm. Giữ tab cửa hàng này để kiểm tra kết quả sau khi hoàn tất trên VNPay.',
+          Text(
+            'Thanh toán thử nghiệm. Giữ tab cửa hàng này để kiểm tra kết quả sau khi hoàn tất trên ${paymentProviderName(provider)}.',
             style: T.small,
           ),
           if (result?.reviewRequired == true)
@@ -85,13 +95,13 @@ class _PaymentPanelState extends ConsumerState<PaymentPanel> {
               if (!paid && widget.order.status == 'Chờ xác nhận')
                 AppButton(
                   'Chuẩn bị thanh toán',
-                  onPressed: busy ? null : () => run(false),
+                  onPressed: busy || !widget.enabled ? null : () => run(false),
                   busy: busy,
                 ),
               if (!paid && result?.checkoutUrl != null)
                 AppButton(
-                  'Mở VNPay sandbox (tab mới)',
-                  onPressed: busy
+                  'Mở $gateway (tab mới)',
+                  onPressed: busy || !widget.enabled
                       ? null
                       : () {
                           try {
@@ -106,7 +116,7 @@ class _PaymentPanelState extends ConsumerState<PaymentPanel> {
               AppButton(
                 'Kiểm tra kết quả',
                 outlined: true,
-                onPressed: busy ? null : () => run(true),
+                onPressed: busy || !widget.enabled ? null : () => run(true),
               ),
             ],
           ),
@@ -134,7 +144,7 @@ class _ReturnContent extends StatelessWidget {
   const _ReturnContent();
   @override
   Widget build(BuildContext context) => StatePanel(
-    title: 'Đã quay lại từ VNPay sandbox',
+    title: 'Đã quay lại từ trang thanh toán thử nghiệm',
     message:
         'Trở về tab cửa hàng ban đầu và bấm “Kiểm tra kết quả” trong đơn hàng. Nếu đã đóng tab đó, đăng nhập lại và mở lịch sử đơn hàng để kiểm tra.',
     icon: Icons.receipt_long_outlined,

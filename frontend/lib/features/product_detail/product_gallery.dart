@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/design/tokens.dart';
+import '../../core/design/motion.dart';
 import '../../core/widgets/primitives.dart';
 import '../../domain/catalog.dart';
 
@@ -53,13 +54,31 @@ class _ProductGalleryState extends State<ProductGallery> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    ColoredBox(
-                      color: T.photo,
-                      child: FashionImage(
-                        selected.path,
-                        label: selected.label,
-                        fit: BoxFit.contain,
-                        alignment: Alignment.center,
+                    ClipRRect(
+                      borderRadius: T.imageRadius,
+                      child: ColoredBox(
+                        color: T.photo,
+                        child: AnimatedSwitcher(
+                          duration: Motion.duration(context),
+                          switchInCurve: Motion.curve,
+                          layoutBuilder: (current, previous) => Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              for (final old in previous)
+                                ExcludeSemantics(child: old),
+                              ?current,
+                            ],
+                          ),
+                          child: RepaintBoundary(
+                            key: ValueKey(selected.path),
+                            child: FashionImage(
+                              selected.path,
+                              label: selected.label,
+                              fit: BoxFit.contain,
+                              alignment: Alignment.center,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                     Positioned(
@@ -80,6 +99,7 @@ class _ProductGalleryState extends State<ProductGallery> {
                         child: IgnorePointer(
                           child: DecoratedBox(
                             decoration: BoxDecoration(
+                              borderRadius: T.imageRadius,
                               border: Border.all(color: T.accent, width: 3),
                             ),
                           ),

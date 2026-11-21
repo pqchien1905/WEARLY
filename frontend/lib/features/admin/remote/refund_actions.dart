@@ -8,6 +8,7 @@ import '../../../data/remote_refunds.dart';
 import '../../account/refund_panel.dart';
 import 'admin_providers.dart';
 import 'admin_widgets.dart';
+import '../../../data/remote_payments.dart';
 
 class AdminRefundActions extends ConsumerStatefulWidget {
   const AdminRefundActions({super.key, required this.orderId});
@@ -48,6 +49,9 @@ class _AdminRefundActionsState extends ConsumerState<AdminRefundActions> {
     final repo = ref.read(adminRefundRepositoryProvider),
         controller = TextEditingController(text: refund?.transactionNo);
     final query = refund != null, cod = state.provider == 'cod';
+    // VNPay refunds are queried by a refund number; wallets by the stored request.
+    final vnpay = state.provider == 'vnpay',
+        gateway = paymentProviderName(state.provider);
     await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -56,20 +60,22 @@ class _AdminRefundActionsState extends ConsumerState<AdminRefundActions> {
             ? 'Kiểm tra kết quả hoàn'
             : cod
             ? 'Ghi nhận hoàn COD'
-            : 'Hoàn qua VNPay sandbox',
+            : 'Hoàn qua $gateway sandbox',
         label: query
-            ? 'Truy vấn VNPay'
+            ? 'Truy vấn $gateway'
             : cod
             ? 'Xác nhận đã hoàn COD'
             : 'Gửi yêu cầu hoàn sandbox',
         message: query
-            ? 'Dùng mã giao dịch hoàn từ VNPay sandbox. Mã thanh toán ban đầu không xác nhận được khoản hoàn.'
+            ? (vnpay
+                  ? 'Dùng mã giao dịch hoàn từ VNPay sandbox. Mã thanh toán ban đầu không xác nhận được khoản hoàn.'
+                  : 'Hệ thống truy vấn $gateway bằng mã yêu cầu hoàn đã lưu.')
             : cod
             ? 'Chỉ xác nhận khi đã trả tiền cho khách: ${money(source!.available)}. Thao tác này ghi biên nhận hoàn tiền.'
-            : 'Gửi yêu cầu hoàn ${money(source!.available)} qua VNPay thử nghiệm. Nếu chưa rõ kết quả, hệ thống sẽ giữ khoản này để xác minh.',
+            : 'Gửi yêu cầu hoàn ${money(source!.available)} qua $gateway thử nghiệm. Nếu chưa rõ kết quả, hệ thống sẽ giữ khoản này để xác minh.',
         controller: controller,
         fieldLabel: query
-            ? 'Mã giao dịch hoàn VNPay'
+            ? (vnpay ? 'Mã giao dịch hoàn VNPay' : null)
             : cod
             ? 'Mã biên nhận hoàn tiền'
             : null,
@@ -79,7 +85,7 @@ class _AdminRefundActionsState extends ConsumerState<AdminRefundActions> {
             await repo.query(
               widget.orderId,
               refund.id,
-              transactionNo: controller.text.trim(),
+              transactionNo: vnpay ? controller.text.trim() : null,
             );
           } else {
             await repo.create(
@@ -168,7 +174,7 @@ class _AdminRefundActionsState extends ConsumerState<AdminRefundActions> {
                           AppButton(
                             state.provider == 'cod'
                                 ? 'Ghi nhận hoàn COD'
-                                : 'Hoàn qua VNPay sandbox',
+                                : 'Hoàn qua ${paymentProviderName(state.provider)} sandbox',
                             onPressed: () => act(state, source: source),
                           ),
                       ],
@@ -186,10 +192,10 @@ class _AdminRefundActionsState extends ConsumerState<AdminRefundActions> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         RefundHistory(refund: refund),
-                        if (refund.provider == 'vnpay' &&
+                        if (refund.provider != 'cod' &&
                             refund.providerRequestId != null)
                           SelectableText(
-                            'Mã yêu cầu VNPay: ${refund.providerRequestId}',
+                            'Mã yêu cầu ${paymentProviderName(refund.provider)}: ${refund.providerRequestId}',
                             style: T.small,
                           ),
                         if (refund.attemptId != null)
@@ -197,7 +203,7 @@ class _AdminRefundActionsState extends ConsumerState<AdminRefundActions> {
                             'Lần thanh toán: ${refund.attemptId}',
                             style: T.small,
                           ),
-                        if (refund.provider == 'vnpay' &&
+                        if (refund.provider != 'cod' &&
                             ['REVIEW', 'PROCESSING'].contains(refund.status))
                           AppButton(
                             'Kiểm tra kết quả hoàn',

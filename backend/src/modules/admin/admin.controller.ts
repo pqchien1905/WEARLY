@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -10,14 +11,34 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Admin, CurrentUser, Identity } from '../../common/decorators/auth';
-import { PageDto } from '../products/dto/query-products.dto';
+import { AdminPageDto as PageDto } from '../../common/admin-page.dto';
 import { AdminService } from './admin.service';
+import { AdminOrdersQueryDto } from './dto/admin-orders-query.dto';
+import { AdminProductsQueryDto } from './dto/admin-products-query.dto';
+import {
+  AdminInventoryQueryDto,
+  InventoryHistoryQueryDto,
+} from './dto/admin-inventory-query.dto';
 import { TaxonomyService } from './taxonomy.service';
+import { AdminTaxonomyQueryDto } from './dto/admin-taxonomy-query.dto';
+import { AdminCategoriesQueryDto } from './dto/admin-categories-query.dto';
+import { CustomersService } from './customers.service';
+import {
+  AdminCustomersQueryDto,
+  CreateCustomerDto,
+  DeleteCustomerDto,
+  CustomerStatusDto,
+  ResetCustomerPasswordDto,
+  UpdateCustomerDto,
+} from './dto/admin-customers.dto';
 import {
   AdjustInventoryDto,
   CategoryDto,
+  DeleteCategoryDto,
+  DeleteTaxonomyDto,
   RenameTaxonomyDto,
   CreateProductDto,
+  DeleteProductDto,
   CreateSkuDto,
   OrderStatusDto,
   SettleCodDto,
@@ -32,6 +53,7 @@ export class AdminController {
   constructor(
     private readonly service: AdminService,
     private readonly taxonomy: TaxonomyService,
+    private readonly customers: CustomersService,
   ) {}
   @Admin('reports.read')
   @Get('summary')
@@ -42,6 +64,11 @@ export class AdminController {
   @Get('audit')
   audit(@Query() q: PageDto) {
     return this.service.audit(q);
+  }
+  @Admin('catalog.read')
+  @Get('products/summary')
+  productsSummary() {
+    return this.service.productsSummary();
   }
   @Admin('catalog.read')
   @Get('products/:id')
@@ -55,8 +82,8 @@ export class AdminController {
   }
   @Admin('catalog.read')
   @Get('products')
-  products(@Query() q: PageDto) {
-    return this.service.list('products', q);
+  products(@Query() q: AdminProductsQueryDto) {
+    return this.service.products(q);
   }
   @Admin('catalog.write')
   @Post('products')
@@ -71,6 +98,15 @@ export class AdminController {
     @Body() dto: UpdateProductDto,
   ) {
     return this.service.updateProduct(u.id, id, dto);
+  }
+  @Admin('catalog.write')
+  @Delete('products/:id')
+  deleteProduct(
+    @CurrentUser() u: Identity,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: DeleteProductDto,
+  ) {
+    return this.service.deleteProduct(u.id, id, dto.expectedUpdatedAt);
   }
   @Admin('catalog.write')
   @Post('skus')
@@ -93,8 +129,18 @@ export class AdminController {
   }
   @Admin('catalog.read')
   @Get('categories')
-  categories(@Query() q: PageDto) {
-    return this.taxonomy.list('categories', q);
+  categories(@Query() q: AdminCategoriesQueryDto) {
+    return this.taxonomy.categories(q);
+  }
+  @Admin('catalog.read')
+  @Get('categories/summary')
+  categoriesSummary() {
+    return this.taxonomy.categorySummary();
+  }
+  @Admin('catalog.read')
+  @Get('categories/:id')
+  categoryDetail(@Param('id', ParseUUIDPipe) id: string) {
+    return this.taxonomy.categoryDetail(id);
   }
   @Admin('catalog.write')
   @Patch('categories/:id')
@@ -106,14 +152,42 @@ export class AdminController {
     return this.taxonomy.rename(u.id, 'categories', id, dto);
   }
   @Admin('catalog.write')
+  @Delete('categories/:id')
+  deleteCategory(
+    @CurrentUser() u: Identity,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: DeleteCategoryDto,
+  ) {
+    return this.taxonomy.deleteCategory(u.id, id, dto.expectedUpdatedAt);
+  }
+  @Admin('catalog.write')
   @Post('brands')
   brand(@CurrentUser() u: Identity, @Body() dto: CategoryDto) {
     return this.taxonomy.create(u.id, 'brands', dto);
   }
   @Admin('catalog.read')
   @Get('brands')
-  brands(@Query() q: PageDto) {
-    return this.taxonomy.list('brands', q);
+  brands(@Query() q: AdminTaxonomyQueryDto) {
+    return this.taxonomy.brands(q);
+  }
+  @Admin('catalog.read')
+  @Get('brands/summary')
+  brandsSummary() {
+    return this.taxonomy.brandSummary();
+  }
+  @Admin('catalog.read')
+  @Get('brands/:id')
+  brandDetail(@Param('id', ParseUUIDPipe) id: string) {
+    return this.taxonomy.brandDetail(id);
+  }
+  @Admin('catalog.write')
+  @Delete('brands/:id')
+  deleteBrand(
+    @CurrentUser() u: Identity,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: DeleteTaxonomyDto,
+  ) {
+    return this.taxonomy.deleteBrand(u.id, id, dto.expectedUpdatedAt);
   }
   @Admin('catalog.write')
   @Patch('brands/:id')
@@ -125,9 +199,35 @@ export class AdminController {
     return this.taxonomy.rename(u.id, 'brands', id, dto);
   }
   @Admin('inventory.read')
+  @Get('inventory/summary')
+  inventorySummary() {
+    return this.service.inventorySummary();
+  }
+  @Admin('inventory.read')
+  @Get('inventory/:id/movements')
+  inventoryHistory(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() q: InventoryHistoryQueryDto,
+  ) {
+    return this.service.inventoryHistory(id, q);
+  }
+  @Admin('inventory.read')
+  @Get('inventory/:id')
+  inventoryDetail(@Param('id', ParseUUIDPipe) id: string) {
+    return this.service.inventoryDetail(id);
+  }
+  @Admin('inventory.write')
+  @Post('inventory/variants/:id/initialize')
+  initializeInventory(
+    @CurrentUser() u: Identity,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.service.initializeInventory(u.id, id);
+  }
+  @Admin('inventory.read')
   @Get('inventory')
-  inventory(@Query() q: PageDto) {
-    return this.service.list('inventory', q);
+  inventory(@Query() q: AdminInventoryQueryDto) {
+    return this.service.inventory(q);
   }
   @Admin('inventory.write')
   @Post('inventory/:id/adjust')
@@ -140,8 +240,8 @@ export class AdminController {
   }
   @Admin('orders.read')
   @Get('orders')
-  orders(@Query() q: PageDto) {
-    return this.service.list('orders', q);
+  orders(@Query() q: AdminOrdersQueryDto) {
+    return this.service.orders(q);
   }
   @Admin('orders.fulfill')
   @Patch('orders/:id/status')
@@ -154,8 +254,59 @@ export class AdminController {
   }
   @Admin('customers.read')
   @Get('users')
-  users(@Query() q: PageDto) {
-    return this.service.list('users', q);
+  users(@Query() q: AdminCustomersQueryDto) {
+    return this.customers.list(q);
+  }
+  @Admin('customers.manage')
+  @Post('users')
+  createCustomer(@CurrentUser() u: Identity, @Body() dto: CreateCustomerDto) {
+    return this.customers.create(u.id, dto);
+  }
+  @Admin('customers.manage')
+  @Delete('users/:id')
+  deleteCustomer(
+    @CurrentUser() u: Identity,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: DeleteCustomerDto,
+  ) {
+    return this.customers.remove(u.id, id, dto);
+  }
+  @Admin('customers.read')
+  @Get('users/summary')
+  customerSummary() {
+    return this.customers.summary();
+  }
+  @Admin('customers.read')
+  @Get('users/:id')
+  customer(@Param('id', ParseUUIDPipe) id: string) {
+    return this.customers.detail(id);
+  }
+  @Admin('customers.manage')
+  @Patch('users/:id')
+  updateCustomer(
+    @CurrentUser() u: Identity,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateCustomerDto,
+  ) {
+    return this.customers.update(u.id, id, dto);
+  }
+  @Admin('customers.manage')
+  @Post('users/:id/reset-password')
+  resetCustomerPassword(
+    @CurrentUser() u: Identity,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ResetCustomerPasswordDto,
+  ) {
+    return this.customers.resetPassword(u.id, id, dto);
+  }
+  @Admin('customers.manage')
+  @Patch('users/:id/status')
+  customerStatus(
+    @CurrentUser() u: Identity,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CustomerStatusDto,
+  ) {
+    return this.customers.update(u.id, id, dto);
   }
   @Admin('payments.manage')
   @Post('orders/:id/settle-cod')

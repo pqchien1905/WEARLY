@@ -9,13 +9,10 @@ import '../../core/widgets/primitives.dart';
 final passwordRecoveryProvider = Provider<PasswordRecovery>((ref) {
   VoidCallback prepareInvalidation() {
     final shopper = ref.read(sessionTokensProvider);
-    final admin = ref.read(adminSessionTokensProvider);
-    final shopperGeneration = shopper.generation,
-        adminGeneration = admin.generation;
+    final shopperGeneration = shopper.generation;
     return () {
       if (!ref.mounted) return;
       if (shopper.generation == shopperGeneration) shopper.clear();
-      if (admin.generation == adminGeneration) admin.clear();
     };
   }
 
@@ -26,6 +23,41 @@ class PasswordRecovery {
   PasswordRecovery(this.api, this.prepareInvalidation);
   final ApiClient api;
   final VoidCallback Function() prepareInvalidation;
+  Future<void> requestCode(String email) async {
+    final response = await api.request(
+      'POST',
+      'auth/forgot-password',
+      authenticated: false,
+      body: {'email': email.trim().toLowerCase()},
+    );
+    if (response is! Map || response['accepted'] != true) {
+      throw const ApiException(
+        'INVALID_RESPONSE',
+        'Chưa gửi được yêu cầu. Vui lòng thử lại.',
+      );
+    }
+  }
+
+  Future<String> verifyCode(String email, String code) async {
+    final response = await api.request(
+      'POST',
+      'auth/verify-reset-code',
+      authenticated: false,
+      body: {'email': email.trim().toLowerCase(), 'code': code},
+    );
+    if (response is! Map ||
+        response['resetToken'] is! String ||
+        !RegExp(
+          r'^[A-Za-z0-9_-]{43}$',
+        ).hasMatch(response['resetToken'] as String)) {
+      throw const ApiException(
+        'INVALID_RESPONSE',
+        'Chưa xác nhận được mã. Vui lòng thử lại.',
+      );
+    }
+    return response['resetToken'] as String;
+  }
+
   Future<void> reset(String token, String password) async {
     final invalidateSessions = prepareInvalidation();
     try {
@@ -146,10 +178,10 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
             ? 'Chưa xác nhận được kết quả'
             : 'Liên kết không còn hiệu lực',
         message: uncertain
-            ? 'Yêu cầu có thể đã hoàn tất. Hãy thử đăng nhập bằng mật khẩu mới hoặc yêu cầu một liên kết khác.'
-            : 'Liên kết có thể đã hết hạn, đã sử dụng hoặc chưa đầy đủ. Hãy yêu cầu một liên kết mới.',
+            ? 'Yêu cầu có thể đã hoàn tất. Hãy thử đăng nhập bằng mật khẩu mới hoặc yêu cầu mã xác nhận khác.'
+            : 'Liên kết có thể đã hết hạn, đã sử dụng hoặc chưa đầy đủ. Hãy yêu cầu mã xác nhận mới.',
         action: AppButton(
-          'Yêu cầu liên kết mới',
+          'Yêu cầu mã mới',
           onPressed: () => context.go('/forgot-password'),
         ),
       );
@@ -166,7 +198,7 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
                 Text('Đặt lại mật khẩu', style: T.display(36)),
                 const SizedBox(height: 16),
                 const Text(
-                  'Mật khẩu cần từ 12 đến 128 ký tự. Sau khi thay đổi, bạn cần đăng nhập lại trên các thiết bị.',
+                  'Mật khẩu cần từ 8 đến 128 ký tự. Sau khi thay đổi, bạn cần đăng nhập lại trên các thiết bị.',
                 ),
                 const SizedBox(height: 24),
                 TextFormField(
@@ -177,9 +209,9 @@ class _ResetPasswordPageState extends ConsumerState<ResetPasswordPage> {
                   autofillHints: const [AutofillHints.newPassword],
                   decoration: const InputDecoration(labelText: 'Mật khẩu mới'),
                   validator: (v) =>
-                      (v?.length ?? 0) >= 12 && (v?.length ?? 0) <= 128
+                      (v?.length ?? 0) >= 8 && (v?.length ?? 0) <= 128
                       ? null
-                      : 'Mật khẩu cần từ 12 đến 128 ký tự.',
+                      : 'Mật khẩu cần từ 8 đến 128 ký tự.',
                 ),
                 const SizedBox(height: 16),
                 TextFormField(

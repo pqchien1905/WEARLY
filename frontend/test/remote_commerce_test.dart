@@ -54,6 +54,7 @@ Map<String, Object?> orderJson({
   },
   'payment': {
     'provider': 'cod',
+    'amount': '520000',
     'status': status == 'CANCELLED' ? 'CANCELLED' : 'PENDING',
   },
   'items': [
@@ -80,6 +81,35 @@ const draft = CheckoutDraft(
 );
 
 void main() {
+  test(
+    'order codes survive status changes without replacing API identifiers',
+    () {
+      final data = orderJson()..['code'] = 'WR00001F';
+      final order = commerceOrder(data, email: 'an@example.com');
+      expect(order.id, 'order-1');
+      expect(order.displayCode, 'WR00001F');
+      expect(order.withStatus('Đã hủy').displayCode, 'WR00001F');
+      data['code'] = 'invalid code';
+      expect(
+        () => commerceOrder(data, email: ''),
+        throwsA(isA<ApiException>()),
+      );
+    },
+  );
+  test('sample orders retain their label when parsed and updated', () {
+    final data = orderJson();
+    data['addressSnapshot'] = <String, Object?>{
+      ...data['addressSnapshot'] as Map<String, Object?>,
+      'sampleData': true,
+    };
+    final order = commerceOrder(data, email: 'an@example.com');
+    expect(order.isSample, isTrue);
+    expect(order.withStatus('Đã hủy').isSample, isTrue);
+    expect(
+      commerceOrder(orderJson(), email: 'an@example.com').isSample,
+      isFalse,
+    );
+  });
   test(
     'definitive unavailable payment unlocks checkout for COD fallback',
     () async {
@@ -147,7 +177,7 @@ void main() {
       );
       addTearDown(api.close);
       final cart = RemoteCartRepository(api);
-      final repo = RemoteOrderRepository(api, cart);
+      final repo = RemoteOrderRepository(api, cart, autoRetries: 0);
       addTearDown(repo.dispose);
       await cart.refresh();
       const vnpay = CheckoutDraft(
@@ -219,7 +249,7 @@ void main() {
       );
       addTearDown(api.close);
       final cart = RemoteCartRepository(api);
-      final orders = RemoteOrderRepository(api, cart);
+      final orders = RemoteOrderRepository(api, cart, autoRetries: 0);
       await cart.refresh();
       await expectLater(orders.checkout(draft), throwsA(isA<ApiException>()));
       await expectLater(
@@ -391,7 +421,12 @@ void main() {
         }),
       );
       final cart = RemoteCartRepository(api);
-      final orders = RemoteOrderRepository(api, cart, email: 'an@example.com');
+      final orders = RemoteOrderRepository(
+        api,
+        cart,
+        email: 'an@example.com',
+        autoRetries: 0,
+      );
       await cart.refresh();
       await expectLater(orders.checkout(draft), throwsA(isA<ApiException>()));
       expect(orders.hasPendingCheckout, isTrue);

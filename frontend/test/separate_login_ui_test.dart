@@ -128,13 +128,13 @@ void main() {
         await tester.ensureVisible(submit);
         await tester.tap(submit);
         await tester.pumpAndSettle();
-        expect(
-          router.routeInformationProvider.value.uri.path,
-          '/admin/settings',
-        );
+        // The demo-only settings link opens staff management in API mode.
+        expect(router.routeInformationProvider.value.uri.path, '/admin/staff');
         expect(c.read(accountProvider)?.email, 'customer@example.com');
         expect(c.read(adminAccountProvider)?.role, 'ADMIN');
-        await tester.tap(find.byTooltip('Đăng xuất quản trị'));
+        await tester.tap(find.byTooltip('Tài khoản quản trị'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(MenuItemButton, 'Đăng xuất'));
         await tester.pumpAndSettle();
         expect(router.routeInformationProvider.value.uri.path, '/admin/login');
         expect(c.read(accountProvider)?.email, 'customer@example.com');

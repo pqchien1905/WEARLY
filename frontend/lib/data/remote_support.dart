@@ -10,7 +10,7 @@ const supportStatusNames = {
 const mailStatusNames = {
   'PENDING': 'Chờ gửi thư',
   'PROCESSING': 'Đang gửi thư',
-  'SENT': 'Đã gửi đến hộp thư local',
+  'SENT': 'Đã gửi thư',
   'FAILED': 'Gửi thư thất bại',
 };
 const invalidSupport = ApiException(
@@ -100,10 +100,23 @@ class RemoteSupportRepository {
     }
   }
 
-  Future<Map<String, dynamic>> list({String? cursor}) async {
+  Future<Map<String, dynamic>> list({
+    String? cursor,
+    String? status,
+    int page = 1,
+    int limit = 10,
+  }) async {
     _check(staff: true);
     final d = commerceMap(
-      await api.get('admin/support', query: {'cursor': ?cursor}),
+      await api.get(
+        'admin/support',
+        query: {
+          'cursor': ?cursor,
+          'status': ?status,
+          'page': '$page',
+          'limit': '$limit',
+        },
+      ),
     );
     _check(staff: true);
     if (d['items'] is! List ||
@@ -178,9 +191,11 @@ class RemoteSupportRepository {
     _check(staff: true);
   }
 
-  Future<Map<String, dynamic>> mail() async {
+  Future<Map<String, dynamic>> mail({int page = 1, int limit = 10}) async {
     _check(staff: true);
-    final d = commerceMap(await api.get('admin/mail'));
+    final d = commerceMap(
+      await api.get('admin/mail', query: {'page': '$page', 'limit': '$limit'}),
+    );
     _check(staff: true);
     if (d['enabled'] is! bool || d['counts'] is! Map || d['items'] is! List) {
       throw invalidSupport;

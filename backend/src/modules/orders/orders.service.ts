@@ -12,15 +12,25 @@ import { cartInclude } from '../cart/cart.service';
 import { CreateOrderDto } from './dto/order.dto';
 import { PageDto } from '../products/dto/query-products.dto';
 import { VnpayProvider } from '../../integrations/payments/vnpay.provider';
+import { WalletGateways } from '../../integrations/payments/wallet-gateways';
+import {
+  assertAmount,
+  providerLabel,
+} from '../../integrations/payments/wallet-gateway';
 import { PromotionsService } from '../promotions/promotions.service';
 import { orderInclude as include } from './order-includes';
 import { cancelOrder } from './cancel-order';
 import { queueOrderStatus } from '../mail/outbox';
+import {
+  automaticOffers,
+  automaticPrice,
+} from '../promotions/automatic-pricing';
 @Injectable()
 export class OrdersService {
   constructor(
     private readonly db: PrismaService,
     private readonly gateway: VnpayProvider,
+    private readonly wallets: WalletGateways,
     private readonly promotions: PromotionsService,
   ) {}
   create(userId: string, key: string | undefined, dto: CreateOrderDto) {
@@ -35,7 +45,10 @@ export class OrdersService {
           shippingMethod: dto.shippingMethod,
           expectedSubtotal: dto.expectedSubtotal,
           cartVersion: dto.cartVersion ?? null,
-          ...(dto.paymentMethod === 'vnpay' ? { paymentMethod: 'vnpay' } : {}),
+          // COD keeps its original hash so earlier idempotency keys still match.
+          ...(dto.paymentMethod !== 'cod'
+            ? { paymentMethod: dto.paymentMethod }
+            : {}),
           ...(dto.couponCode
             ? {
                 couponCode: dto.couponCode,
@@ -71,22 +84,45 @@ export class OrdersService {
       if (!cart?.items.length) throw new BadRequestException('Cart is empty');
       if (dto.cartVersion !== undefined && dto.cartVersion !== cart.version)
         fail(409, 'VERSION_CONFLICT', 'Cart changed; refresh before ordering');
-      const subtotal = totalForItems(
-        cart.items.map((i) => ({
-          price: i.variant.price,
-          quantity: i.quantity,
-        })),
+      const offers = await automaticOffers(tx);
+      const prices = new Map(
+        cart.items.map((i) => [
+          i.variantId,
+          automaticPrice(i.variant.productId, i.variant.price, offers),
+        ]),
       );
+      const pricedItems = cart.items.map((i) => ({
+        productId: i.variant.productId,
+        price: prices.get(i.variantId)!.price,
+        quantity: i.quantity,
+      }));
+      const subtotal = totalForItems(pricedItems);
       if (!subtotal.eq(dto.expectedSubtotal))
         fail(409, 'PRICE_CHANGED', 'Prices changed; refresh your cart');
       const shipping = shippingFee(subtotal, dto.shippingMethod);
       const promotion = dto.couponCode
-        ? await this.promotions.discount(tx, userId, dto.couponCode, subtotal)
+        ? await this.promotions.discount(
+            tx,
+            userId,
+            dto.couponCode,
+            subtotal,
+            pricedItems,
+          )
         : null;
       const discount = promotion?.discount ?? subtotal.minus(subtotal),
         total = subtotal.plus(shipping).minus(discount);
+      const wallet = this.wallets.get(dto.paymentMethod);
       if (dto.paymentMethod === 'vnpay' && total.gt(0))
         this.gateway.assertAvailable();
+      if (wallet && total.gt(0)) {
+        wallet.assertAvailable();
+        if (!assertAmount(wallet, total.toFixed(0)))
+          fail(
+            400,
+            'PAYMENT_AMOUNT_UNSUPPORTED',
+            `${providerLabel(wallet.name)} chỉ nhận đơn từ ${wallet.minAmount.toLocaleString('vi-VN')} đến ${wallet.maxAmount.toLocaleString('vi-VN')} VND`,
+          );
+      }
       if (
         dto.expectedDiscount !== undefined &&
         !discount.eq(dto.expectedDiscount)
@@ -156,7 +192,10 @@ export class OrdersService {
               size: i.variant.size,
               color: i.variant.color,
               image: i.variant.product.images[0]?.url ?? '',
-              unitPrice: i.variant.price,
+              unitPrice: prices.get(i.variantId)!.price,
+              originalUnitPrice: i.variant.price,
+              promotionName: prices.get(i.variantId)!.promotion?.name,
+              automaticPromotionId: prices.get(i.variantId)!.promotion?.id,
               quantity: i.quantity,
             })),
           },

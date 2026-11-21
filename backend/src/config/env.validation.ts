@@ -81,7 +81,7 @@ const schema = z
     GEMINI_API_KEY: z
       .string()
       .trim()
-      .refine((s) => !s || /^[a-zA-Z0-9_-]{20,200}$/.test(s))
+      .refine((s) => !s || /^[a-zA-Z0-9_.-]{20,200}$/.test(s))
       .default(''),
     GEMINI_STYLIST_MODEL: z
       .string()
@@ -138,8 +138,24 @@ const schema = z
     VNPAY_HASH_SECRET: z.string().default(''),
     VNPAY_RETURN_URL: z.string().default(''),
     VNPAY_WEB_RETURN_URL: z.string().default(''),
+    // E-wallet sandboxes. The storefront return page is shared by both wallets.
+    PAYMENT_WEB_RETURN_URL: z.string().default(''),
+    MOMO_ENABLED: z.enum(['true', 'false']).default('false'),
+    MOMO_PARTNER_CODE: z.string().default(''),
+    MOMO_ACCESS_KEY: z.string().default(''),
+    MOMO_SECRET_KEY: z.string().default(''),
+    MOMO_RETURN_URL: z.string().default(''),
+    MOMO_IPN_URL: z.string().default(''),
+    ZALOPAY_ENABLED: z.enum(['true', 'false']).default('false'),
+    ZALOPAY_APP_ID: z.string().default(''),
+    ZALOPAY_KEY1: z.string().default(''),
+    ZALOPAY_KEY2: z.string().default(''),
+    ZALOPAY_RETURN_URL: z.string().default(''),
+    ZALOPAY_CALLBACK_URL: z.string().default(''),
     PASSWORD_RECOVERY_ENABLED: z.enum(['true', 'false']).default('false'),
     LOCAL_MAIL_ENABLED: z.enum(['true', 'false']).default('false'),
+    // Order/support notifications through the configured (external) SMTP.
+    MAIL_DELIVERY_ENABLED: z.enum(['true', 'false']).default('false'),
     LOCAL_MAIL_TIMEOUT_MS: z.coerce
       .number()
       .int()
@@ -154,6 +170,26 @@ const schema = z
     SMTP_FROM: z.string().default(''),
     SMTP_ALLOW_INSECURE_LOCAL: z.enum(['true', 'false']).default('false'),
     PASSWORD_RESET_WEB_URL: z.string().default(''),
+  })
+  .superRefine((c, ctx) => {
+    if (c.MAIL_DELIVERY_ENABLED !== 'true') return;
+    const fail = (path: string) =>
+      ctx.addIssue({
+        code: 'custom',
+        path: [path],
+        message: 'Invalid mail delivery configuration',
+      });
+    const local = ['localhost', '127.0.0.1', '[::1]', '::1'].includes(
+      c.SMTP_HOST,
+    );
+    if (!c.SMTP_HOST || /[\s/@]/.test(c.SMTP_HOST)) fail('SMTP_HOST');
+    if (!z.email().safeParse(c.SMTP_FROM).success) fail('SMTP_FROM');
+    if (Boolean(c.SMTP_USER) !== Boolean(c.SMTP_PASSWORD)) fail('SMTP_USER');
+    if (
+      c.SMTP_ALLOW_INSECURE_LOCAL === 'true' &&
+      (c.NODE_ENV === 'production' || !local)
+    )
+      fail('SMTP_ALLOW_INSECURE_LOCAL');
   })
   .superRefine((c, ctx) => {
     if (c.LOCAL_MAIL_ENABLED !== 'true') return;
@@ -215,6 +251,69 @@ const schema = z
       } catch {
         fail(key);
       }
+    }
+  })
+  .superRefine((c, ctx) => {
+    const momo = c.MOMO_ENABLED === 'true',
+      zalopay = c.ZALOPAY_ENABLED === 'true';
+    if (!momo && !zalopay) return;
+    const fail = (path: string) =>
+      ctx.addIssue({
+        code: 'custom',
+        path: [path],
+        message: 'Invalid e-wallet sandbox configuration',
+      });
+    const local = (host: string) =>
+      ['localhost', '127.0.0.1', '[::1]'].includes(host);
+    // Secure, credential-free URL; plain HTTP only for local development.
+    const url = (key: string, path?: string) => {
+      try {
+        const u = new URL(
+          String((c as unknown as Record<string, unknown>)[key] ?? ''),
+        );
+        if (
+          u.username ||
+          u.password ||
+          u.search ||
+          !(
+            u.protocol === 'https:' ||
+            (u.protocol === 'http:' &&
+              local(u.hostname) &&
+              c.NODE_ENV !== 'production')
+          ) ||
+          (path !== undefined && (u.pathname !== path || u.hash))
+        )
+          fail(key);
+        return u;
+      } catch {
+        fail(key);
+        return null;
+      }
+    };
+    const web = url('PAYMENT_WEB_RETURN_URL');
+    if (
+      web &&
+      (web.hash !== '#/payments/return' ||
+        !c.CORS_ORIGINS.split(',')
+          .map((s) => s.trim())
+          .includes(web.origin))
+    )
+      fail('PAYMENT_WEB_RETURN_URL');
+    if (momo) {
+      if (!/^[A-Za-z0-9]{2,32}$/.test(c.MOMO_PARTNER_CODE))
+        fail('MOMO_PARTNER_CODE');
+      if (!/^[A-Za-z0-9]{8,64}$/.test(c.MOMO_ACCESS_KEY))
+        fail('MOMO_ACCESS_KEY');
+      if (c.MOMO_SECRET_KEY.length < 16) fail('MOMO_SECRET_KEY');
+      url('MOMO_RETURN_URL', '/api/v1/payments/momo/return');
+      url('MOMO_IPN_URL', '/api/v1/payments/momo/ipn');
+    }
+    if (zalopay) {
+      if (!/^\d{1,10}$/.test(c.ZALOPAY_APP_ID)) fail('ZALOPAY_APP_ID');
+      if (c.ZALOPAY_KEY1.length < 16) fail('ZALOPAY_KEY1');
+      if (c.ZALOPAY_KEY2.length < 16) fail('ZALOPAY_KEY2');
+      url('ZALOPAY_RETURN_URL', '/api/v1/payments/zalopay/return');
+      url('ZALOPAY_CALLBACK_URL', '/api/v1/payments/zalopay/callback');
     }
   })
   .superRefine((c, ctx) => {

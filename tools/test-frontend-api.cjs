@@ -20,6 +20,7 @@ Object.assign(process.env, normal, { DATABASE_URL: target.href, NODE_ENV: 'test'
   AI_QUEUE_PREFIX: 'flutter-test-' + randomUUID(), CORS_ORIGINS: 'http://127.0.0.1:4183' });
 process.env.PASSWORD_RECOVERY_ENABLED = 'false';
 process.env.LOCAL_MAIL_ENABLED = 'false';
+process.env.MAIL_DELIVERY_ENABLED = 'false';
 process.env.VNPAY_ENABLED = 'false';
 process.env.GEMINI_API_KEY = ' ';
 process.chdir(backend);
@@ -127,7 +128,8 @@ async function main() {
   const { AppModule } = requireBackend('./dist/app.module');
   let fixtureAiCalls = 0;
   const fixtureAiHttp = async (endpoint, init) => {
-    if(endpoint !== 'https://generativelanguage.googleapis.com/v1/interactions')throw Error('Unexpected Gemini endpoint');
+    const apiVersion = tryon ? 'v1beta' : 'v1';
+    if(endpoint !== `https://generativelanguage.googleapis.com/${apiVersion}/interactions`)throw Error('Unexpected Gemini endpoint');
     if(tryon) {
       const body=JSON.parse(init.body),images=body.input.filter(x=>x.type==='image');
       if(body.store!==false||body.background!==false||images.length!==2||images.some(x=>!x.data||x.uri))throw Error('Invalid private inline image request');
@@ -221,16 +223,21 @@ async function main() {
         headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, name: 'Khôi phục kiểm thử' }) });
       if (registered.status !== 201) throw new Error('Recovery fixture registration failed');
       const account = await registered.json();
+      const administrator = await db.user.create({ data: {
+        email: 'admin-' + fixture + '@example.com', username: 'admin-' + fixture,
+        name: 'Separate recovery administrator', role: 'ADMIN',
+        passwordHash: await requireBackend('argon2').hash(password),
+      } });
       await flutter(['build', 'web', '--release', '--dart-define=USE_REMOTE_API=true', '--dart-define=API_BASE_URL=' + url]);
-      await verifyBrowser('./verify-recovery-browser.cjs', { root, email, password, url, nextPassword: 'Browser-replaced-Password-2026',
-        getLink: async () => {
+      await verifyBrowser('./verify-recovery-browser.cjs', { root, email, password, url, adminUsername: administrator.username, nextPassword: 'Browser-replaced-Password-2026',
+        getCode: async () => {
           for (let i = 0; i < 100; i++) {
             if(mailpit) {
               const result=await (await fetch('http://127.0.0.1:8025/api/v1/search?query='+encodeURIComponent('to:'+email))).json();
               for(const item of result.messages??[]) {
                 const message=await (await fetch('http://127.0.0.1:8025/api/v1/message/'+item.ID)).json();
-                const match=message.Text?.match(/http:\/\/127\.0\.0\.1:4183\/#\/reset-password\?token=[A-Za-z0-9_-]{43}/);
-                if(match)return match[0];
+                const match=message.Text?.match(/:\s*(\d{6})\r?\n/);
+                if(match)return match[1];
               }
             }
             for (const mail of mails) {
@@ -238,18 +245,20 @@ async function main() {
               const decoded = /Content-Transfer-Encoding: base64/i.test(headers)
                 ? Buffer.from(body.replace(/\s/g, ''), 'base64').toString()
                 : body.replace(/=\r\n/g, '').replace(/=([0-9A-F]{2})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
-              const link = decoded.match(/http:\/\/127\.0\.0\.1:4183\/#\/reset-password\?token=[A-Za-z0-9_-]{43}/)?.[0];
-              if (link) return link;
+              const code = decoded.match(/:\s*(\d{6})\r?\n/)?.[1];
+              if (code) return code;
             }
             await new Promise(resolve => setTimeout(resolve, 50));
           }
-          throw new Error('Local SMTP reset link did not arrive');
+          throw new Error('Local SMTP recovery code did not arrive');
         },
       });
       const oldSession = await fetch(url + '/auth/me', { headers: { Authorization: 'Bearer ' + account.accessToken } });
       if (oldSession.status !== 401) throw new Error('Pre-reset session remained active');
       if (await db.passwordResetToken.count({ where: { userId: account.user.id, consumedAt: null } }) !== 0)
         throw new Error('Unconsumed reset token remained');
+      if ((await db.user.findUniqueOrThrow({ where: { id: administrator.id } })).passwordHash !== administrator.passwordHash)
+        throw new Error('Customer recovery changed the administrator password');
       console.log('PASS recovery database: token consumed and original session revoked.');
     } else if(stylist) {
       const email=fixture+'@example.com',otherEmail='browser-'+fixture+'@example.com',password='Stylist-browser-fixture-2026';

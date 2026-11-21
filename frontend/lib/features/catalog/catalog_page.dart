@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../app/providers.dart';
+import '../../app/api_providers.dart';
 import '../../core/design/tokens.dart';
 import '../../core/format.dart';
 import '../../core/widgets/primitives.dart';
 import '../../core/widgets/product_card.dart';
 import '../../core/widgets/category_choices.dart';
-import '../../data/fixtures/catalog_fixture.dart';
 import '../../domain/catalog.dart';
+import '../account/account_navigation.dart';
 
 class CatalogPage extends ConsumerWidget {
   const CatalogPage({super.key, required this.uri, this.wishlist = false});
@@ -31,6 +32,9 @@ class CatalogPage extends ConsumerWidget {
     final query = ProductQuery.fromParams(uri.queryParameters);
     final categories =
         ref.watch(catalogCategoriesProvider).value ?? const <String, String>{};
+    final brands = query.brand.isEmpty
+        ? const <String, String>{}
+        : ref.watch(catalogBrandsProvider).value ?? const <String, String>{};
     final result = wishlist
         ? ref.watch(allProductsProvider)
         : ref.watch(catalogProvider(uri.query));
@@ -41,241 +45,352 @@ class CatalogPage extends ConsumerWidget {
       onChange: (key, value) => change(context, key, value),
       onClear: () => context.go('/shop'),
     );
-    return PageBody(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Trang chủ / ${wishlist ? "Yêu thích" : "Cửa hàng"}',
-            style: T.small,
-          ),
-          const SizedBox(height: 28),
-          Text(
-            wishlist
-                ? 'Những món đồ bạn thích.'
-                : query.search.isNotEmpty
-                ? 'Kết quả cho “${query.search}”'
-                : query.category.isNotEmpty
-                ? categories[query.category] ?? 'Bộ sưu tập'
-                : 'Tủ đồ của bạn.',
-            style: T.display(wide ? 48 : 32),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            wishlist
-                ? 'Lưu cảm hứng, trở lại khi bạn sẵn sàng.'
-                : 'Chọn ít hơn. Chọn đúng với mình.',
-            style: T.body.copyWith(color: T.muted),
-          ),
-          const SizedBox(height: 32),
-          if (!wishlist) ...[
-            CategoryChoices(
-              selected: query.category,
-              onSelected: (slug) => change(context, 'category', slug),
-            ),
-            const SizedBox(height: 24),
-          ],
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (wide && !wishlist) ...[
-                SizedBox(width: 210, child: filters),
-                const SizedBox(width: 40),
-              ],
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (!wishlist) ...[
+          Text('Trang chủ / Cửa hàng', style: T.small),
+          const SizedBox(height: 24),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final heading = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    wishlist
+                        ? 'Những món đồ bạn thích.'
+                        : query.search.isNotEmpty
+                        ? 'Kết quả cho “${query.search}”'
+                        : query.category.isNotEmpty
+                        ? categories[query.category] ?? 'Bộ sưu tập'
+                        : query.brand.isNotEmpty
+                        ? brands[query.brand] ?? query.brand
+                        : 'Tủ đồ của bạn.',
+                    style: T.display(wide ? 48 : 32),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    wishlist
+                        ? 'Lưu cảm hứng, trở lại khi bạn sẵn sàng.'
+                        : 'Chọn ít hơn. Chọn đúng với mình.',
+                    style: T.body.copyWith(color: T.muted),
+                  ),
+                ],
+              );
+              final search = _CatalogSearch(
+                value: query.search,
+                onSearch: (value) => change(context, 'q', value),
+              );
+              if (constraints.maxWidth >= 880 &&
+                  MediaQuery.textScalerOf(context).scale(14) <= 18) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Wrap(
-                      alignment: WrapAlignment.spaceBetween,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 16,
-                      runSpacing: 12,
-                      children: [
-                        Text(
-                          result.hasValue
-                              ? '${wishlist ? favorites.length : result.value!.total} thiết kế'
-                              : 'Đang tìm thiết kế…',
-                          style: T.small,
-                        ),
-                        if (!wide && !wishlist)
-                          OutlinedButton.icon(
-                            onPressed: () async {
-                              final params =
-                                  await showModalBottomSheet<
-                                    Map<String, String>
-                                  >(
-                                    context: context,
-                                    isScrollControlled: true,
-                                    useSafeArea: true,
-                                    builder: (_) => CatalogFilterSheet(
-                                      parameters: uri.queryParameters,
-                                    ),
-                                  );
-                              if (params != null && context.mounted) {
-                                context.go(
-                                  Uri(
-                                    path: uri.path,
-                                    queryParameters: params.isEmpty
-                                        ? null
-                                        : params,
-                                  ).toString(),
-                                );
-                              }
-                            },
-                            icon: const Icon(Icons.tune, size: 18),
-                            label: const Text('Bộ lọc'),
-                          ),
-                        if (!wishlist)
-                          DropdownButton<String>(
-                            value:
-                                [
-                                  'newest',
-                                  'price-asc',
-                                  'price-desc',
-                                  'name',
-                                ].contains(query.sort)
-                                ? query.sort
-                                : 'newest',
-                            underline: const SizedBox(),
-                            items: const [
-                              DropdownMenuItem(
-                                value: 'newest',
-                                child: Text('Mới nhất'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'price-asc',
-                                child: Text('Giá tăng dần'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'price-desc',
-                                child: Text('Giá giảm dần'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'name',
-                                child: Text('Theo tên'),
-                              ),
-                            ],
-                            onChanged: (v) => change(context, 'sort', v),
-                          ),
-                      ],
-                    ),
-                    if (uri.queryParameters.entries.any(
-                      (e) => !['page', 'sort'].contains(e.key),
-                    ))
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            for (final e in uri.queryParameters.entries.where(
-                              (e) => !['page', 'sort'].contains(e.key),
-                            ))
-                              InputChip(
-                                label: Text(
-                                  e.key == 'max'
-                                      ? 'Dưới ${money(int.tryParse(e.value) ?? 0)}'
-                                      : e.key == 'stock'
-                                      ? 'Còn hàng'
-                                      : categories[e.value] ?? e.value,
-                                ),
-                                onDeleted: () => change(context, e.key, null),
-                              ),
-                            TextButton(
-                              onPressed: () => context.go('/shop'),
-                              child: const Text('Xóa bộ lọc'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    const SizedBox(height: 24),
-                    result.when(
-                      data: (page) {
-                        final items = wishlist
-                            ? page.items
-                                  .where((p) => favorites.contains(p.id))
-                                  .toList()
-                            : page.items;
-                        return Column(
-                          children: [
-                            if (items.isEmpty)
-                              StatePanel(
-                                title: wishlist
-                                    ? 'Tủ đồ yêu thích còn trống'
-                                    : 'Chưa có thiết kế phù hợp',
-                                message: wishlist
-                                    ? 'Nhấn biểu tượng trái tim trên một sản phẩm để lưu lại.'
-                                    : 'Thử bỏ bớt bộ lọc hoặc dùng từ khóa khác.',
-                                action: AppButton(
-                                  'Khám phá cửa hàng',
-                                  onPressed: () => context.go('/shop'),
-                                ),
-                              )
-                            else
-                              ProductGrid(items, maxColumns: 4),
-                            if (page.total > 12 && !wishlist)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 40),
-                                child: Wrap(
-                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                  spacing: 12,
-                                  children: [
-                                    AppButton(
-                                      'Trang trước',
-                                      outlined: true,
-                                      onPressed: query.page > 1
-                                          ? () => change(
-                                              context,
-                                              'page',
-                                              '${query.page - 1}',
-                                            )
-                                          : null,
-                                    ),
-                                    Text(
-                                      '${query.page} / ${(page.total / 12).ceil()}',
-                                    ),
-                                    AppButton(
-                                      'Trang sau',
-                                      outlined: true,
-                                      onPressed: query.page * 12 < page.total
-                                          ? () => change(
-                                              context,
-                                              'page',
-                                              '${query.page + 1}',
-                                            )
-                                          : null,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
-                        );
-                      },
-                      error: (e, _) => StatePanel(
-                        title: 'Không tải được sản phẩm',
-                        message: '$e',
-                        action: AppButton(
-                          'Thử lại',
-                          onPressed: () => ref.invalidate(catalogProvider),
-                        ),
-                      ),
-                      loading: () => const LoadingPanel(),
-                    ),
+                    Expanded(child: heading),
+                    const SizedBox(width: 40),
+                    SizedBox(width: 360, child: search),
                   ],
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [heading, const SizedBox(height: 24), search],
+              );
+            },
+          ),
+          const SizedBox(height: 24),
+          CategoryChoices(
+            selected: query.category,
+            onSelected: (slug) => change(context, 'category', slug),
+          ),
+          const Divider(height: 48),
+        ],
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (wide && !wishlist) ...[
+              Container(
+                width: 250,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: T.canvas,
+                  borderRadius: T.panelRadius,
+                  border: Border.all(color: T.line),
+                ),
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: filters,
                 ),
               ),
+              const SizedBox(width: 32),
             ],
-          ),
-          const SizedBox(height: 40),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 16,
+                    runSpacing: 12,
+                    children: [
+                      Text(
+                        result.hasValue
+                            ? '${wishlist ? favorites.length : result.value!.total} thiết kế'
+                            : 'Đang tìm thiết kế…',
+                        style: T.small,
+                      ),
+                      if (!wide && !wishlist)
+                        OutlinedButton.icon(
+                          onPressed: () async {
+                            final params =
+                                await showModalBottomSheet<Map<String, String>>(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  useSafeArea: true,
+                                  builder: (_) => CatalogFilterSheet(
+                                    parameters: uri.queryParameters,
+                                  ),
+                                );
+                            if (params != null && context.mounted) {
+                              context.go(
+                                Uri(
+                                  path: uri.path,
+                                  queryParameters: params.isEmpty
+                                      ? null
+                                      : params,
+                                ).toString(),
+                              );
+                            }
+                          },
+                          icon: const Icon(Icons.tune, size: 18),
+                          label: const Text('Bộ lọc'),
+                        ),
+                      if (!wishlist)
+                        DropdownButton<String>(
+                          value:
+                              [
+                                'newest',
+                                'price-asc',
+                                'price-desc',
+                                'name',
+                              ].contains(query.sort)
+                              ? query.sort
+                              : 'newest',
+                          underline: const SizedBox(),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'newest',
+                              child: Text('Mới nhất'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'price-asc',
+                              child: Text('Giá tăng dần'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'price-desc',
+                              child: Text('Giá giảm dần'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'name',
+                              child: Text('Theo tên'),
+                            ),
+                          ],
+                          onChanged: (v) => change(context, 'sort', v),
+                        ),
+                    ],
+                  ),
+                  if (uri.queryParameters.entries.any(
+                    (e) => !['page', 'sort'].contains(e.key),
+                  ))
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final e in uri.queryParameters.entries.where(
+                            (e) => !['page', 'sort'].contains(e.key),
+                          ))
+                            InputChip(
+                              label: Text(
+                                e.key == 'max'
+                                    ? 'Dưới ${money(int.tryParse(e.value) ?? 0)}'
+                                    : e.key == 'stock'
+                                    ? 'Còn hàng'
+                                    : e.key == 'brand'
+                                    ? 'Thương hiệu: ${brands[e.value] ?? e.value}'
+                                    : categories[e.value] ?? e.value,
+                              ),
+                              onDeleted: () => change(context, e.key, null),
+                            ),
+                          TextButton(
+                            onPressed: () => context.go('/shop'),
+                            child: const Text('Xóa bộ lọc'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 24),
+                  result.when(
+                    data: (page) {
+                      final items = wishlist
+                          ? page.items
+                                .where((p) => favorites.contains(p.id))
+                                .toList()
+                          : page.items;
+                      return Column(
+                        children: [
+                          if (items.isEmpty)
+                            StatePanel(
+                              title: wishlist
+                                  ? 'Tủ đồ yêu thích còn trống'
+                                  : page.total > 0
+                                  ? 'Trang này không còn sản phẩm'
+                                  : 'Chưa có thiết kế phù hợp',
+                              message: wishlist
+                                  ? 'Nhấn biểu tượng trái tim trên một sản phẩm để lưu lại.'
+                                  : page.total > 0
+                                  ? 'Danh mục đã được cập nhật. Trở về trang đầu để xem các sản phẩm hiện có.'
+                                  : 'Thử bỏ bớt bộ lọc hoặc dùng từ khóa khác.',
+                              action: AppButton(
+                                !wishlist && page.total > 0
+                                    ? 'Về trang đầu'
+                                    : 'Khám phá cửa hàng',
+                                onPressed: () => !wishlist && page.total > 0
+                                    ? change(context, 'page', null)
+                                    : context.go('/shop'),
+                              ),
+                            )
+                          else
+                            ProductGrid(items, maxColumns: 4),
+                          if (page.total > 12 && items.isNotEmpty && !wishlist)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 40),
+                              child: Wrap(
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                spacing: 12,
+                                children: [
+                                  AppButton(
+                                    'Trang trước',
+                                    outlined: true,
+                                    onPressed: query.page > 1
+                                        ? () => change(
+                                            context,
+                                            'page',
+                                            '${query.page - 1}',
+                                          )
+                                        : null,
+                                  ),
+                                  Text(
+                                    '${query.page} / ${(page.total / 12).ceil()}',
+                                  ),
+                                  AppButton(
+                                    'Trang sau',
+                                    outlined: true,
+                                    onPressed: query.page * 12 < page.total
+                                        ? () => change(
+                                            context,
+                                            'page',
+                                            '${query.page + 1}',
+                                          )
+                                        : null,
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      );
+                    },
+                    error: (e, _) => StatePanel(
+                      title: 'Không tải được sản phẩm',
+                      message: '$e',
+                      action: AppButton(
+                        'Thử lại',
+                        onPressed: () => ref.invalidate(catalogProvider),
+                      ),
+                    ),
+                    loading: () => const LoadingPanel(),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 40),
+        if (!ref.watch(remoteApiProvider))
           const Text(
             'Ảnh và catalog minh họa. Màu ảnh có thể khác biến thể demo.',
             style: T.small,
           ),
+      ],
+    );
+    return wishlist
+        ? AccountFrame(
+            title: 'Những món đồ bạn thích.',
+            current: '/wishlist',
+            child: body,
+          )
+        : PageBody(child: body);
+  }
+}
+
+class _CatalogSearch extends StatefulWidget {
+  const _CatalogSearch({required this.value, required this.onSearch});
+  final String value;
+  final ValueChanged<String> onSearch;
+  @override
+  State<_CatalogSearch> createState() => _CatalogSearchState();
+}
+
+class _CatalogSearchState extends State<_CatalogSearch> {
+  late final controller = TextEditingController(text: widget.value);
+  @override
+  void didUpdateWidget(covariant _CatalogSearch oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value) controller.text = widget.value;
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => TextField(
+    controller: controller,
+    maxLength: 100,
+    textInputAction: TextInputAction.search,
+    onSubmitted: (value) => widget.onSearch(value.trim()),
+    onChanged: (_) => setState(() {}),
+    decoration: InputDecoration(
+      labelText: 'Tìm trong cửa hàng',
+      hintText: 'Tên sản phẩm, ví dụ: áo sơ mi',
+      counterText: '',
+      prefixIcon: const Icon(Icons.search),
+      suffixIcon: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (controller.text.isNotEmpty)
+            IconButton(
+              tooltip: 'Xóa từ khóa',
+              onPressed: () {
+                controller.clear();
+                widget.onSearch('');
+                setState(() {});
+              },
+              icon: const Icon(Icons.close, size: 20),
+            ),
+          IconButton(
+            tooltip: 'Tìm sản phẩm',
+            onPressed: () => widget.onSearch(controller.text.trim()),
+            icon: const Icon(Icons.arrow_forward),
+          ),
         ],
       ),
-    );
-  }
+    ),
+  );
 }
 
 class CatalogFilterSheet extends StatefulWidget {
@@ -388,18 +503,10 @@ class FilterControls extends ConsumerWidget {
       const Divider(),
       const Text('Size'),
       const SizedBox(height: 12),
-      Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: ['XS', 'S', 'M', 'L', 'XL', 'XXL']
-            .map(
-              (s) => FilterChip(
-                label: Text(s),
-                selected: query.size == s,
-                onSelected: (v) => onChange('size', v ? s : null),
-              ),
-            )
-            .toList(),
+      _CatalogOptions(
+        kind: 'sizes',
+        selected: query.size,
+        onSelected: (value) => onChange('size', value),
       ),
       const Divider(),
       const Text('Màu sắc'),
@@ -429,18 +536,10 @@ class FilterControls extends ConsumerWidget {
       const Divider(),
       const Text('Phong cách'),
       const SizedBox(height: 12),
-      Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: styles
-            .map(
-              (s) => FilterChip(
-                label: Text(s),
-                selected: query.style == s,
-                onSelected: (v) => onChange('style', v ? s : null),
-              ),
-            )
-            .toList(),
+      _CatalogOptions(
+        kind: 'styles',
+        selected: query.style,
+        onSelected: (value) => onChange('style', value),
       ),
       const Divider(),
       CheckboxListTile(
@@ -452,4 +551,39 @@ class FilterControls extends ConsumerWidget {
       TextButton(onPressed: onClear, child: const Text('Xóa tất cả bộ lọc')),
     ],
   );
+}
+
+class _CatalogOptions extends ConsumerWidget {
+  const _CatalogOptions({
+    required this.kind,
+    required this.selected,
+    required this.onSelected,
+  });
+  final String kind, selected;
+  final ValueChanged<String?> onSelected;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => ref
+      .watch(catalogOptionsProvider)
+      .when(
+        loading: () => const Text('Đang tải lựa chọn…', style: T.small),
+        error: (_, _) => TextButton(
+          onPressed: () => ref.invalidate(catalogOptionsProvider),
+          child: const Text('Tải lại lựa chọn'),
+        ),
+        data: (options) => Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final value in {
+              ...?options[kind],
+              if (selected.isNotEmpty) selected,
+            })
+              FilterChip(
+                label: Text(value),
+                selected: selected == value,
+                onSelected: (checked) => onSelected(checked ? value : null),
+              ),
+          ],
+        ),
+      );
 }

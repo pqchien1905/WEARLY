@@ -97,7 +97,7 @@ class _AdminProductsPageState extends ConsumerState<AdminProductsPage> {
                     (p, v),
             ];
             final total = widget.inventory ? variantRows.length : items.length;
-            final perPage = widget.inventory ? 12 : 8;
+            const perPage = 10;
             final pageCount = (total / perPage).ceil().clamp(1, 100000);
             final current = tablePage.clamp(1, pageCount);
             final visibleItems = items

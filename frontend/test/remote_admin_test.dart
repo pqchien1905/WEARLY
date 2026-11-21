@@ -10,6 +10,36 @@ import 'remote_session_test.dart' show jsonResponse;
 
 void main() {
   test(
+    'editor references include empty categories from every private page',
+    () async {
+      final paths = <String>[];
+      final api = ApiClient(
+        baseUrl: 'http://localhost/api/v1',
+        tokens: SessionTokens()
+          ..set(accessToken: 'admin', refreshToken: 'refresh'),
+        client: MockClient((r) async {
+          paths.add(r.url.path);
+          expect(r.url.path, startsWith('/api/v1/admin/'));
+          expect(r.headers['authorization'], 'Bearer admin');
+          final page = int.parse(r.url.queryParameters['page']!);
+          return jsonResponse({
+            'items': [
+              {'id': '${r.url.path}-$page', 'name': 'New empty category'},
+            ],
+            'total': r.url.path.endsWith('/categories') ? 101 : 1,
+            'page': page,
+            'limit': 100,
+          });
+        }),
+      );
+      addTearDown(api.close);
+      final references = await AdminRepository(api).references();
+      expect((references['categories'] as List).length, 2);
+      expect((references['brands'] as List).length, 1);
+      expect(paths.length, 3);
+    },
+  );
+  test(
     'late publication completion invalidates public content without replaying the write',
     () async {
       final response = Completer<http.Response>();
@@ -42,7 +72,7 @@ void main() {
         ..set(accessToken: 'admin', refreshToken: 'refresh'),
       client: MockClient((r) async {
         expect(r.headers['authorization'], 'Bearer admin');
-        expect(r.url.queryParameters, {'page': '2', 'limit': '20'});
+        expect(r.url.queryParameters, {'page': '2', 'limit': '10'});
         return jsonResponse({
           'items': [
             {
@@ -52,14 +82,14 @@ void main() {
               ],
             },
           ],
-          'total': 21,
+          'total': 11,
           'page': 2,
-          'limit': 20,
+          'limit': 10,
         });
       }),
     );
     final result = await AdminRepository(api).list('products', 2);
-    expect(result.total, 21);
+    expect(result.total, 11);
     expect(result.hasNext, false);
     expect(result.items.single['variants'][0]['active'], false);
     expect(result.items.single['variants'][0]['price'], '99999999999999');

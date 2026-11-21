@@ -6,6 +6,7 @@ import '../../core/design/tokens.dart';
 import '../../core/widgets/primitives.dart';
 import '../virtual_tryon/tryon_results.dart';
 import 'account_navigation.dart';
+import 'account_components.dart';
 
 class TryOnHistoryPage extends ConsumerWidget {
   const TryOnHistoryPage({super.key});
@@ -24,15 +25,14 @@ class TryOnHistoryPage extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const DemoNotice(
+          const AccountNotice(
             text:
                 'Lịch sử của tab này chỉ giữ mã phiên và trang phục, tối đa 20 kết quả. Không lưu ảnh cá nhân hay ảnh AI. Tải lại trang sẽ xóa lịch sử.',
           ),
           const SizedBox(height: 24),
-          Wrap(
-            spacing: 16,
-            runSpacing: 12,
-            children: [
+          AccountToolbar(
+            label: '${results.length} lượt thử đồ',
+            actions: [
               AppButton(
                 'Thử trang phục mới',
                 onPressed: () => context.go('/virtual-try-on'),
@@ -56,7 +56,7 @@ class TryOnHistoryPage extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
           if (results.isEmpty)
-            const StatePanel(
+            const AccountEmptyState(
               title: 'Chưa có lần thử đồ nào',
               message:
                   'Hoàn tất một phiên thử đồ demo để xem lại thông tin trang phục tại đây.',
@@ -73,6 +73,7 @@ class TryOnHistoryPage extends ConsumerWidget {
                   margin: const EdgeInsets.only(bottom: 16),
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
+                    color: T.surface,
                     border: Border.all(color: T.line),
                     borderRadius: T.radius,
                   ),

@@ -14,6 +14,7 @@ import { CurrentUser, Identity, Public } from '../../common/decorators/auth';
 import { ReviewsService } from './reviews.service';
 import {
   CreateReviewDto,
+  OwnedReviewPageDto,
   ReviewPageDto,
   ReviewVersionDto,
   UpdateReviewDto,
@@ -24,7 +25,10 @@ import {
 @Controller('users/me/reviews')
 export class CustomerReviewsController {
   constructor(private readonly service: ReviewsService) {}
-  @Get() history(@CurrentUser() user: Identity, @Query() q: ReviewPageDto) {
+  @Get() history(
+    @CurrentUser() user: Identity,
+    @Query() q: OwnedReviewPageDto,
+  ) {
     return this.service.history(user.id, q);
   }
 }

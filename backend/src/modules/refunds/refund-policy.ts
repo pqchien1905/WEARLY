@@ -1,3 +1,4 @@
+import { isOnlineProvider } from '../../integrations/payments/wallet-gateway';
 export type RefundPolicyOrder = {
   status: string;
   shipmentStatus: string | null;
@@ -38,7 +39,7 @@ export function refundSources(order: RefundPolicyOrder) {
   const sources =
     p.provider === 'cod' && p.settled
       ? [{ id: null, amount: p.amount, primary: true }]
-      : p.provider === 'vnpay' &&
+      : isOnlineProvider(p.provider) &&
           p.transactionNo &&
           order.attempts.some(
             (a) => a.transactionNo === p.transactionNo && a.status === 'PAID',

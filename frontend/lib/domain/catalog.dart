@@ -6,9 +6,14 @@ class ProductVariant {
     required this.colorHex,
     required this.price,
     required this.stock,
+    this.originalPrice,
+    this.promotionName,
   });
   final String sku, size, color;
   final int colorHex, price, stock;
+  final int? originalPrice;
+  final String? promotionName;
+  bool get discounted => originalPrice != null && originalPrice! > price;
   ProductVariant copyWith({int? price, int? stock}) => ProductVariant(
     sku: sku,
     size: size,
@@ -16,6 +21,8 @@ class ProductVariant {
     colorHex: colorHex,
     price: price ?? this.price,
     stock: stock ?? this.stock,
+    originalPrice: originalPrice,
+    promotionName: promotionName,
   );
 }
 
@@ -45,6 +52,8 @@ class Product {
   final List<ProductMedia> media;
   final bool active, tryOn;
   int get price => variants.map((v) => v.price).reduce((a, b) => a < b ? a : b);
+  ProductVariant get cheapestVariant =>
+      variants.reduce((a, b) => a.price <= b.price ? a : b);
   List<String> get colors => variants.map((v) => v.color).toSet().toList();
   Product copyWith({
     String? name,
@@ -71,6 +80,7 @@ class ProductQuery {
   const ProductQuery({
     this.search = '',
     this.category = '',
+    this.brand = '',
     this.size = '',
     this.color = '',
     this.style = '',
@@ -81,7 +91,7 @@ class ProductQuery {
     this.limit = 12,
     this.includeInactive = false,
   });
-  final String search, category, size, color, style, sort;
+  final String search, category, brand, size, color, style, sort;
   final int? maxPrice;
   final int page, limit;
   final bool inStock;
@@ -89,6 +99,7 @@ class ProductQuery {
   factory ProductQuery.fromParams(Map<String, String> p) => ProductQuery(
     search: p['q'] ?? '',
     category: p['category'] ?? '',
+    brand: p['brand'] ?? '',
     size: p['size'] ?? '',
     color: p['color'] ?? '',
     style: p['style'] ?? '',
@@ -100,6 +111,7 @@ class ProductQuery {
   Map<String, String> toParams() => {
     if (search.isNotEmpty) 'q': search,
     if (category.isNotEmpty) 'category': category,
+    if (brand.isNotEmpty) 'brand': brand,
     if (size.isNotEmpty) 'size': size,
     if (color.isNotEmpty) 'color': color,
     if (style.isNotEmpty) 'style': style,

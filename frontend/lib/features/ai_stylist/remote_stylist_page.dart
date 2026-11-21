@@ -479,14 +479,20 @@ class _RemoteStylistPageState extends ConsumerState<RemoteStylistPage> {
             builder: (_, c) => c.maxWidth < 850
                 ? Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [form, const SizedBox(height: 32), result],
+                    children: [
+                      SurfacePanel(child: form),
+                      const SizedBox(height: 24),
+                      SurfacePanel(tinted: true, child: result),
+                    ],
                   )
                 : Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(child: form),
-                      const SizedBox(width: 40),
-                      Expanded(child: result),
+                      Expanded(child: SurfacePanel(child: form)),
+                      const SizedBox(width: 24),
+                      Expanded(
+                        child: SurfacePanel(tinted: true, child: result),
+                      ),
                     ],
                   ),
           ),

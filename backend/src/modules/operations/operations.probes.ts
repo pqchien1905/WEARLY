@@ -315,6 +315,7 @@ export class OperationsProbes {
   async mail(): Promise<ProbeState> {
     if (
       this.config.get('LOCAL_MAIL_ENABLED') !== 'true' &&
+      this.config.get('MAIL_DELIVERY_ENABLED') !== 'true' &&
       this.config.get('PASSWORD_RECOVERY_ENABLED') !== 'true'
     )
       return { status: 'disabled' };

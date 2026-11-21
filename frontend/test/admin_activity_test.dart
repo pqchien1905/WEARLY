@@ -7,7 +7,7 @@ import 'package:nep_storefront/features/admin/remote/admin_providers.dart';
 
 AdminPage history(int page, {bool empty = false}) => AdminPage({
   'page': page,
-  'limit': 20,
+  'limit': 10,
   'total': empty ? 0 : 21,
   'items': empty
       ? []
@@ -68,6 +68,36 @@ void main() {
     await tester.tap(find.text('Trang trước'));
     await tester.pumpAndSettle();
     expect(find.text('Cập nhật sản phẩm'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('activity distinguishes password reset from a profile update', (
+    tester,
+  ) async {
+    await mount(
+      tester,
+      (_) async => AdminPage({
+        'page': 1,
+        'limit': 10,
+        'total': 2,
+        'items': [
+          for (final changed in [false, true])
+            {
+              'id': 'event-$changed',
+              'actorId': 'admin',
+              'targetId': 'customer',
+              'action': 'STAFF_UPDATED',
+              'createdAt': '2026-11-03T10:30:00.000Z',
+              'details': {
+                'after': {if (changed) 'passwordChanged': true},
+              },
+            },
+        ],
+      }),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Cập nhật tài khoản'), findsOneWidget);
+    expect(find.text('Đặt lại mật khẩu khách hàng'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

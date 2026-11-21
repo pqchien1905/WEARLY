@@ -1,10 +1,12 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
+import { cleanProductName } from '../../products/catalog-text';
 import {
   IsArray,
   ArrayMaxSize,
   ValidateNested,
   IsBoolean,
+  IsDateString,
   IsIn,
   IsInt,
   ValidateIf,
@@ -15,6 +17,7 @@ import {
   MaxLength,
   Min,
   MinLength,
+  NotEquals,
 } from 'class-validator';
 export class ProductImageDto {
   @ApiProperty()
@@ -36,7 +39,12 @@ export class CreateProductDto {
   @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
   @MaxLength(100)
   slug!: string;
-  @ApiProperty() @IsString() @MinLength(1) @MaxLength(200) name!: string;
+  @ApiProperty()
+  @Transform(({ value }: { value: unknown }) => cleanProductName(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(200)
+  name!: string;
   @ApiProperty() @IsString() @MaxLength(5000) description!: string;
   @ApiProperty() @IsString() @MaxLength(200) material!: string;
   @ApiProperty() @IsString() @MaxLength(100) style!: string;
@@ -60,16 +68,51 @@ export class CreateProductDto {
 }
 export class UpdateProductDto extends PartialType(CreateProductDto, {
   skipNullProperties: false,
-}) {}
+}) {
+  @ApiProperty({ required: false })
+  @ValidateIf((_o, v) => v !== undefined)
+  @IsDateString({ strict: true })
+  expectedUpdatedAt?: string;
+}
+export class DeleteProductDto {
+  @ApiProperty()
+  @IsDateString({ strict: true })
+  expectedUpdatedAt!: string;
+}
 export class CreateSkuDto {
   @ApiProperty() @IsUUID() productId!: string;
-  @ApiProperty() @IsString() @MinLength(1) @MaxLength(100) sku!: string;
-  @ApiProperty() @IsString() @MinLength(1) @MaxLength(30) size!: string;
-  @ApiProperty() @IsString() @MinLength(1) @MaxLength(60) color!: string;
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  sku!: string;
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(30)
+  size!: string;
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(60)
+  color!: string;
   @ApiProperty() @Matches(/^#[0-9a-fA-F]{6}$/) colorHex!: string;
   @ApiProperty() @Matches(/^\d{1,14}$/) price!: string;
 }
 export class UpdateSkuDto {
+  @ApiProperty({ required: false })
+  @ValidateIf((_o, v) => v !== undefined)
+  @IsDateString({ strict: true })
+  expectedUpdatedAt?: string;
   @ApiProperty({ required: false })
   @ValidateIf((_object, value) => value !== undefined)
   @Matches(/^\d{1,14}$/)
@@ -94,6 +137,10 @@ export class CategoryDto {
   name!: string;
 }
 export class RenameTaxonomyDto {
+  @ApiProperty({ required: false })
+  @ValidateIf((_o, v) => v !== undefined)
+  @IsDateString({ strict: true })
+  expectedUpdatedAt?: string;
   @ApiProperty()
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim() : value,
@@ -108,10 +155,32 @@ export class RenameTaxonomyDto {
   @MaxLength(100)
   expectedName!: string;
 }
+export class DeleteTaxonomyDto {
+  @ApiProperty()
+  @IsDateString({ strict: true })
+  expectedUpdatedAt!: string;
+}
+export class DeleteCategoryDto extends DeleteTaxonomyDto {}
 export class AdjustInventoryDto {
-  @ApiProperty() @IsInt() @Min(-1000000) @Max(1000000) delta!: number;
+  @ApiProperty({ required: false, enum: ['in', 'out', 'count', 'delta'] })
+  @ValidateIf((_o, v) => v !== undefined)
+  @IsIn(['in', 'out', 'count', 'delta'])
+  operation?: 'in' | 'out' | 'count' | 'delta';
+  @ApiProperty()
+  @IsInt()
+  @Min(-1000000)
+  @Max(1000000)
+  @NotEquals(0)
+  delta!: number;
   @ApiProperty() @IsInt() @Min(0) expectedVersion!: number;
-  @ApiProperty() @IsString() @MinLength(3) @MaxLength(200) reason!: string;
+  @ApiProperty()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @MinLength(3)
+  @MaxLength(200)
+  reason!: string;
 }
 export class OrderStatusDto {
   @ApiProperty({ enum: ['CONFIRMED', 'SHIPPED', 'DELIVERED'] })
@@ -122,7 +191,12 @@ export class OrderStatusDto {
 export class SettleCodDto {
   @ApiProperty() @Matches(/^[1-9]\d{0,13}$/) amount!: string;
   @ApiProperty()
-  @Transform(({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value)
-  @IsString() @MinLength(3) @MaxLength(100) reference!: string;
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @MinLength(3)
+  @MaxLength(100)
+  reference!: string;
   @ApiProperty() @IsInt() @Min(0) expectedVersion!: number;
 }

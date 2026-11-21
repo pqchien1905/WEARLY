@@ -108,6 +108,24 @@ describe('Commerce with real PostgreSQL', () => {
       .expect(200);
     expect(swagger.body.paths['/api/v1/products']).toBeDefined();
   });
+  it('allocates unique uppercase order codes and preserves them on replay and reads', async () => {
+    const [first, second, p] = await Promise.all([customer(), customer(), product(4)]);
+    const customers = [first, second];
+    await Promise.all(customers.map(c => api(c.accessToken).add(p.variants[0].sku).expect(201)));
+    const keys = [randomUUID(), randomUUID()];
+    const results = await Promise.all(customers.map((c, i) => api(c.accessToken).order(c.address.id, keys[i]).expect(201)));
+    expect(new Set(results.map(r => r.body.code)).size).toBe(2);
+    for (const [i, result] of results.entries()) {
+      expect(result.body.code).toMatch(/^WR[A-F0-9]{6,16}$/);
+      const replay = await api(customers[i].accessToken).order(customers[i].address.id, keys[i]).expect(201);
+      expect(replay.body.id).toBe(result.body.id);
+      expect(replay.body.code).toBe(result.body.code);
+      const read = await request(app.getHttpServer()).get('/api/v1/orders/' + result.body.id).auth(customers[i].accessToken, { type: 'bearer' }).expect(200);
+      expect(read.body.code).toBe(result.body.code);
+    }
+    await expect(db.order.update({ where: { id: results[1].body.id }, data: { code: results[0].body.code } })).rejects.toMatchObject({ code: 'P2002' });
+    await request(app.getHttpServer()).get('/api/v1/orders/' + results[0].body.id).auth(second.accessToken, { type: 'bearer' }).expect(404);
+  });
   it('persists the chosen shipping method in checkout and order history', async () => {
     const c = await customer(),
       p = await product(2);
@@ -210,6 +228,7 @@ describe('Commerce with real PostgreSQL', () => {
   });
   it('returns catalog filters and exact price strings', async () => {
     const p = await product(2);
+    await db.productImage.create({ data: { productId: p.id, url: 'assets/images/shirt.jpg', alt: 'Catalog fixture' } });
     await db.productVariant.create({
       data: {
         productId: p.id,

@@ -6,9 +6,9 @@ export class CreateOrderDto {
   @ApiProperty({ enum: ['standard', 'express'] })
   @IsIn(['standard', 'express'])
   shippingMethod: 'standard' | 'express' = 'standard';
-  @ApiProperty({ enum: ['cod', 'vnpay'] })
-  @IsIn(['cod', 'vnpay'])
-  paymentMethod: 'cod' | 'vnpay' = 'cod';
+  @ApiProperty({ enum: ['cod', 'vnpay', 'momo', 'zalopay'] })
+  @IsIn(['cod', 'vnpay', 'momo', 'zalopay'])
+  paymentMethod: 'cod' | 'vnpay' | 'momo' | 'zalopay' = 'cod';
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)
   @Transform(({ value }: { value: unknown }) =>

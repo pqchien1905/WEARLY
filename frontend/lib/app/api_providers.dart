@@ -6,11 +6,17 @@ import 'config.dart';
 import '../data/tryon_pending_store.dart';
 import '../data/tryon_pending_native.dart'
     if (dart.library.js_interop) '../data/tryon_pending_web.dart';
+import '../data/checkout_pending_store.dart';
+import '../data/checkout_pending_native.dart'
+    if (dart.library.js_interop) '../data/checkout_pending_web.dart';
 
 final remoteApiProvider = Provider<bool>((ref) => BrandConfig.useRemoteApi);
 final apiBaseUrlProvider = Provider<String>((ref) => BrandConfig.apiBaseUrl);
 final tryOnPendingStoreProvider = Provider<TryOnPendingStore>(
   (ref) => tryOnPendingStore(ref.watch(apiBaseUrlProvider)),
+);
+final checkoutPendingStoreProvider = Provider<CheckoutPendingStore>(
+  (ref) => checkoutPendingStore(ref.watch(apiBaseUrlProvider)),
 );
 final browserSessionsEnabledProvider = Provider<bool>((ref) => kIsWeb);
 final sessionTokensProvider = Provider<SessionTokens>((ref) {

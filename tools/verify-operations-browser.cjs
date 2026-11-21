@@ -41,7 +41,7 @@ module.exports=async function verify({root,url,email,managerEmail,password,start
     await page.getByText('Chưa có số liệu.',{exact:true}).waitFor();await page.screenshot({path:path.join(output,'operations-redis-unavailable-mobile.png')});
     await redisUnavailable(false);assert.equal((await refresh()).redis.status,'ok');
     await customerDenied();
-    await page.getByRole('button',{name:'Đăng xuất quản trị',exact:true}).click();await login(managerEmail);
+    await (async()=>{await page.getByRole('button',{name:'Tài khoản quản trị',exact:true}).click();await page.getByRole('menuitem',{name:'Đăng xuất',exact:true}).or(page.getByRole('button',{name:'Đăng xuất',exact:true})).first().click();})();await login(managerEmail);
     const priorReads=requests.filter(r=>r.path.endsWith('/admin/operations')).length;
     await page.evaluate(()=>{location.hash='/admin/ai-monitoring';});
     await page.getByText('Bạn chưa có quyền truy cập',{exact:true}).waitFor();

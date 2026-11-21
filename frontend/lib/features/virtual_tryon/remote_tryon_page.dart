@@ -874,14 +874,20 @@ class _RemoteTryOnPageState extends ConsumerState<RemoteTryOnPage> {
             builder: (_, c) => c.maxWidth < 850
                 ? Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [source, const SizedBox(height: 32), controls],
+                    children: [
+                      SurfacePanel(tinted: true, child: source),
+                      const SizedBox(height: 24),
+                      SurfacePanel(child: controls),
+                    ],
                   )
                 : Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(child: source),
-                      const SizedBox(width: 40),
-                      Expanded(child: controls),
+                      Expanded(
+                        child: SurfacePanel(tinted: true, child: source),
+                      ),
+                      const SizedBox(width: 24),
+                      Expanded(child: SurfacePanel(child: controls)),
                     ],
                   ),
           ),

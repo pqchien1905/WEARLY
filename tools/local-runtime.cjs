@@ -471,10 +471,13 @@ function configure(input, options) {
     }
     if (
       (input.LOCAL_MAIL_ENABLED === "true" ||
-        input.PASSWORD_RECOVERY_ENABLED === "true") &&
+        (input.PASSWORD_RECOVERY_ENABLED === "true" &&
+          input.SMTP_ALLOW_INSECURE_LOCAL === "true")) &&
       !localHost(input.SMTP_HOST)
     )
       fail("LOCAL_CONFIGURATION_REQUIRED");
+    // Recovery may use the configured external SMTP server. prepare() still
+    // validates its settings; plaintext/local-mail mode stays loopback-only.
   } catch {
     fail("LOCAL_CONFIGURATION_REQUIRED");
   }

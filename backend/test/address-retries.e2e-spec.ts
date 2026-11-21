@@ -41,7 +41,7 @@ describe('Address create retries with PostgreSQL', () => {
     configureApp(app);
     await app.init();
     db = app.get(PrismaService);
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < 3; i++) {
       const r = await request(app.getHttpServer())
         .post('/api/v1/auth/register')
         .send({
@@ -113,5 +113,75 @@ describe('Address create retries with PostgreSQL', () => {
       .auth(tokens[0], { type: 'bearer' })
       .send(body)
       .expect(201);
+  });
+  it('assigns the first default atomically without relying on the client', async () => {
+    const results = await Promise.all([
+      post(randomUUID(), { ...body, isDefault: false }, 2).expect(201),
+      post(
+        randomUUID(),
+        { ...body, isDefault: false, label: 'Office' },
+        2,
+      ).expect(201),
+    ]);
+    expect(results[0].body.id).not.toBe(results[1].body.id);
+    const list = () => db.address.findMany({ where: { userId: users[2] } });
+    expect((await list()).filter((a) => a.isDefault)).toHaveLength(1);
+    const current = (await list()).find((a) => a.isDefault)!;
+    const remaining = (await list()).find((a) => !a.isDefault)!;
+    await request(app.getHttpServer())
+      .delete(`${path}/${current.id}`)
+      .auth(tokens[2], { type: 'bearer' })
+      .expect(200);
+    expect(await list()).toMatchObject([{ id: remaining.id, isDefault: true }]);
+    await request(app.getHttpServer())
+      .delete(`${path}/${remaining.id}`)
+      .auth(tokens[2], { type: 'bearer' })
+      .expect(200);
+    expect(await list()).toHaveLength(0);
+    const next = await post(
+      randomUUID(),
+      { ...body, isDefault: false },
+      2,
+    ).expect(201);
+    expect(next.body.isDefault).toBe(true);
+  });
+  it('serializes deleting the default with selecting another and isolates ownership', async () => {
+    const original = await db.address.findFirstOrThrow({
+      where: { userId: users[2], isDefault: true },
+    });
+    const second = await post(
+      randomUUID(),
+      { ...body, isDefault: false, label: 'Second' },
+      2,
+    ).expect(201);
+    await post(
+      randomUUID(),
+      { ...body, isDefault: false, label: 'Third' },
+      2,
+    ).expect(201);
+    await Promise.all([
+      request(app.getHttpServer())
+        .delete(`${path}/${original.id}`)
+        .auth(tokens[2], { type: 'bearer' })
+        .expect(200),
+      request(app.getHttpServer())
+        .patch(`${path}/${second.body.id}`)
+        .auth(tokens[2], { type: 'bearer' })
+        .send({ isDefault: true })
+        .expect(200),
+    ]);
+    expect(
+      await db.address.findMany({
+        where: { userId: users[2], isDefault: true },
+      }),
+    ).toMatchObject([{ id: second.body.id }]);
+    await request(app.getHttpServer())
+      .delete(`${path}/${second.body.id}`)
+      .auth(tokens[0], { type: 'bearer' })
+      .expect(404);
+    expect(
+      (await db.address.findUniqueOrThrow({ where: { id: second.body.id } }))
+        .isDefault,
+    ).toBe(true);
   });
 });

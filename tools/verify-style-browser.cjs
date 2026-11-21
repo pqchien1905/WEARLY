@@ -48,14 +48,13 @@ module.exports = async function verify({ root, email, otherEmail, password, chan
       await button('Đăng nhập');
     }
     async function choose(label, value) {
-      await click(page.getByRole('button', { name: new RegExp(label) }).first());
-      await click(page.getByRole('menuitem', { name: value, exact: true }));
+      await click(page.getByRole('button', { name: `${label}: ${value}`, exact: true }));
     }
     async function save() { await button('Lưu hồ sơ phong cách'); await page.locator('flt-semantics').getByText('Đã lưu hồ sơ phong cách.', { exact: true }).waitFor(); }
     async function selected(label, value) {
-      const field = page.getByRole('button', { name: new RegExp(label) });
+      const field = page.getByRole('button', { name: `${label}: ${value}`, exact: true });
       await field.waitFor();
-      assert((await field.ariaSnapshot()).includes(value), 'Unexpected selection for ' + label);
+      assert.equal(await field.getAttribute('aria-current'), 'true', 'Unexpected selection for ' + label);
     }
     async function frame() {
       const heading = page.getByText('Phong cách, theo ý bạn.', { exact: true }); await reveal(heading);

@@ -1,8 +1,9 @@
+import 'admin_pagination.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/providers.dart';
 import '../../../core/design/tokens.dart';
-import '../../../core/network/api_client.dart';
+import 'taxonomy_actions.dart';
 import '../../../core/widgets/primitives.dart';
 import 'admin_providers.dart';
 import 'admin_widgets.dart';
@@ -25,80 +26,8 @@ class _RemoteTaxonomyPageState extends ConsumerState<RemoteTaxonomyPage> {
     ref.read(catalogRevisionProvider.notifier).refresh();
   }
 
-  Future<void> edit([AdminRecord? row]) async {
-    final repository = ref.read(adminRepositoryProvider);
-    // Public cache lifetime is independent of this page and staff session.
-    final catalogRevision = ref.read(catalogRevisionProvider.notifier);
-    final name = TextEditingController(text: row?['name'] ?? '');
-    final slug = TextEditingController();
-    await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AdminMutationDialog(
-        title: row == null ? 'Thêm $label' : 'Đổi tên $label',
-        message: row == null
-            ? 'Tên hiển thị có thể đổi sau. Đường dẫn được giữ cố định.'
-            : 'Giữ nguyên đường dẫn /${row['slug']} và các sản phẩm liên quan.',
-        onDisposed: () {
-          name.dispose();
-          slug.dispose();
-        },
-        fields: [
-          TextFormField(
-            controller: name,
-            decoration: const InputDecoration(labelText: 'Tên hiển thị'),
-            maxLength: 100,
-            validator: (v) => requiredText(v, max: 100),
-          ),
-          if (row == null)
-            TextFormField(
-              controller: slug,
-              decoration: const InputDecoration(
-                labelText: 'Đường dẫn',
-                helperText: 'Ví dụ: mua-thu, wearly-studio',
-              ),
-              maxLength: 100,
-              validator: (v) =>
-                  RegExp(
-                        r'^[a-z0-9]+(?:-[a-z0-9]+)*$',
-                      ).hasMatch((v ?? '').trim()) &&
-                      (v ?? '').trim().length <= 100
-                  ? null
-                  : 'Dùng chữ thường không dấu, số và dấu gạch nối.',
-            ),
-        ],
-        reload: refresh,
-        submit: () async {
-          try {
-            await repository.saveTaxonomy(widget.kind, row?['id'], {
-              'name': name.text.trim(),
-              if (row == null)
-                'slug': slug.text.trim()
-              else
-                'expectedName': row['name'],
-            });
-          } on ApiException catch (e) {
-            if (e.status == 409 && e.code == 'CONFLICT') {
-              throw const ApiException(
-                'CONFLICT',
-                'Đường dẫn đã được sử dụng. Tải lại danh sách để kiểm tra.',
-                status: 409,
-              );
-            }
-            rethrow;
-          } finally {
-            // The server may have committed even if logout/navigation or a lost
-            // response prevents acknowledging success. Re-read, never replay.
-            catalogRevision.refresh();
-            if (mounted) {
-              refreshAdmin(ref);
-              ref.invalidate(adminReferencesProvider);
-            }
-          }
-        },
-      ),
-    );
-  }
+  Future<void> edit([AdminRecord? row]) =>
+      editTaxonomy(context, ref, widget.kind, row);
 
   @override
   Widget build(BuildContext context) {
@@ -169,23 +98,9 @@ class _RemoteTaxonomyPageState extends ConsumerState<RemoteTaxonomyPage> {
                     ],
                   ),
                 ),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  AppButton(
-                    'Trang trước',
-                    outlined: true,
-                    onPressed: page > 1 ? () => setState(() => page--) : null,
-                  ),
-                  AppButton(
-                    'Trang sau',
-                    outlined: true,
-                    onPressed: data.hasNext
-                        ? () => setState(() => page++)
-                        : null,
-                  ),
-                ],
+              AdminPagination(
+                page: data,
+                onPage: (n) => setState(() => page = n),
               ),
             ],
           ),

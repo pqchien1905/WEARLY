@@ -5,6 +5,7 @@ import { AddressDto, ProfileDto, UpdateAddressDto } from './dto/user.dto';
 import { transaction, lockUser } from '../../common/transaction';
 import { createHash } from 'node:crypto';
 import { fail } from '../../common/errors';
+import { assertPhoneAvailable, lockProfileIdentity } from './profile-identity';
 @Injectable()
 export class UsersService {
   constructor(private readonly db: PrismaService) {}
@@ -12,12 +13,31 @@ export class UsersService {
     return publicUser(await this.db.user.findUniqueOrThrow({ where: { id } }));
   }
   async update(id: string, dto: ProfileDto) {
-    return publicUser(await this.db.user.update({ where: { id }, data: dto }));
+    return transaction(this.db, async (tx) => {
+      await lockProfileIdentity(tx);
+      await lockUser(tx, id);
+      const current = await tx.user.findUniqueOrThrow({ where: { id } });
+      if (!current.active)
+        fail(401, 'AUTH_REQUIRED', 'Phiên đăng nhập không còn hợp lệ.');
+      if (dto.phone !== undefined)
+        await assertPhoneAvailable(tx, id, dto.phone);
+      return publicUser(
+        await tx.user.update({
+          where: { id },
+          data: {
+            ...dto,
+            updatedAt: new Date(
+              Math.max(Date.now(), current.updatedAt.getTime() + 1),
+            ),
+          },
+        }),
+      );
+    });
   }
   addresses(userId: string) {
     return this.db.address.findMany({
       where: { userId },
-      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
     });
   }
   saveAddress(
@@ -68,14 +88,21 @@ export class UsersService {
       }
       if (id && !(await tx.address.findFirst({ where: { id, userId } })))
         throw new NotFoundException();
-      if (dto.isDefault)
+      const makeDefault =
+        dto.isDefault === true ||
+        (!id &&
+          !(await tx.address.findFirst({
+            where: { userId, isDefault: true },
+            select: { id: true },
+          })));
+      if (makeDefault)
         await tx.address.updateMany({
           where: { userId, isDefault: true },
           data: { isDefault: false },
         });
       if (id) return tx.address.update({ where: { id }, data: dto });
       const address = await tx.address.create({
-        data: { ...(dto as AddressDto), userId },
+        data: { ...(dto as AddressDto), userId, isDefault: makeDefault },
       });
       if (key !== undefined)
         await tx.addressCreateReceipt.create({
@@ -89,9 +116,29 @@ export class UsersService {
       return address;
     });
   }
-  async deleteAddress(userId: string, id: string) {
-    const result = await this.db.address.deleteMany({ where: { id, userId } });
-    if (!result.count) throw new NotFoundException();
-    return { deleted: true };
+  deleteAddress(userId: string, id: string) {
+    return transaction(this.db, async (tx) => {
+      await lockUser(tx, userId);
+      const result = await tx.address.deleteMany({ where: { id, userId } });
+      if (!result.count) throw new NotFoundException();
+      if (
+        !(await tx.address.findFirst({
+          where: { userId, isDefault: true },
+          select: { id: true },
+        }))
+      ) {
+        const next = await tx.address.findFirst({
+          where: { userId },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          select: { id: true },
+        });
+        if (next)
+          await tx.address.update({
+            where: { id: next.id },
+            data: { isDefault: true },
+          });
+      }
+      return { deleted: true };
+    });
   }
 }

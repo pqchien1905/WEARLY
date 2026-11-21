@@ -26,14 +26,14 @@ export async function queueOrderMail(
 ) {
   const order = await tx.order.findUniqueOrThrow({
     where: { id: orderId },
-    select: { user: { select: { email: true } } },
+    select: { code: true, user: { select: { email: true } } },
   });
   return enqueueMail(tx, {
     orderId,
     eventKey,
     recipient: order.user.email,
     subject: 'WEARLY — ' + subject,
-    body: `Mã đơn hàng: ${orderId}\n\n${detail}\n\nXem chi tiết trong mục Đơn hàng của tài khoản. Thư được lưu trong hộp thư local của hệ thống.`,
+    body: `Mã đơn hàng: ${order.code}\n\n${detail}\n\nXem chi tiết trong mục Đơn hàng của tài khoản WEARLY.`,
   });
 }
 const orderNotices = {

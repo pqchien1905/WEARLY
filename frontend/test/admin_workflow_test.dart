@@ -25,11 +25,11 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Áo cotton không tay Essential'), findsOneWidget);
-    expect(find.text('Áo cotton không tay Daily'), findsNothing);
+    expect(find.text('Quần jogger nhẹ Daily'), findsNothing);
     await tester.ensureVisible(find.byTooltip('Trang sau'));
     await tester.tap(find.byTooltip('Trang sau'));
     await tester.pumpAndSettle();
-    expect(find.text('Áo cotton không tay Daily'), findsOneWidget);
+    expect(find.text('Quần jogger nhẹ Daily'), findsOneWidget);
     await tester.ensureVisible(find.byType(TextField).first);
     await tester.enterText(
       find.byType(TextField).first,

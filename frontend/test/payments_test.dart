@@ -110,6 +110,113 @@ void main() {
       expect(find.text('Mở VNPay sandbox (tab mới)'), findsNothing);
     },
   );
+  test(
+    'wallet payment links must belong to the order provider sandbox',
+    () async {
+      Future<PaymentState> start(Map<String, Object?> body) {
+        final api = ApiClient(
+          baseUrl: 'http://localhost/api/v1',
+          client: MockClient((_) async => jsonResponse(body)),
+        );
+        addTearDown(api.close);
+        return RemotePaymentRepository(api).start('order-1');
+      }
+
+      final momo = await start({
+        ...state(url: 'https://test-payment.momo.vn/v2/gateway/pay?t=abc'),
+        'provider': 'momo',
+      });
+      expect(momo.provider, 'momo');
+      expect(momo.checkoutUrl?.host, 'test-payment.momo.vn');
+      final zalo = await start({
+        ...state(url: 'https://qcgateway.zalopay.vn/openinapp?order=1'),
+        'provider': 'zalopay',
+      });
+      expect(zalo.checkoutUrl?.host, 'qcgateway.zalopay.vn');
+      for (final body in [
+        // A VNPay page is not a MoMo page, and look-alike hosts are refused.
+        {...state(), 'provider': 'momo'},
+        {
+          ...state(url: 'https://zalopay.vn.evil.example/x'),
+          'provider': 'zalopay',
+        },
+        {...state(url: 'https://test-payment.momo.vn/x'), 'provider': 'cash'},
+      ]) {
+        await expectLater(start(body), throwsA(isA<ApiException>()));
+      }
+    },
+  );
+  test('payment methods report each enabled gateway', () async {
+    Future<PaymentMethods> methods(Map<String, Object?> body) {
+      final api = ApiClient(
+        baseUrl: 'http://localhost/api/v1',
+        client: MockClient((_) async => jsonResponse(body)),
+      );
+      addTearDown(api.close);
+      return RemotePaymentRepository(api).available();
+    }
+
+    final all = await methods({
+      'cod': true,
+      'vnpay': false,
+      'momo': true,
+      'zalopay': true,
+      'sandbox': true,
+    });
+    expect(
+      [
+        all.enabled('cod'),
+        all.enabled('vnpay'),
+        all.enabled('momo'),
+        all.enabled('zalopay'),
+      ],
+      [true, false, true, true],
+    );
+    // An older server without wallet flags offers no wallet.
+    final legacy = await methods({'cod': true, 'vnpay': true, 'sandbox': true});
+    expect(legacy.enabled('momo'), isFalse);
+    expect(legacy.enabled('vnpay'), isTrue);
+  });
+  testWidgets('payment panel names and opens the MoMo sandbox page', (
+    tester,
+  ) async {
+    Uri? opened;
+    final api = ApiClient(
+      baseUrl: 'http://localhost/api/v1',
+      client: MockClient(
+        (_) async => jsonResponse({
+          ...state(url: 'https://test-payment.momo.vn/v2/gateway/pay?t=abc'),
+          'provider': 'momo',
+        }),
+      ),
+    );
+    addTearDown(api.close);
+    final order = commerceOrder(
+      orderJson()..['payment'] = {'provider': 'momo', 'status': 'PENDING'},
+      email: '',
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          apiClientProvider.overrideWithValue(api),
+          paymentLauncherProvider.overrideWithValue((uri) => opened = uri),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: PaymentPanel(order: order, onRefresh: () async {}),
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('MoMo sandbox'), findsOneWidget);
+    await tester.tap(find.text('Chuẩn bị thanh toán'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mở MoMo sandbox (tab mới)'));
+    await tester.pumpAndSettle();
+    expect(opened?.host, 'test-payment.momo.vn');
+  });
   testWidgets(
     'verification errors preserve unpaid state and callback page makes no paid claim',
     (tester) async {

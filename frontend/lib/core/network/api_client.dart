@@ -499,14 +499,35 @@ class ApiClient {
         ? error['code']?.toString() ?? 'REQUEST_FAILED'
         : 'REQUEST_FAILED';
     final message = switch (response.statusCode) {
-      400 => 'Thông tin chưa hợp lệ. Kiểm tra lại các trường đã nhập.',
+      400 =>
+        code == 'INVALID_COLLECTION_COVER'
+            ? 'Ảnh bìa phải thuộc một sản phẩm đang bán trong phong cách đã chọn.'
+            : code == 'CURRENT_PASSWORD_INVALID'
+            ? 'Mật khẩu hiện tại chưa đúng.'
+            : code == 'PASSWORD_UNCHANGED'
+            ? 'Mật khẩu mới cần khác mật khẩu hiện tại.'
+            : 'Thông tin chưa hợp lệ. Kiểm tra lại các trường đã nhập.',
       401 =>
         login
             ? 'Email hoặc mật khẩu chưa đúng.'
             : 'Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.',
-      403 => 'Bạn không có quyền thực hiện thao tác này.',
+      403 =>
+        code == 'CUSTOMER_ACCOUNT_REQUIRED'
+            ? 'Đây là tài khoản quản trị. Hãy vào trang đăng nhập quản trị hoặc dùng tài khoản khách hàng riêng.'
+            : 'Bạn không có quyền thực hiện thao tác này.',
       404 => 'Không tìm thấy nội dung này.',
-      409 => 'Dữ liệu đã thay đổi. Tải lại trước khi tiếp tục.',
+      409 =>
+        code == 'PHONE_ALREADY_EXISTS'
+            ? 'Số điện thoại đã được tài khoản khác sử dụng. Vui lòng kiểm tra lại.'
+            : code == 'PASSWORD_CHANGED_CONCURRENTLY'
+            ? 'Mật khẩu vừa được thay đổi ở nơi khác. Hãy đăng nhập lại rồi thử lại.'
+            : code == 'DUPLICATE_COLLECTION'
+            ? 'Đường dẫn hoặc phong cách đã có bộ sưu tập. Hãy sửa bộ sưu tập hiện có.'
+            : code == 'DUPLICATE_PRODUCT'
+            ? 'Đã có sản phẩm cùng tên trong thương hiệu này. Hãy cập nhật sản phẩm hiện có hoặc dùng tên phân biệt.'
+            : code == 'EMAIL_ALREADY_EXISTS'
+            ? 'Email này đã được đăng ký. Vui lòng đăng nhập hoặc chọn "Quên mật khẩu?" để khôi phục tài khoản.'
+            : 'Dữ liệu đã thay đổi. Tải lại trước khi tiếp tục.',
       429 => 'Bạn thao tác quá nhanh. Vui lòng thử lại.',
       _ => 'Chưa thể kết nối dịch vụ. Vui lòng thử lại.',
     };

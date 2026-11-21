@@ -15,6 +15,9 @@ class RemoteAccountDetailsRepository implements AccountDetailsRepository {
   final _addressAttempts =
       <String, ({String input, Map<String, Object?> body})>{};
   bool _creatingAddress = false;
+  void _lateAddress() {
+    if (api.tokens.generation == _generation) onLateAddressCompletion?.call();
+  }
 
   Future<Object?> _request(
     String method,
@@ -131,6 +134,7 @@ class RemoteAccountDetailsRepository implements AccountDetailsRepository {
         'PATCH',
         'users/me/addresses/${Uri.encodeComponent(address.id)}',
         body: input,
+        onLateCompletion: _lateAddress,
       );
       return read();
     }
@@ -185,12 +189,12 @@ class RemoteAccountDetailsRepository implements AccountDetailsRepository {
 
   @override
   Future<AccountDetails> deleteAddress(String id) async {
-    await _request('DELETE', 'users/me/addresses/${Uri.encodeComponent(id)}');
-    final result = await read();
-    if (result.defaultAddressId == null && result.addresses.isNotEmpty) {
-      return setDefault(result.addresses.first.id);
-    }
-    return result;
+    await _request(
+      'DELETE',
+      'users/me/addresses/${Uri.encodeComponent(id)}',
+      onLateCompletion: _lateAddress,
+    );
+    return read();
   }
 
   @override
@@ -199,6 +203,7 @@ class RemoteAccountDetailsRepository implements AccountDetailsRepository {
       'PATCH',
       'users/me/addresses/${Uri.encodeComponent(id)}',
       body: {'isDefault': true},
+      onLateCompletion: _lateAddress,
     );
     return read();
   }

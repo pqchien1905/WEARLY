@@ -51,7 +51,10 @@ class ShipmentActions extends ConsumerWidget {
         },
       ),
     );
-    if (context.mounted && changed == true) refreshAdmin(ref);
+    if (context.mounted && changed == true) {
+      refreshAdmin(ref);
+      toast(context, 'Đã cập nhật vận chuyển: $label.');
+    }
   }
 
   @override

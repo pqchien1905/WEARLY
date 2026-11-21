@@ -7,6 +7,8 @@ import '../../core/design/tokens.dart';
 import '../../core/network/api_client.dart';
 import '../../core/widgets/primitives.dart';
 
+enum ReviewEditorResult { saved, deleted, reload }
+
 class ReviewEditor extends ConsumerStatefulWidget {
   const ReviewEditor({
     super.key,
@@ -14,11 +16,13 @@ class ReviewEditor extends ConsumerStatefulWidget {
     required this.repository,
     this.previous,
     this.deleting = false,
+    this.productName,
   });
   final String productId;
   final OwnerReviewRepository repository;
   final ProductReview? previous;
   final bool deleting;
+  final String? productName;
   @override
   ConsumerState<ReviewEditor> createState() => _ReviewEditorState();
 }
@@ -30,10 +34,25 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
   );
   late int rating = widget.previous?.rating ?? 0;
   late final identity = ref.read(accountProvider)?.id;
-  bool busy = false, reconcile = false;
+  bool busy = false, reconcile = false, confirmingDiscard = false;
   String? error;
+  bool get dirty =>
+      !widget.deleting &&
+      (rating != (widget.previous?.rating ?? 0) ||
+          comment.text.trim() != (widget.previous?.comment ?? '').trim());
+
+  void close() {
+    if (busy) return;
+    if (dirty && !reconcile) {
+      setState(() => confirmingDiscard = true);
+    } else {
+      Navigator.pop(context);
+    }
+  }
+
   Future<void> submit() async {
     if (busy || reconcile) return;
+    if (widget.previous != null && !widget.deleting && !dirty) return;
     if (!widget.deleting && (!form.currentState!.validate() || rating == 0)) {
       setState(() => error = rating == 0 ? 'Hãy chọn số sao.' : null);
       return;
@@ -53,7 +72,14 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
           previous: widget.previous,
         );
       }
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        Navigator.pop(
+          context,
+          widget.deleting
+              ? ReviewEditorResult.deleted
+              : ReviewEditorResult.saved,
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -69,12 +95,17 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
 
   @override
   Widget build(BuildContext context) {
+    final inset = EdgeInsets.symmetric(
+      horizontal: MediaQuery.sizeOf(context).width < 600 ? 16 : 40,
+      vertical: 24,
+    );
     final account = ref.watch(accountProvider);
     if (account == null ||
         account.id != identity ||
         ref.read(apiClientProvider).tokens.generation !=
             widget.repository.generation) {
       return AlertDialog(
+        insetPadding: inset,
         title: const Text('Phiên khách hàng đã kết thúc'),
         actions: [
           TextButton(
@@ -84,9 +115,37 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
         ],
       );
     }
+    if (confirmingDiscard) {
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) setState(() => confirmingDiscard = false);
+        },
+        child: AlertDialog(
+          insetPadding: inset,
+          title: const Text('Bỏ thay đổi chưa lưu?'),
+          content: const Text('Nội dung bạn vừa chỉnh sửa sẽ không được lưu.'),
+          actions: [
+            TextButton(
+              onPressed: () => setState(() => confirmingDiscard = false),
+              child: const Text('Tiếp tục viết'),
+            ),
+            AppButton(
+              'Bỏ thay đổi',
+              outlined: true,
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+      );
+    }
     return PopScope(
-      canPop: !busy,
+      canPop: !busy && (!dirty || reconcile),
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) close();
+      },
       child: AlertDialog(
+        insetPadding: inset,
         title: Text(
           widget.deleting
               ? 'Xóa đánh giá?'
@@ -103,11 +162,30 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (widget.deleting)
+                  if (widget.productName != null) ...[
+                    Text(
+                      widget.productName!,
+                      style: T.body.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (widget.deleting) ...[
+                    Text(
+                      '${widget.previous!.rating}/5 sao',
+                      style: T.body.copyWith(color: T.accent),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      widget.previous!.comment,
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                      style: T.body,
+                    ),
+                    const SizedBox(height: 16),
                     const Text(
                       'Đánh giá sẽ được xóa khỏi sản phẩm và danh sách của bạn. Thao tác này không thể hoàn tác.',
-                    )
-                  else ...[
+                    ),
+                  ] else ...[
                     const Text(
                       'Trải nghiệm của bạn với sản phẩm',
                       style: T.body,
@@ -130,9 +208,19 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
                           ),
                       ],
                     ),
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        rating == 0
+                            ? 'Chọn từ 1 đến 5 sao'
+                            : 'Bạn chấm $rating/5 sao',
+                        style: T.small,
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: comment,
+                      onChanged: (_) => setState(() {}),
                       enabled: !busy && !reconcile,
                       minLines: 3,
                       maxLines: 6,
@@ -146,6 +234,7 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
                           }) => Text('${comment.text.runes.length} / 2000'),
                       decoration: const InputDecoration(
                         labelText: 'Nội dung đánh giá',
+                        floatingLabelBehavior: FloatingLabelBehavior.always,
                         hintText: 'Chất liệu, độ vừa vặn, cảm giác khi mặc…',
                       ),
                       validator: (value) => (value ?? '').trim().isEmpty
@@ -163,9 +252,12 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
                   if (error != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 16),
-                      child: Text(
-                        error!,
-                        style: T.body.copyWith(color: T.danger),
+                      child: Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          error!,
+                          style: T.body.copyWith(color: T.danger),
+                        ),
                       ),
                     ),
                   if (reconcile)
@@ -179,10 +271,7 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: busy ? null : () => Navigator.pop(context),
-            child: const Text('Đóng'),
-          ),
+          TextButton(onPressed: busy ? null : close, child: const Text('Đóng')),
           if (reconcile)
             AppButton(
               'Kiểm tra lại',
@@ -190,18 +279,30 @@ class _ReviewEditorState extends ConsumerState<ReviewEditor> {
                 ref
                     .read(reviewRevisionProvider.notifier)
                     .refresh(widget.productId);
-                Navigator.pop(context);
+                Navigator.pop(context, ReviewEditorResult.reload);
               },
             )
           else
-            AppButton(
-              widget.deleting
-                  ? 'Xóa đánh giá'
-                  : widget.previous == null
-                  ? 'Gửi đánh giá'
-                  : 'Lưu đánh giá',
-              busy: busy,
-              onPressed: submit,
+            Semantics(
+              button: busy ? true : null,
+              enabled: busy ? false : null,
+              label: busy
+                  ? (widget.deleting
+                        ? 'Đang xóa đánh giá…'
+                        : 'Đang lưu đánh giá…')
+                  : null,
+              excludeSemantics: busy,
+              child: AppButton(
+                widget.deleting
+                    ? 'Xóa đánh giá'
+                    : widget.previous == null
+                    ? 'Gửi đánh giá'
+                    : 'Lưu đánh giá',
+                busy: busy,
+                onPressed: widget.previous != null && !widget.deleting && !dirty
+                    ? null
+                    : submit,
+              ),
             ),
         ],
       ),

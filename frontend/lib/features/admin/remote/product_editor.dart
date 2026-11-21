@@ -7,33 +7,50 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/providers.dart';
 import '../../../core/design/tokens.dart';
-import '../../../core/format.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/catalog_image.dart';
 import '../../../core/widgets/primitives.dart';
 import '../../../data/commerce_json.dart';
 import '../../virtual_tryon/image_validation.dart';
-import 'admin_pages.dart' show adjustInventory;
+import 'product_variants.dart';
+import 'product_editor_widgets.dart';
 import 'admin_providers.dart';
 import 'admin_widgets.dart';
+import 'product_widgets.dart';
+
+export 'product_variants.dart' show ProductVariantSection;
 
 class RemoteProductEditor extends ConsumerWidget {
-  const RemoteProductEditor({super.key, this.id});
-  final String? id;
+  const RemoteProductEditor({super.key, this.id, this.returnTo});
+  final String? id, returnTo;
   @override
   Widget build(BuildContext context, WidgetRef ref) => AdminAsync(
     value: ref.watch(adminReferencesProvider),
     reload: () => ref.invalidate(adminReferencesProvider),
     builder: (references) {
-      if (id == null) return _ProductForm(references: references);
+      if (id == null) {
+        return _ProductForm(references: references, returnTo: returnTo);
+      }
       final key = (kind: 'products', id: id!);
+      final value = ref.watch(adminDetailProvider(key));
+      if (value.error case ApiException(status: 404)) {
+        return StatePanel(
+          title: 'Không tìm thấy sản phẩm',
+          message: 'Sản phẩm không còn tồn tại hoặc đường dẫn không đúng.',
+          action: AppButton(
+            'Về danh sách sản phẩm',
+            onPressed: () => context.go(productsBack(returnTo)),
+          ),
+        );
+      }
       return AdminAsync(
-        value: ref.watch(adminDetailProvider(key)),
+        value: value,
         reload: () => ref.invalidate(adminDetailProvider(key)),
         builder: (product) => _ProductForm(
           key: ValueKey(id),
           product: product,
           references: references,
+          returnTo: returnTo,
         ),
       );
     },
@@ -67,9 +84,15 @@ class _PendingImage {
 }
 
 class _ProductForm extends ConsumerStatefulWidget {
-  const _ProductForm({super.key, this.product, required this.references});
+  const _ProductForm({
+    super.key,
+    this.product,
+    required this.references,
+    this.returnTo,
+  });
   final AdminRecord? product;
   final AdminRecord references;
+  final String? returnTo;
   @override
   ConsumerState<_ProductForm> createState() => _ProductFormState();
 }
@@ -81,14 +104,17 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
   final removedImages = <_ImageFields>[];
   late final AdminRecord baseline;
   bool active = false, tryOn = false, saving = false;
-  bool uploading = false;
+  bool uploading = false, needsReload = false;
+  String? expectedUpdatedAt;
   _PendingImage? pendingImage;
-  bool get locked => saving || uploading || pendingImage != null;
+  bool get locked => saving || uploading || pendingImage != null || needsReload;
+  bool get dirty => jsonEncode(draft()) != jsonEncode(baseline);
   String? category, brand, error;
   @override
   void initState() {
     super.initState();
     final p = widget.product;
+    expectedUpdatedAt = p?['updatedAt'];
     for (final key in ['name', 'slug', 'description', 'material', 'style']) {
       fields[key] = TextEditingController(text: p?[key] ?? '');
     }
@@ -123,7 +149,16 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
   }
 
   Future<void> save() async {
-    if (locked || !form.currentState!.validate()) return;
+    if (locked) return;
+    final invalid = form.currentState!.validateGranularly();
+    if (invalid.isNotEmpty) {
+      await Scrollable.ensureVisible(
+        invalid.first.context,
+        duration: const Duration(milliseconds: 200),
+        alignment: .15,
+      );
+      return;
+    }
     final snapshot = draft();
     // PATCH only the fields edited in this form. In particular an unchanged
     // gallery must not replace images another administrator added meanwhile.
@@ -144,28 +179,57 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
       error = null;
     });
     try {
-      final saved = await repo.saveProduct(widget.product?['id'], changes);
+      final saved = await repo.saveProduct(widget.product?['id'], {
+        ...changes,
+        if (widget.product != null && expectedUpdatedAt != null)
+          'expectedUpdatedAt': expectedUpdatedAt,
+      });
       if (!mounted) return;
       // Advance only confirmed edits, not untouched fields from a newer server
       // response, since those may differ from the form still on screen.
       baseline.addAll(changes);
+      expectedUpdatedAt = saved['updatedAt'] ?? expectedUpdatedAt;
+      for (final key in fields.keys.where(changes.containsKey)) {
+        fields[key]!.text = '${saved[key] ?? changes[key]}';
+        baseline[key] = fields[key]!.text;
+      }
       refreshAdmin(ref);
       ref.read(catalogRevisionProvider.notifier).refresh();
       toast(context, 'Đã lưu thông tin sản phẩm.');
       if (widget.product == null) {
-        context.go('/admin/products/${saved['id']}/edit');
+        context.go(
+          Uri(
+            path: '/admin/products/${saved['id']}/edit',
+            queryParameters: {'from': productsBack(widget.returnTo)},
+          ).toString(),
+        );
       }
     } catch (e) {
-      if (mounted) setState(() => error = adminError(e));
+      if (mounted) {
+        setState(() {
+          error = adminError(e);
+          needsReload =
+              e is! ApiException ||
+              (![400, 422].contains(e.status) &&
+                  ![
+                    'PRODUCT_SLUG_EXISTS',
+                    'DUPLICATE_PRODUCT',
+                  ].contains(e.code));
+        });
+      }
     } finally {
-      if (mounted) setState(() => saving = false);
+      if (mounted) {
+        setState(() => saving = false);
+        revealFeedback();
+      }
     }
   }
 
   Future<void> upload() async {
-    if (saving || uploading || widget.product == null) return;
+    if (saving || uploading || needsReload || widget.product == null) return;
     if (pendingImage == null && jsonEncode(draft()) != jsonEncode(baseline)) {
       setState(() => error = 'Lưu các thay đổi hiện tại trước khi tải ảnh.');
+      revealFeedback();
       return;
     }
     final repo = ref.read(adminRepositoryProvider);
@@ -231,6 +295,7 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
           images.add(_ImageFields(commerceMap(raw)));
         }
         baseline['images'] = images.map((image) => image.json()).toList();
+        expectedUpdatedAt = product['updatedAt'] ?? expectedUpdatedAt;
         pendingImage = null;
         error = failure;
       });
@@ -247,297 +312,780 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
         );
       }
     } finally {
-      if (mounted) setState(() => uploading = false);
+      if (mounted) {
+        setState(() => uploading = false);
+        revealFeedback();
+      }
     }
   }
 
+  Future<void> reloadProduct() async {
+    if (saving || uploading) return;
+    if (widget.product == null) {
+      context.go(
+        Uri(
+          path: '/admin/products',
+          queryParameters: {'q': fields['slug']!.text.trim()},
+        ).toString(),
+      );
+      return;
+    }
+    setState(() => saving = true);
+    try {
+      final fresh = await ref
+          .read(adminRepositoryProvider)
+          .detail('products', widget.product!['id']);
+      if (!mounted) return;
+      setState(() {
+        for (final key in fields.keys) {
+          fields[key]!.text = '${fresh[key] ?? ''}';
+        }
+        category = fresh['categoryId'];
+        brand = fresh['brandId'];
+        active = fresh['active'] == true;
+        tryOn = fresh['tryOnSupported'] == true;
+        removedImages.addAll(images);
+        images.clear();
+        images.addAll(
+          (fresh['images'] as List).map(
+            (raw) => _ImageFields(commerceMap(raw)),
+          ),
+        );
+        baseline.clear();
+        baseline.addAll(draft());
+        expectedUpdatedAt = fresh['updatedAt'];
+        needsReload = false;
+        error = null;
+      });
+      refreshAdmin(ref);
+    } catch (e) {
+      if (mounted) setState(() => error = adminError(e));
+    } finally {
+      if (mounted) {
+        setState(() => saving = false);
+        revealFeedback();
+      }
+    }
+  }
+
+  final infoAnchor = GlobalKey(),
+      galleryAnchor = GlobalKey(),
+      variantsAnchor = GlobalKey(),
+      settingsAnchor = GlobalKey(),
+      feedbackAnchor = GlobalKey();
+
+  void revealFeedback() {
+    if (error == null && !needsReload) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) jumpTo(feedbackAnchor);
+    });
+  }
+
+  void jumpTo(GlobalKey anchor) {
+    final target = anchor.currentContext;
+    if (target != null) {
+      Scrollable.ensureVisible(
+        target,
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 200),
+        alignment: .04,
+      );
+    }
+  }
+
+  Future<void> navigate(String destination) async {
+    if (saving || uploading) return;
+    if (dirty || pendingImage != null) {
+      final leave = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('Rời trang khi chưa lưu?'),
+          content: Text(
+            pendingImage != null
+                ? 'Kết quả tải ảnh chưa được xác nhận. Bạn có thể ở lại để kiểm tra trước khi rời trang.'
+                : 'Các thay đổi chưa lưu sẽ bị bỏ. Ảnh đã tải từ máy và các thay đổi biến thể đã lưu vẫn được giữ.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Tiếp tục chỉnh sửa'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Rời trang'),
+            ),
+          ],
+        ),
+      );
+      if (leave != true || !mounted) return;
+    }
+    if (mounted) context.go(destination);
+  }
+
+  Future<void> discard() async {
+    if (locked || !dirty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Bỏ các thay đổi chưa lưu?'),
+        content: const Text(
+          'Thông tin và bộ ảnh sẽ trở về lần lưu gần nhất. Ảnh đã tải từ máy vẫn được giữ.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Tiếp tục chỉnh sửa'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Bỏ thay đổi'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    setState(() {
+      for (final key in fields.keys) {
+        fields[key]!.text = '${baseline[key] ?? ''}';
+      }
+      category = baseline['categoryId'];
+      brand = baseline['brandId'];
+      active = baseline['active'] == true;
+      tryOn = baseline['tryOnSupported'] == true;
+      removedImages.addAll(images);
+      images.clear();
+      images.addAll(
+        (baseline['images'] as List).map(
+          (raw) => _ImageFields(commerceMap(raw)),
+        ),
+      );
+      error = null;
+    });
+  }
+
+  String referenceName(String kind, String? id) {
+    for (final item in widget.references[kind] as List) {
+      if (item['id'] == id) return '${item['name']}';
+    }
+    return '';
+  }
+
+  Widget saveButton({bool outlined = false}) => AppButton(
+    'Lưu thông tin sản phẩm',
+    outlined: outlined,
+    icon: Icons.save_outlined,
+    busy: saving,
+    onPressed: locked ? null : save,
+  );
+
+  Widget draftStatus() => Semantics(
+    liveRegion: true,
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          dirty ? Icons.edit_outlined : Icons.check_circle_outline,
+          size: 16,
+          color: dirty ? T.warning : T.success,
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            dirty
+                ? 'Có thay đổi chưa lưu'
+                : widget.product == null
+                ? 'Sản phẩm mới'
+                : 'Thông tin đã được lưu',
+            style: T.small,
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget pairs(List<Widget> children) => LayoutBuilder(
+    builder: (context, c) => Wrap(
+      spacing: 20,
+      children: [
+        for (final child in children)
+          SizedBox(
+            width: c.maxWidth >= 500 ? (c.maxWidth - 20) / 2 : c.maxWidth,
+            child: child,
+          ),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
-    final variants = (widget.product?['variants'] ?? []) as List;
+    final back = productsBack(widget.returnTo);
+    final preview = <String, dynamic>{...?widget.product, ...draft()};
+    final facts = ProductFacts(preview);
+    final info = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ProductEditorSection(
+          key: infoAnchor,
+          title: 'Thông tin sản phẩm',
+          description: 'Tên và nội dung khách hàng nhìn thấy tại cửa hàng.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _field(
+                'name',
+                'Tên sản phẩm',
+                validator: (v) => requiredText(v, max: 200),
+              ),
+              _field(
+                'slug',
+                'Đường dẫn sản phẩm',
+                validator: (s) =>
+                    RegExp(
+                          r'^[a-z0-9]+(?:-[a-z0-9]+)*$',
+                        ).hasMatch((s ?? '').trim()) &&
+                        (s?.trim().length ?? 0) <= 100
+                    ? null
+                    : 'Dùng chữ thường, số và dấu gạch ngang; tối đa 100 ký tự.',
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 20),
+                child: Text(
+                  '/products/${fields['slug']!.text.trim()}',
+                  style: T.small,
+                ),
+              ),
+              _field(
+                'description',
+                'Mô tả',
+                maxLines: 5,
+                validator: (v) =>
+                    (v ?? '').length > 5000 ? 'Tối đa 5.000 ký tự.' : null,
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  '${fields['description']!.text.length}/5.000 ký tự',
+                  style: T.small,
+                ),
+              ),
+            ],
+          ),
+        ),
+        ProductEditorSection(
+          title: 'Phân loại & thuộc tính',
+          description: 'Giúp khách hàng tìm đúng sản phẩm.',
+          child: pairs([
+            _select(
+              'Danh mục',
+              'categories',
+              category,
+              (v) => setState(() => category = v),
+            ),
+            _select(
+              'Thương hiệu',
+              'brands',
+              brand,
+              (v) => setState(() => brand = v),
+            ),
+            _field(
+              'material',
+              'Chất liệu',
+              validator: (v) =>
+                  (v ?? '').length > 200 ? 'Tối đa 200 ký tự.' : null,
+            ),
+            _field(
+              'style',
+              'Phong cách',
+              validator: (v) =>
+                  (v ?? '').length > 100 ? 'Tối đa 100 ký tự.' : null,
+            ),
+          ]),
+        ),
+      ],
+    );
+    final settings = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ProductEditorPreview(
+          product: preview,
+          category: referenceName('categories', category),
+          brand: referenceName('brands', brand),
+        ),
+        ProductEditorSection(
+          key: settingsAnchor,
+          title: 'Thiết lập bán hàng',
+          description: '',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Hiển thị sản phẩm'),
+                value: active,
+                onChanged: locked ? null : (v) => setState(() => active = v),
+              ),
+              const SizedBox(height: 8),
+              const Text('Điều kiện hiển thị tại cửa hàng', style: T.small),
+              ProductEditorCheck('Sản phẩm được bật', complete: active),
+              ProductEditorCheck(
+                'Có ảnh sản phẩm',
+                complete: images.any((i) => i.url.text.trim().isNotEmpty),
+              ),
+              ProductEditorCheck(
+                'Có biến thể đang bán',
+                complete: facts.selling.isNotEmpty,
+              ),
+              const Divider(height: 32),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Hỗ trợ thử đồ'),
+                value: tryOn,
+                onChanged: locked ? null : (v) => setState(() => tryOn = v),
+              ),
+              const Text(
+                'Bật cho sản phẩm phù hợp với tính năng thử đồ AI.',
+                style: T.small,
+              ),
+              if (widget.product == null) ...[
+                const SizedBox(height: 16),
+                const Text(
+                  'Lưu sản phẩm để tải ảnh từ máy và thêm biến thể.',
+                  style: T.small,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         AdminHeading(
           widget.product == null ? 'Thêm sản phẩm' : 'Chỉnh sửa sản phẩm',
-          'Lưu thông tin trước, sau đó thêm biến thể và nhập kho.',
+          widget.product == null
+              ? 'Chuẩn bị thông tin, hình ảnh và các lựa chọn bán hàng.'
+              : '${widget.product!['name']}',
           actions: [
             AppButton(
               'Về danh sách sản phẩm',
               outlined: true,
-              onPressed: uploading || saving
-                  ? null
-                  : () => context.go('/admin/products'),
+              icon: Icons.arrow_back,
+              onPressed: saving || uploading ? null : () => navigate(back),
             ),
+            saveButton(),
           ],
         ),
-        AdminCard(
-          child: Form(
-            key: form,
+        Padding(
+          padding: const EdgeInsets.only(bottom: 24),
+          child: Wrap(
+            spacing: 16,
+            runSpacing: 12,
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final entry in <(String, GlobalKey)>[
+                    ('Thông tin', infoAnchor),
+                    ('Hình ảnh (${images.length})', galleryAnchor),
+                    if (widget.product != null)
+                      ('Biến thể (${facts.variants.length})', variantsAnchor),
+                    ('Trạng thái bán', settingsAnchor),
+                  ])
+                    TextButton(
+                      onPressed: () => jumpTo(entry.$2),
+                      child: Text(entry.$1),
+                    ),
+                ],
+              ),
+              draftStatus(),
+            ],
+          ),
+        ),
+        if (error != null || needsReload)
+          Container(
+            key: feedbackAnchor,
+            margin: const EdgeInsets.only(bottom: 24),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: T.danger.withValues(alpha: .05),
+              border: Border.all(color: T.danger),
+              borderRadius: T.radius,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _field('name', 'Tên sản phẩm', validator: requiredText),
-                _field(
-                  'slug',
-                  'Đường dẫn sản phẩm',
-                  validator: (s) =>
-                      RegExp(r'^[a-z0-9]+(?:-[a-z0-9]+)*$').hasMatch(s ?? '') &&
-                          s!.length <= 100
-                      ? null
-                      : 'Dùng chữ thường, số và dấu gạch ngang; tối đa 100 ký tự.',
-                ),
-                _select(
-                  'Danh mục',
-                  'categories',
-                  category,
-                  (v) => setState(() => category = v),
-                ),
-                _select(
-                  'Thương hiệu',
-                  'brands',
-                  brand,
-                  (v) => setState(() => brand = v),
-                ),
-                _field(
-                  'description',
-                  'Mô tả',
-                  maxLines: 4,
-                  validator: (s) =>
-                      (s ?? '').length > 5000 ? 'Tối đa 5.000 ký tự.' : null,
-                ),
-                _field(
-                  'material',
-                  'Chất liệu',
-                  validator: (s) =>
-                      (s ?? '').length > 200 ? 'Tối đa 200 ký tự.' : null,
-                ),
-                _field(
-                  'style',
-                  'Phong cách',
-                  validator: (s) =>
-                      (s ?? '').length > 100 ? 'Tối đa 100 ký tự.' : null,
-                ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Hiển thị sản phẩm'),
-                  subtitle: const Text(
-                    'Sản phẩm cần ít nhất một biến thể đang bán để xuất hiện tại cửa hàng.',
-                  ),
-                  value: active,
-                  onChanged: locked ? null : (v) => setState(() => active = v),
-                ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Hỗ trợ thử đồ'),
-                  value: tryOn,
-                  onChanged: locked ? null : (v) => setState(() => tryOn = v),
-                ),
-                const SizedBox(height: 24),
-                Text('Bộ ảnh sản phẩm', style: T.display(24)),
-                const Text(
-                  'Ảnh đầu tiên là ảnh bìa. Dùng đường dẫn HTTPS công khai hoặc ảnh có sẵn trong assets/images/.',
-                  style: T.small,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  widget.product == null
-                      ? 'Lưu sản phẩm trước để tải ảnh từ máy.'
-                      : 'Ảnh tải lên được lưu ngay và có đường dẫn công khai. JPEG/PNG tối đa 8 MB, mỗi chiều 64–8.192 px, tối đa 16 triệu điểm ảnh.',
-                  style: T.small,
-                ),
-                if (widget.product != null)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: AppButton(
-                      pendingImage == null
-                          ? 'Tải ảnh từ máy'
-                          : 'Kiểm tra lại ảnh tải lên',
-                      outlined: true,
-                      busy: uploading,
-                      onPressed:
-                          saving ||
-                              uploading ||
-                              (pendingImage == null && images.length >= 20)
-                          ? null
-                          : upload,
-                    ),
-                  ),
-                for (final image in images)
-                  Padding(
-                    key: ObjectKey(image),
-                    padding: const EdgeInsets.only(top: 20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (managedCatalogImage.hasMatch(image.url.text))
-                          SizedBox(
-                            height: 160,
-                            child: FashionImage(
-                              image.url.text,
-                              label: image.alt.text,
-                              fit: BoxFit.contain,
-                            ),
-                          ),
-                        AppField(
-                          label: 'Đường dẫn ảnh',
-                          controller: image.url,
-                          readOnly: locked,
-                          validator: (s) =>
-                              (managedCatalogImage.hasMatch(s ?? '') ||
-                                      RegExp(
-                                        r'^(https://[^\s]+|assets/images/[a-zA-Z0-9_./-]+)$',
-                                      ).hasMatch(s ?? '')) &&
-                                  s!.length <= 2000
-                              ? null
-                              : 'Nhập đường dẫn ảnh HTTPS hoặc assets/images/ hợp lệ.',
-                        ),
-                        const SizedBox(height: 12),
-                        AppField(
-                          label: 'Mô tả ảnh',
-                          controller: image.alt,
-                          readOnly: locked,
-                          validator: (s) => (s ?? '').length > 200
-                              ? 'Tối đa 200 ký tự.'
-                              : null,
-                        ),
-                        const SizedBox(height: 12),
-                        AppField(
-                          label: 'Màu áp dụng (không bắt buộc)',
-                          controller: image.color,
-                          readOnly: locked,
-                          validator: (s) =>
-                              (s ?? '').length > 60 ? 'Tối đa 60 ký tự.' : null,
-                        ),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: TextButton.icon(
-                            onPressed: locked
-                                ? null
-                                : () => setState(() {
-                                    images.remove(image);
-                                    removedImages.add(image);
-                                  }),
-                            icon: const Icon(Icons.remove_circle_outline),
-                            label: const Text('Bỏ ảnh'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: AppButton(
-                    'Thêm ảnh',
-                    outlined: true,
-                    onPressed: locked || images.length >= 20
-                        ? null
-                        : () => setState(() => images.add(_ImageFields({}))),
-                  ),
-                ),
                 if (error != null)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  Semantics(
+                    liveRegion: true,
                     child: Text(
                       error!,
                       style: T.body.copyWith(color: T.danger),
                     ),
                   ),
-                const SizedBox(height: 24),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: AppButton(
-                    'Lưu thông tin sản phẩm',
-                    busy: saving,
-                    onPressed: locked ? null : save,
+                if (needsReload) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    widget.product == null
+                        ? 'Kết quả lưu chưa được xác nhận. Tra cứu đường dẫn trước khi tạo lại để tránh trùng sản phẩm.'
+                        : 'Tải lại dữ liệu mới nhất trước khi tiếp tục. Bản nháp hiện tại sẽ được thay bằng dữ liệu đã lưu.',
+                    style: T.small,
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: AppButton(
+                      widget.product == null
+                          ? 'Tra cứu sản phẩm đã tạo'
+                          : 'Tải lại dữ liệu sản phẩm',
+                      busy: saving,
+                      onPressed: reloadProduct,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
-        ),
-        if (widget.product != null) ...[
-          const SizedBox(height: 20),
-          AdminHeading(
-            'Biến thể & tồn kho',
-            'Mỗi biến thể có mã SKU riêng. Thay đổi giá và tồn kho được lưu riêng.',
-            actions: [
-              AppButton(
-                'Thêm biến thể',
-                outlined: true,
-                onPressed: locked
-                    ? null
-                    : () => _sku(context, ref, widget.product!),
+        Form(
+          key: form,
+          onChanged: () => setState(() {}),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              LayoutBuilder(
+                builder: (context, c) => c.maxWidth >= 980
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(flex: 7, child: info),
+                          const SizedBox(width: 24),
+                          Expanded(flex: 4, child: settings),
+                        ],
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [info, settings],
+                      ),
+              ),
+              ProductEditorSection(
+                key: galleryAnchor,
+                title: 'Bộ ảnh sản phẩm',
+                description:
+                    '${images.length}/20 ảnh. Ảnh đầu tiên là ảnh bìa.',
+                actions: [
+                  AppButton(
+                    'Thêm ảnh',
+                    outlined: true,
+                    icon: Icons.add_photo_alternate_outlined,
+                    onPressed: locked || images.length >= 20
+                        ? null
+                        : () => setState(() => images.add(_ImageFields({}))),
+                  ),
+                  if (widget.product != null)
+                    AppButton(
+                      pendingImage == null
+                          ? 'Tải ảnh từ máy'
+                          : 'Kiểm tra lại ảnh tải lên',
+                      outlined: true,
+                      icon: Icons.file_upload_outlined,
+                      busy: uploading,
+                      onPressed:
+                          saving ||
+                              uploading ||
+                              needsReload ||
+                              (pendingImage == null && images.length >= 20)
+                          ? null
+                          : upload,
+                    ),
+                ],
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (images.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 32,
+                          horizontal: 20,
+                        ),
+                        color: T.canvas,
+                        child: const Column(
+                          children: [
+                            Icon(
+                              Icons.add_photo_alternate_outlined,
+                              color: T.muted,
+                              size: 40,
+                            ),
+                            SizedBox(height: 12),
+                            Text(
+                              'Thêm ảnh đầu tiên cho sản phẩm',
+                              style: T.body,
+                            ),
+                            SizedBox(height: 6),
+                            Text(
+                              'Ảnh rõ nét giúp khách hàng dễ lựa chọn hơn.',
+                              style: T.small,
+                            ),
+                          ],
+                        ),
+                      ),
+                    for (var index = 0; index < images.length; index++)
+                      _imageCard(images[index], index),
+                    const SizedBox(height: 8),
+                    Text(
+                      widget.product == null
+                          ? 'Lưu sản phẩm trước để tải ảnh từ máy.'
+                          : 'JPEG/PNG, tối đa 8 MB. Ảnh tải từ máy được lưu ngay. Các chỉnh sửa và thứ tự ảnh cần bấm lưu.',
+                      style: T.small,
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(20),
+                margin: const EdgeInsets.only(bottom: 32),
+                decoration: BoxDecoration(
+                  color: T.soft.withValues(alpha: .5),
+                  borderRadius: T.radius,
+                ),
+                child: Wrap(
+                  spacing: 20,
+                  runSpacing: 16,
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    const Text(
+                      'Hoàn tất thông tin trước khi chỉnh sửa biến thể.',
+                      style: T.small,
+                    ),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        TextButton(
+                          onPressed: !locked && dirty ? discard : null,
+                          child: const Text('Hủy thay đổi'),
+                        ),
+                        saveButton(outlined: true),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-          if (variants.isEmpty)
-            const Text(
-              'Chưa có biến thể. Hãy thêm size, màu và giá trước khi mở bán.',
-              style: T.body,
-            ),
-          for (final raw in variants)
-            Builder(
-              builder: (context) {
-                final variant = commerceMap(raw);
-                final inventory = variant['inventory'];
-                return AdminCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        variant['sku'],
-                        style: T.body.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                      Text(
-                        '${variant['color']} / ${variant['size']} · ${money(vnd(variant['price']))}',
-                        style: T.body,
-                      ),
-                      Text(
-                        '${variant['active'] ? 'Đang bán' : 'Đã ẩn'} · Tồn kho: ${inventory?['quantity'] ?? 0}',
-                        style: T.small,
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        children: [
-                          AppButton(
-                            'Sửa giá / trạng thái',
-                            outlined: true,
-                            onPressed: locked
-                                ? null
-                                : () => _sku(
-                                    context,
-                                    ref,
-                                    widget.product!,
-                                    variant: variant,
-                                  ),
-                          ),
-                          if (inventory != null)
-                            AppButton(
-                              'Điều chỉnh kho',
-                              outlined: true,
-                              onPressed: locked
-                                  ? null
-                                  : () => adjustInventory(
-                                      context,
-                                      ref,
-                                      commerceMap(inventory),
-                                      variant['sku'],
-                                    ),
-                            ),
-                        ],
-                      ),
-                    ],
+        ),
+        if (widget.product != null) ...[
+          ProductVariantSection(
+            key: variantsAnchor,
+            product: widget.product!,
+            locked: locked || dirty,
+            tableOnWide: true,
+            lockedReason: dirty
+                ? 'Lưu hoặc hủy các thay đổi thông tin trước khi chỉnh sửa biến thể.'
+                : null,
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 16),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                AppButton(
+                  'Xem chi tiết',
+                  outlined: true,
+                  icon: Icons.open_in_new,
+                  onPressed: saving || uploading
+                      ? null
+                      : () => navigate(
+                          Uri(
+                            path: '/admin/products/${widget.product!['id']}',
+                            queryParameters: {'from': back},
+                          ).toString(),
+                        ),
+                ),
+                if (ProductFacts(widget.product!).published)
+                  AppButton(
+                    'Xem tại cửa hàng',
+                    outlined: true,
+                    icon: Icons.storefront_outlined,
+                    onPressed: saving || uploading
+                        ? null
+                        : () =>
+                              navigate('/products/${widget.product!['slug']}'),
                   ),
-                );
-              },
+              ],
             ),
+          ),
         ],
       ],
     );
   }
+
+  Widget _imageCard(_ImageFields image, int index) => Container(
+    key: ObjectKey(image),
+    margin: const EdgeInsets.only(bottom: 20),
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      border: Border.all(color: T.line),
+      borderRadius: T.radius,
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          spacing: 12,
+          runSpacing: 8,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              index == 0 ? 'Ảnh bìa' : 'Ảnh ${index + 1}',
+              style: T.body.copyWith(fontWeight: FontWeight.w600),
+            ),
+            Wrap(
+              spacing: 4,
+              children: [
+                IconButton(
+                  tooltip: 'Đưa ảnh lên trước',
+                  onPressed: locked || index == 0
+                      ? null
+                      : () => setState(() {
+                          images.removeAt(index);
+                          images.insert(index - 1, image);
+                        }),
+                  icon: const Icon(Icons.arrow_upward, size: 20),
+                ),
+                IconButton(
+                  tooltip: 'Đưa ảnh ra sau',
+                  onPressed: locked || index == images.length - 1
+                      ? null
+                      : () => setState(() {
+                          images.removeAt(index);
+                          images.insert(index + 1, image);
+                        }),
+                  icon: const Icon(Icons.arrow_downward, size: 20),
+                ),
+                TextButton.icon(
+                  onPressed: locked || index == 0
+                      ? null
+                      : () => setState(() {
+                          images.remove(image);
+                          images.insert(0, image);
+                        }),
+                  icon: const Icon(Icons.photo_outlined, size: 18),
+                  label: const Text('Đặt làm ảnh bìa'),
+                ),
+                TextButton.icon(
+                  onPressed: locked
+                      ? null
+                      : () async {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('Bỏ ảnh khỏi sản phẩm?'),
+                              content: const Text(
+                                'Ảnh sẽ được gỡ khỏi bộ ảnh khi lưu. Hình ảnh trong đơn hàng đã đặt vẫn được giữ nguyên.',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(context, false),
+                                  child: const Text('Giữ ảnh'),
+                                ),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: const Text('Bỏ ảnh'),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (mounted && confirm == true) {
+                            setState(() {
+                              images.remove(image);
+                              removedImages.add(image);
+                            });
+                          }
+                        },
+                  icon: const Icon(Icons.remove_circle_outline, size: 20),
+                  label: const Text('Bỏ ảnh'),
+                  style: TextButton.styleFrom(foregroundColor: T.danger),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        LayoutBuilder(
+          builder: (context, c) {
+            final preview = SizedBox(
+              height: 210,
+              width: 210,
+              child: image.url.text.isEmpty
+                  ? const ColoredBox(
+                      color: T.photo,
+                      child: Icon(Icons.image_outlined, color: T.muted),
+                    )
+                  : FashionImage(
+                      image.url.text,
+                      label: image.alt.text,
+                      fit: BoxFit.contain,
+                    ),
+            );
+            final inputs = Column(
+              children: [
+                AppField(
+                  label: 'Đường dẫn ảnh',
+                  controller: image.url,
+                  readOnly: locked,
+                  validator: (s) =>
+                      (managedCatalogImage.hasMatch(s ?? '') ||
+                              RegExp(
+                                r'^(https://[^\s]+|assets/images/[a-zA-Z0-9_./-]+)$',
+                              ).hasMatch(s ?? '')) &&
+                          (s?.length ?? 0) <= 2000
+                      ? null
+                      : 'Nhập đường dẫn ảnh HTTPS hoặc assets/images/ hợp lệ.',
+                ),
+                const SizedBox(height: 12),
+                AppField(
+                  label: 'Mô tả ảnh',
+                  controller: image.alt,
+                  readOnly: locked,
+                  validator: (v) =>
+                      (v ?? '').length > 200 ? 'Tối đa 200 ký tự.' : null,
+                ),
+                const SizedBox(height: 12),
+                AppField(
+                  label: 'Màu áp dụng (không bắt buộc)',
+                  controller: image.color,
+                  readOnly: locked,
+                  validator: (v) =>
+                      (v ?? '').length > 60 ? 'Tối đa 60 ký tự.' : null,
+                ),
+              ],
+            );
+            return c.maxWidth >= 620
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      preview,
+                      const SizedBox(width: 20),
+                      Expanded(child: inputs),
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [preview, const SizedBox(height: 16), inputs],
+                  );
+          },
+        ),
+      ],
+    ),
+  );
 
   Widget _field(
     String key,
@@ -562,6 +1110,7 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
   ) => Padding(
     padding: const EdgeInsets.only(bottom: 18),
     child: DropdownButtonFormField<String>(
+      key: ValueKey('$kind-$current'),
       initialValue: current,
       isExpanded: true,
       decoration: InputDecoration(labelText: label),
@@ -576,94 +1125,4 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
       validator: (s) => s == null ? 'Vui lòng chọn $label.' : null,
     ),
   );
-}
-
-Future<void> _sku(
-  BuildContext context,
-  WidgetRef ref,
-  AdminRecord product, {
-  AdminRecord? variant,
-}) async {
-  final controls = {
-    for (final key in ['sku', 'size', 'color', 'colorHex', 'price'])
-      key: TextEditingController(
-        text: variant?[key] ?? (key == 'colorHex' ? '#000000' : ''),
-      ),
-  };
-  var active = variant?['active'] ?? true;
-  final repo = ref.read(adminRepositoryProvider);
-  final changed = await showDialog<bool>(
-    context: context,
-    barrierDismissible: false,
-    builder: (_) => StatefulBuilder(
-      builder: (context, setState) => AdminMutationDialog(
-        title: variant == null ? 'Thêm biến thể' : 'Sửa biến thể',
-        message: variant == null
-            ? 'Biến thể mới có tồn kho bằng 0. Nhập kho sau khi lưu.'
-            : '${variant['sku']} · ${variant['color']} / ${variant['size']}',
-        reload: () => refreshAdmin(ref),
-        onDisposed: () {
-          for (final control in controls.values) {
-            control.dispose();
-          }
-        },
-        fields: [
-          if (variant == null) ...[
-            AppField(
-              label: 'Mã SKU',
-              controller: controls['sku'],
-              validator: (s) => requiredText(s, max: 100),
-            ),
-            AppField(
-              label: 'Kích cỡ',
-              controller: controls['size'],
-              validator: (s) => requiredText(s, max: 30),
-            ),
-            AppField(
-              label: 'Màu sắc',
-              controller: controls['color'],
-              validator: (s) => requiredText(s, max: 60),
-            ),
-            AppField(
-              label: 'Mã màu HEX',
-              controller: controls['colorHex'],
-              validator: (s) => RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(s ?? '')
-                  ? null
-                  : 'Ví dụ: #000000',
-            ),
-          ],
-          AppField(
-            label: 'Giá bán (VND)',
-            controller: controls['price'],
-            keyboardType: TextInputType.number,
-            validator: priceValidation,
-          ),
-          if (variant != null)
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Đang bán'),
-              value: active,
-              onChanged: (v) => setState(() => active = v),
-            ),
-        ],
-        submit: () async {
-          await repo.saveSku(
-            variant?['id'],
-            variant == null
-                ? {
-                    'productId': product['id'],
-                    for (final e in controls.entries)
-                      e.key: e.value.text.trim(),
-                  }
-                : {'price': controls['price']!.text.trim(), 'active': active},
-          );
-        },
-      ),
-    ),
-  );
-  if (context.mounted && changed == true) {
-    refreshAdmin(ref);
-    ref.read(catalogRevisionProvider.notifier).refresh();
-    toast(context, 'Đã lưu biến thể.');
-  }
 }

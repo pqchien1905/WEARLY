@@ -1,7 +1,7 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../database/prisma.service';
-import { ProductsService } from '../products/products.service';
+import { ProductsService, publicProductWhere } from '../products/products.service';
 import { ContentService } from './content.service';
 import { defaultStoreDetails } from './store-details';
 
@@ -46,7 +46,7 @@ export class StorefrontService {
   }
   async sitemap(): Promise<string> {
     const products = await this.db.product.findMany({
-      where: { active: true, variants: { some: { active: true } } },
+      where: publicProductWhere,
       select: { slug: true },
       orderBy: { id: 'asc' },
       take: 50001,

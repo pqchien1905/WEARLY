@@ -28,6 +28,7 @@ final accountDetailsRepositoryProvider = Provider<AccountDetailsRepository>((
 final accountDetailsProvider =
     AsyncNotifierProvider<AccountDetailsController, AccountDetails>(
       AccountDetailsController.new,
+      retry: (_, _) => null,
     );
 
 class AccountDetailsController extends AsyncNotifier<AccountDetails> {

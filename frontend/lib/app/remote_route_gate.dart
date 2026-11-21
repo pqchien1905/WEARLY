@@ -84,10 +84,23 @@ class LoginRequired extends StatelessWidget {
   const LoginRequired({super.key, required this.next, this.beforeNavigate});
   final String next;
   final VoidCallback? beforeNavigate;
+  String get _message {
+    final path = Uri.parse(next).path;
+    if (path == '/wishlist') {
+      return 'Danh sách yêu thích được lưu theo tài khoản để bạn xem lại trên mọi thiết bị.';
+    }
+    if (path == '/ai-stylist' ||
+        path.startsWith('/virtual-try-on') ||
+        path == '/account/try-ons') {
+      return 'AI Stylist và phòng thử cần tài khoản để lưu lượt dùng và ảnh riêng tư của bạn.';
+    }
+    return 'Giỏ hàng, địa chỉ và đơn hàng được lưu theo tài khoản của bạn.';
+  }
+
   @override
   Widget build(BuildContext context) => StatePanel(
     title: 'Đăng nhập để tiếp tục',
-    message: 'Giỏ hàng, địa chỉ và đơn hàng được lưu theo tài khoản của bạn.',
+    message: _message,
     icon: Icons.person_outline,
     action: AppButton(
       'Đăng nhập',

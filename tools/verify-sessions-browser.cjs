@@ -64,7 +64,7 @@ module.exports=async function verify({root,url,email,otherEmail,adminEmail,passw
     await route('/admin/staff');await page.reload();await semantics();await page.getByText('Nhân sự & quyền',{exact:true}).last().waitFor();
     await revokeStaff();await page.reload();await semantics();await page.getByRole('button',{name:'Đăng nhập quản trị',exact:true}).waitFor();
     await login(adminEmail,true);await page.getByText('Hỗ trợ khách hàng',{exact:true}).last().waitFor();
-    await page.getByRole('button',{name:'Đăng xuất quản trị',exact:true}).click();await page.waitForTimeout(300);
+    await (async()=>{await page.getByRole('button',{name:'Tài khoản quản trị',exact:true}).click();await page.getByRole('menuitem',{name:'Đăng xuất',exact:true}).or(page.getByRole('button',{name:'Đăng xuất',exact:true})).first().click();})();await page.waitForTimeout(300);
     await page.reload();await semantics();await page.getByRole('button',{name:'Đăng nhập quản trị',exact:true}).waitFor();
     assert.equal((await context.cookies()).filter(c=>c.name.startsWith('wearly_')).length,0);
     assert.deepEqual(errors,[]);assert(!requests.some(r=>r.status>=500));

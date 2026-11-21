@@ -9,9 +9,9 @@ export class LoginDto {
   @IsEmail()
   @MaxLength(254)
   email!: string;
-  @ApiProperty({ minLength: 12, maxLength: 128 })
+  @ApiProperty({ minLength: 8, maxLength: 128 })
   @IsString()
-  @MinLength(12)
+  @MinLength(8)
   @MaxLength(128)
   password!: string;
 }

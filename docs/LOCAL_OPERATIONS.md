@@ -6,8 +6,30 @@ chạy tại thư mục chứa phiên bản code muốn dùng; mỗi worktree c�
 
 ## Khởi động và dừng
 
+### Mở giao diện bằng bản release
+
+Khi API đã chạy ở cổng 3000, bật thêm kho ảnh MinIO rồi mở giao diện mà không
+cần Flutter debug:
+
+```powershell
+.\tools\start-storage.ps1 # Kho ảnh; có thể chạy lại nếu MinIO đã bật
+.\tools\frontend.ps1 build-api # Chỉ cần khi chưa có bản build hoặc vừa sửa code
+.\tools\frontend.ps1 preview
+```
+
+Mở `http://localhost:5173`. Lệnh `preview` phục vụ bản build có sẵn ngay bằng
+Node, không chạy `pub get` hay dịch vụ debug. Giữ terminal mở; nhấn `Ctrl+C`
+để dừng. Nếu bản preview đã chạy, mở địa chỉ trên, không cần chạy thêm phiên.
+API phải cho phép origin `http://localhost:5173` trong `CORS_ORIGINS` (cấu hình
+local hiện tại đã có). Có thể đổi cổng bằng `-PreviewPort`, đồng thời cập nhật
+origin tương ứng trong API. Lệnh `preview` không tự khởi động backend hay MinIO.
+Nếu sản phẩm vẫn có tên/giá nhưng ảnh hiện «Ảnh chưa có» và API ảnh trả 503,
+kiểm tra MinIO ở cổng 9000, chạy lại `start-storage.ps1`, rồi tải lại trang.
+
+### Chạy đầy đủ dịch vụ local
+
 Node24, Flutter3.47.7 tại `.tools/flutter`, dependencies backend đã cài và schema
-đã migrate là điều kiện trước khi chạy. Bản native hiện có28 migrations. Với bản
+đã migrate là điều kiện trước khi chạy. Bản native ngày26/10/2026 có42 migrations. Với bản
 nâng cấp có migration mới, sao lưu trước, kiểm tra đúng database rồi chạy migration
 theo hướng dẫn bản nâng cấp. Lệnh runtime không migrate, seed hoặc sửa `.env`.
 
@@ -20,12 +42,29 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\local.ps1 status
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\local.ps1 stop
 ```
 
-Nếu bật email local/khôi phục mật khẩu, khởi động Mailpit trước bằng helper được
-mô tả trong [hướng dẫn email](MAIL_SUPPORT_LOCAL.md). Web mở tại
+Nếu SMTP trỏ vào Mailpit local, khởi động Mailpit trước bằng helper được
+mô tả trong [hướng dẫn email](MAIL_SUPPORT_LOCAL.md). Khôi phục mật khẩu cũng
+chạy được với SMTP bên ngoài đã cấu hình, như Gmail; không cần Mailpit trong
+trường hợp đó. Chế độ `LOCAL_MAIL_ENABLED=true` vẫn chỉ dùng SMTP loopback.
+Web mở tại
 `http://localhost:8080`, API tại `http://localhost:3000/api/v1`. API và các
-tiến trình chỉ nghe loopback. Khi đổi cổng, truyền cùng `-ApiPort` và `-WebPort`
+tiến trình chỉ nghe loopback. Nếu mở web bằng `127.0.0.1`, ứng dụng tự chuyển
+về hostname local đã cấu hình trong `API_BASE_URL` trước khi khôi phục phiên;
+cổng và đường dẫn trang được giữ nguyên. Việc này giữ CORS và cookie đăng nhập
+`SameSite=Strict` cùng hostname. Bản demo và các địa chỉ triển khai bên ngoài
+không chuyển hướng theo quy tắc này.
+Khi đổi cổng, truyền cùng `-ApiPort` và `-WebPort`
 cho `build` và `start`; trình chạy đặt CORS và URL trả về tương ứng trong tiến trình.
 `-EnvFile` mặc định `backend/.env` và phải nằm trong workspace được phép.
+
+Máy hiện tại đã chuyển sang chạy hoàn toàn bằng dịch vụ Windows ngày26/10/2026.
+Docker Desktop được giữ lại nhưng đã tắt, cùng máy ảo WSL; tự khởi động Docker
+khi đăng nhập đang tắt. Container, volume và image của WEARLY đã được dọn sau
+khi sao lưu volume tại `.tools/docker-retirement/2026-10-26-0ff6226a`.
+Sau khi khởi động lại Windows, chạy `start-storage.ps1` rồi `local.ps1 start`
+như trên; chỉ cần `local.ps1 build` khi mã nguồn hoặc bản build thay đổi.
+Không cần mở Docker Desktop. Database PostgreSQL, Memurai và dữ liệu MinIO
+native vẫn được giữ nguyên. Các hướng dẫn container/CI là lựa chọn riêng.
 
 `build` ghi dấu kiểm tra nội dung backend/web và URL API. Sau khi sửa code hoặc
 chạy một browser fixture tạo bản web khác, chạy lại `build`. `start` từ chối bản

@@ -18,10 +18,6 @@ class InfoPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final remote = ref.watch(remoteApiProvider);
     final content = switch (path) {
-      '/collections' => (
-        'Everyday, theo cách bạn.',
-        'Một chiếc áo trắng, một phom quần rộng, một chiếc đầm có sắc màu riêng. Bộ sưu tập minh họa những cách phối đơn giản cho nhịp sống hằng ngày.',
-      ),
       '/privacy' => (
         remote
             ? 'Dữ liệu khi kết nối cửa hàng'
@@ -82,11 +78,6 @@ class InfoPage extends ConsumerWidget {
                 else
                   Text(content.$2, style: T.body.copyWith(fontSize: 16)),
                 const SizedBox(height: 32),
-                if (remote)
-                  const Text(
-                    'Bản demo chạy local · Chưa bán hàng thực tế.',
-                    style: T.small,
-                  ),
                 const SizedBox(height: 16),
                 if (path == '/size-guide')
                   AppButton(
@@ -101,17 +92,6 @@ class InfoPage extends ConsumerWidget {
               ],
             ),
           ),
-          if (path == '/collections') ...[
-            const SizedBox(height: 40),
-            const AspectRatio(
-              aspectRatio: 2,
-              child: FashionImage(
-                'assets/images/shirt.jpg',
-                label: 'Bộ sưu tập Everyday minh họa',
-                alignment: Alignment(0, -.5),
-              ),
-            ),
-          ],
           const SizedBox(height: 64),
         ],
       ),

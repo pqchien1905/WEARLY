@@ -10,19 +10,19 @@ class StoreDetails {
   String operator [](String key) => values[key] ?? '';
   static const defaults = {
     'name': 'WEARLY',
-    'tagline': 'Bản demo chạy local',
+    'tagline': 'Tủ đồ đương đại, theo cách bạn.',
     'email': '',
     'phone': '',
     'address': '',
     'about':
-        'WEARLY là cửa hàng minh họa chạy trên máy local. Catalog và ảnh dùng để trải nghiệm các chức năng; chưa đại diện cho hoạt động bán hàng thực tế.',
+        'Khám phá những thiết kế, màu sắc và cách phối dành cho phong cách riêng của bạn. WEARLY giúp bạn lưu sản phẩm yêu thích, chọn kích cỡ, theo dõi đơn hàng và tìm cảm hứng cho tủ đồ mỗi ngày.',
     'privacy':
-        'Tài khoản, địa chỉ, đơn hàng và yêu cầu hỗ trợ được lưu trên máy chủ local. Phiên đăng nhập dùng cookie HttpOnly và có thể tiếp tục sau khi tải lại trang; đăng xuất để thu hồi phiên. Stylist gửi nội dung lựa chọn tới Google Gemini sau khi bạn đồng ý. Thử đồ chỉ lưu ảnh và gửi ảnh người/trang phục tới Gemini sau các bước đồng ý riêng. Ảnh riêng tư cần đăng nhập để xem, có thời hạn lưu và có thể xóa trong phòng thử; xóa hoặc hết hạn chặn truy cập, việc dọn bytes được xử lý nền. Thư hỗ trợ nằm trong hộp thư local. Hạn chế dùng dữ liệu cá nhân thật trong bản thử nghiệm.',
+        'Tài khoản, địa chỉ, đơn hàng, yêu cầu hỗ trợ và đăng ký nhận tin được lưu trên máy chủ. Phiên đăng nhập dùng cookie HttpOnly; đăng xuất để thu hồi phiên. Email khôi phục được gửi tới địa chỉ tài khoản. Khi dịch vụ Gemini được bật, Stylist chỉ gửi nội dung lựa chọn sau khi bạn đồng ý; phòng thử yêu cầu đồng ý riêng trước khi tải ảnh và tạo kết quả. Ảnh riêng tư cần đăng nhập để xem, có thời hạn lưu và có thể xóa trong phòng thử. Xóa hoặc hết hạn chặn truy cập, việc dọn tệp được xử lý nền.',
     'terms':
-        'Đây là bản demo local. VNPay dùng môi trường thử nghiệm, vận chuyển được mô phỏng và COD được xác nhận thu tiền bằng thao tác đối soát có phân quyền. Kết quả Gemini chỉ hỗ trợ tham khảo, không xác nhận độ vừa vặn hay chất lượng sản phẩm. Không có cam kết giao hàng thực tế hoặc tự động hoàn tiền ngoài hệ thống.',
+        'Giá và tồn kho được kiểm tra lại khi đặt hàng. COD được xác nhận thu tiền bằng thao tác đối soát có phân quyền. VNPay, MoMo và ZaloPay hiện dùng môi trường thử nghiệm; theo dõi vận chuyển chưa kết nối với đơn vị giao hàng bên ngoài. Kết quả Gemini chỉ hỗ trợ tham khảo, không xác nhận độ vừa vặn hay chất lượng sản phẩm. Không có tự động giao hàng hoặc hoàn tiền ngoài hệ thống.',
   };
   static const shipping =
-      'Vận chuyển trên máy local được mô phỏng; phí hiển thị tại bước thanh toán. VNPay dùng sandbox. Với COD, trạng thái đã giao không tự xác nhận đã thu tiền: nhân viên có quyền phải đối soát. Yêu cầu trả hàng cần được duyệt và ghi nhận hàng nhận lại trước khi xử lý hoàn tiền. Chưa có giao hàng hoặc thu tiền thực tế.';
+      'Vận chuyển trên máy local được mô phỏng; phí hiển thị tại bước thanh toán. VNPay, MoMo và ZaloPay dùng sandbox. Với COD, trạng thái đã giao không tự xác nhận đã thu tiền: nhân viên có quyền phải đối soát. Yêu cầu trả hàng cần được duyệt và ghi nhận hàng nhận lại trước khi xử lý hoàn tiền. Chưa có giao hàng hoặc thu tiền thực tế.';
   static const fields = [
     (key: 'name', label: 'Tên cửa hàng', max: 80, lines: 1),
     (key: 'tagline', label: 'Mô tả ngắn', max: 160, lines: 1),

@@ -59,6 +59,9 @@ void main() {
           if (r.method == 'GET') return jsonResponse(rows);
           if (r.method == 'DELETE') {
             rows.removeWhere((a) => a['id'] == r.url.path.split('/').last);
+            if (rows.isNotEmpty && !rows.any((a) => a['isDefault'] == true)) {
+              rows.first['isDefault'] = true;
+            }
             return jsonResponse({'deleted': true});
           }
           final body = jsonDecode(r.body) as Map<String, dynamic>;

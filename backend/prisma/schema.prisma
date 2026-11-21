@@ -2,6 +2,7 @@ generator client {
   provider = "prisma-client"
   output = "../src/generated/prisma"
   moduleFormat = "cjs"
+  importFileExtension = ""
 }
 datasource db {
   provider = "postgresql"
@@ -59,24 +60,34 @@ enum AIJobStatus {
   FAILED
 }
 enum AdminAuditAction {
+  CUSTOMER_CREATED
+  CUSTOMER_DELETED
   STAFF_UPDATED
   SUPPORT_REPLIED
   SUPPORT_STATUS_CHANGED
   PRODUCT_CREATED
   PRODUCT_UPDATED
+  PRODUCT_DELETED
   SKU_CREATED
   SKU_UPDATED
   CATEGORY_CREATED
   CATEGORY_RENAMED
+  CATEGORY_DELETED
   BRAND_CREATED
+  BRAND_DELETED
   BRAND_RENAMED
+  COLLECTION_DELETED
+  COLLECTION_CREATED
+  COLLECTION_UPDATED
   INVENTORY_ADJUSTED
   ORDER_STATUS_CHANGED
+  CONTENT_DRAFT_RESTORED
   CONTENT_DRAFT_SAVED
   CONTENT_PUBLISHED
   PRODUCT_IMAGE_UPLOADED
   COD_SETTLED
   PROMOTION_CREATED
+  PROMOTION_DELETED
   PROMOTION_UPDATED
   SHIPMENT_UPDATED
   ORDER_CANCELLED
@@ -95,6 +106,7 @@ model AdminAuditEvent {
   details Json @default("{}")
   createdAt DateTime @default(now())
   @@index([createdAt, id])
+  @@index([targetId, action])
 }
 model StoreContent {
   id String @id @default(uuid()) @db.Uuid
@@ -121,11 +133,13 @@ model User {
   phone String @default("")
   role Role @default(CUSTOMER)
   active Boolean @default(true)
+  deletedAt DateTime?
   staffVersion Int @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   refreshTokens RefreshToken[]
   passwordResetTokens PasswordResetToken[]
+  passwordResetCode PasswordResetCode?
   addresses Address[]
   cart Cart?
   orders Order[]
@@ -145,6 +159,19 @@ model PasswordResetToken {
   consumedAt DateTime?
   createdAt DateTime @default(now())
   @@index([userId])
+  @@index([expiresAt])
+}
+model PasswordResetCode {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @unique @db.Uuid
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash String @db.VarChar(64)
+  attempts Int @default(0)
+  requestedAt DateTime
+  expiresAt DateTime
+  deliveredAt DateTime?
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
   @@index([expiresAt])
 }
 model StylePreference {
@@ -195,6 +222,12 @@ model AddressCreateReceipt {
   createdAt DateTime @default(now())
   @@id([userId, key])
 }
+model NewsletterSubscription {
+  id String @id @default(uuid()) @db.Uuid
+  email String @unique @db.VarChar(254)
+  consentedAt DateTime @default(now())
+  createdAt DateTime @default(now())
+}
 model Category {
   id String @id @default(uuid()) @db.Uuid
   slug String @unique
@@ -230,9 +263,27 @@ model Product {
   images ProductImage[]
   wishlist WishlistItem[]
   reviews Review[]
+  collectionCovers StoreCollection[]
+  promotions CouponProduct[]
   @@index([active, createdAt, id])
   @@index([categoryId, active])
   @@index([brandId, active])
+  @@index([style, active, createdAt])
+}
+model StoreCollection {
+  id String @id @default(uuid()) @db.Uuid
+  slug String @unique @db.VarChar(100)
+  title String @db.VarChar(120)
+  description String @db.VarChar(1500)
+  style String @unique @db.VarChar(100)
+  active Boolean @default(true)
+  position Int @default(0)
+  version Int @default(1)
+  coverProductId String? @db.Uuid
+  coverProduct Product? @relation(fields: [coverProductId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([active, position, id])
 }
 model ProductVariant {
   id String @id @default(uuid()) @db.Uuid
@@ -333,6 +384,7 @@ model CartItem {
 model Order {
   mail MailOutbox[]
   id String @id @default(uuid()) @db.Uuid
+  code String @unique @default(dbgenerated("next_order_code()"))
   userId String @db.Uuid
   user User @relation(fields: [userId], references: [id])
   idempotencyKey String
@@ -408,6 +460,10 @@ model OrderItem {
   color String
   image String
   unitPrice Decimal @db.Decimal(14, 0)
+  originalUnitPrice Decimal? @db.Decimal(14, 0)
+  promotionName String?
+  automaticPromotionId String? @db.Uuid
+  automaticPromotion Coupon? @relation(fields: [automaticPromotionId], references: [id], onDelete: Restrict)
   quantity Int
   createdAt DateTime @default(now())
   returns ReturnItem[]
@@ -469,6 +525,8 @@ model PaymentAttempt {
   ipAddress String @db.VarChar(45)
   transactionNo String? @unique @db.VarChar(15)
   reviewRequired Boolean @default(false)
+  // E-wallet gateways issue the payment link server-side; VNPay signs it locally.
+  checkoutUrl String? @db.VarChar(2048)
   createdAt DateTime @default(now())
   expiresAt DateTime
   lastQueryAt DateTime?
@@ -511,6 +569,12 @@ model PaymentSettlement {
 model Coupon {
   id String @id @default(uuid()) @db.Uuid
   code String @unique
+  name String @default("") @db.VarChar(120)
+  application String @default("CODE") @db.VarChar(16)
+  scope String @default("ALL") @db.VarChar(16)
+  products CouponProduct[]
+  automaticItems OrderItem[]
+  @@index([application, active])
   amount Decimal @db.Decimal(14, 0)
   kind CouponKind @default(FIXED)
   active Boolean @default(false)
@@ -521,9 +585,18 @@ model Coupon {
   usageLimit Int?
   perUserLimit Int @default(1)
   version Int @default(0)
+  @@index([createdAt, id])
   redemptions CouponRedemption[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+model CouponProduct {
+  couponId String @db.Uuid
+  coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  productId String @db.Uuid
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  @@id([couponId, productId])
+  @@index([productId])
 }
 model CouponRedemption {
   id String @id @default(uuid()) @db.Uuid
@@ -536,6 +609,7 @@ model CouponRedemption {
   createdAt DateTime @default(now())
   releasedAt DateTime?
   @@index([couponId, userId, releasedAt])
+  @@index([couponId, createdAt, id])
 }
 model WishlistItem {
   id String @id @default(uuid()) @db.Uuid

@@ -76,6 +76,23 @@ describe('Verified product reviews with PostgreSQL', () => {
           style: '',
           categoryId,
           brandId,
+          images:
+            i === 0
+              ? {
+                  create: [
+                    {
+                      url: 'assets/review-secondary.jpg',
+                      alt: 'Side',
+                      position: 2,
+                    },
+                    {
+                      url: 'assets/review-primary.jpg',
+                      alt: 'Front',
+                      position: 0,
+                    },
+                  ],
+                }
+              : undefined,
           variants: {
             create: {
               sku: `reviews-${i}-${suffix}`,
@@ -243,7 +260,15 @@ describe('Verified product reviews with PostgreSQL', () => {
     await request(app.getHttpServer())
       .get('/api/v1/users/me/reviews')
       .expect(401);
-    for (const query of ['?page=0', '?limit=21', '?userId=' + users[1]]) {
+    for (const query of [
+      '?page=0',
+      '?limit=21',
+      '?userId=' + users[1],
+      '?rating=0',
+      '?rating=6',
+      '?rating=no',
+      '?q=' + 'a'.repeat(101),
+    ]) {
       await history(0, query).expect(400);
     }
     const extra = await db.review.create({
@@ -275,10 +300,14 @@ describe('Verified product reviews with PostgreSQL', () => {
         rows.find((r: { productId: string }) => r.productId === products[0]),
       ).toMatchObject({
         canEdit: true,
-        product: { name: 'Review shirt', slug: `reviews-0-${suffix}` },
+        product: {
+          name: 'Review shirt',
+          slug: `reviews-0-${suffix}`,
+          image: 'assets/review-primary.jpg',
+        },
       });
       expect(rows.find((r: { id: string }) => r.id === extra.id)).toMatchObject(
-        { canEdit: false },
+        { canEdit: false, product: { image: null } },
       );
       expect(Object.keys(rows[0]).sort()).toEqual(
         [
@@ -306,6 +335,21 @@ describe('Verified product reviews with PostgreSQL', () => {
       expect(
         (await history(0, '?page=3&limit=1').expect(200)).body,
       ).toMatchObject({ total: 2, items: [] });
+      const filtered = (
+        await history(0, '?q=SHIRT%20legacy&rating=3&limit=1').expect(200)
+      ).body;
+      expect(filtered).toMatchObject({ total: 1, items: [{ id: extra.id }] });
+      expect(
+        (await history(0, '?q=legacy&rating=3&page=2&limit=1').expect(200))
+          .body,
+      ).toMatchObject({ total: 1, items: [] });
+      expect(
+        (await history(1, '?q=legacy&rating=3').expect(200)).body,
+      ).toMatchObject({ total: 0, items: [] });
+      expect((await history(0, '?q=%25').expect(200)).body).toMatchObject({
+        total: 0,
+        items: [],
+      });
     } finally {
       await db.review.delete({ where: { id: extra.id } });
     }
@@ -343,6 +387,13 @@ describe('Verified product reviews with PostgreSQL', () => {
         });
         expect(JSON.stringify(hidden)).not.toContain(`reviews-1-${suffix}`);
         expect(JSON.stringify(hidden)).not.toContain('Review shirt');
+        const searched = await request(app.getHttpServer())
+          .get('/api/v1/users/me/reviews?q=Review%20shirt')
+          .auth(tokens[0], { type: 'bearer' })
+          .expect(200);
+        expect(
+          searched.body.items.some((r: { id: string }) => r.id === extra.id),
+        ).toBe(false);
       }
       await call('delete', '/me', 0, 1)
         .send({ expectedUpdatedAt: extra.updatedAt.toISOString() })

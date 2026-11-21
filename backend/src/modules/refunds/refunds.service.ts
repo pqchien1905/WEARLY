@@ -9,8 +9,13 @@ import { queueOrderMail } from '../mail/outbox';
 import {
   VnpayProvider,
   VnpayRefund,
-  VnpayRefundEvent,
 } from '../../integrations/payments/vnpay.provider';
+import {
+  RefundEvent,
+  isOnlineProvider,
+  providerLabel,
+} from '../../integrations/payments/wallet-gateway';
+import { WalletGateways } from '../../integrations/payments/wallet-gateways';
 import { CreateRefundDto, QueryRefundDto } from './refunds.dto';
 import {
   RefundOrder,
@@ -26,7 +31,24 @@ export class RefundsService {
   constructor(
     private readonly db: PrismaService,
     private readonly gateway: VnpayProvider,
+    private readonly wallets: WalletGateways,
   ) {}
+  private assertAvailable(provider: string) {
+    const wallet = this.wallets.get(provider);
+    if (wallet) wallet.assertAvailable();
+    else this.gateway.assertAvailable();
+  }
+  private send(provider: string, request: VnpayRefund) {
+    const wallet = this.wallets.get(provider);
+    return wallet ? wallet.refund(request) : this.gateway.refund(request);
+  }
+  private async publicRow(refundId: string) {
+    const row = await this.db.refund.findUniqueOrThrow({
+      where: { id: refundId },
+      include: { payment: { select: { provider: true } } },
+    });
+    return publicRefund(row, row.payment.provider);
+  }
   private async order(
     tx: Prisma.TransactionClient,
     id: string,
@@ -95,7 +117,7 @@ export class RefundsService {
         ]),
       )
       .digest('hex');
-    let reserved: { row: RefundRow; request?: VnpayRefund };
+    let reserved: { row: RefundRow; provider?: string; request?: VnpayRefund };
     try {
       reserved = await transaction(this.db, async (tx) => {
         const order = await this.order(tx, id),
@@ -153,14 +175,14 @@ export class RefundsService {
               'REFUND_REFERENCE_USED',
               'Refund receipt reference already exists',
             );
-        } else if (p.provider === 'vnpay') {
+        } else if (isOnlineProvider(p.provider)) {
           if (!dto.paymentAttemptId || dto.reference)
             fail(
               400,
               'REFUND_SOURCE_INVALID',
-              'Select a verified VNPay payment',
+              `Select a verified ${providerLabel(p.provider)} payment`,
             );
-          this.gateway.assertAvailable();
+          this.assertAvailable(p.provider);
         } else
           fail(
             409,
@@ -174,7 +196,9 @@ export class RefundsService {
             primary: source.primary,
             requestKey: dto.requestKey,
             payloadHash: hash,
-            providerRequestId: randomUUID().replaceAll('-', ''),
+            providerRequestId:
+              this.wallets.get(p.provider)?.refundRequestId(new Date()) ??
+              randomUUID().replaceAll('-', ''),
             amount: source.available,
             actorId,
             reference: dto.reference ?? null,
@@ -200,7 +224,8 @@ export class RefundsService {
           );
         return {
           row,
-          ...(p.provider === 'vnpay'
+          provider: p.provider,
+          ...(isOnlineProvider(p.provider)
             ? { request: this.request(order, row) }
             : {}),
         };
@@ -219,19 +244,15 @@ export class RefundsService {
     }
     // Only the transaction that inserted the durable reservation may send money.
     // Replays and crash recovery return/query the reservation, never send again.
-    if (reserved.request) {
+    if (reserved.request && reserved.provider) {
       try {
-        const event = await this.gateway.refund(reserved.request);
+        const event = await this.send(reserved.provider, reserved.request);
         await this.apply(actorId, id, reserved.row.id, event);
       } catch {
-        /* Keep REVIEW and reserved funds; query a verified refund number. */
+        /* Keep REVIEW and reserved funds; query the provider before retrying. */
       }
     }
-    return publicRefund(
-      await this.db.refund.findUniqueOrThrow({
-        where: { id: reserved.row.id },
-      }),
-    );
+    return this.publicRow(reserved.row.id);
   }
   async query(
     actorId: string,
@@ -244,13 +265,31 @@ export class RefundsService {
         row = order.payment?.refunds.find((r) => r.id === refundId);
       if (!row) throw new NotFoundException();
       if (['SUCCEEDED', 'FAILED'].includes(row.status)) return { row };
-      if (!row.attemptId)
+      const provider = order.payment!.provider;
+      if (!row.attemptId || !isOnlineProvider(provider))
         fail(
           409,
           'REFUND_QUERY_UNAVAILABLE',
-          'Only VNPay refunds use provider queries',
+          'Only online payment refunds use provider queries',
         );
-      this.gateway.assertAvailable();
+      this.assertAvailable(provider);
+      const rateLimit = async () => {
+        if (row.lastQueryAt && Date.now() - row.lastQueryAt.getTime() < 10000)
+          fail(
+            429,
+            'REFUND_QUERY_RATE_LIMITED',
+            'Wait ten seconds before querying again',
+          );
+        await tx.refund.update({
+          where: { id: row.id },
+          data: { lastQueryAt: new Date() },
+        });
+      };
+      // Wallets look the refund up by its request identifier; no manual number.
+      if (provider !== 'vnpay') {
+        await rateLimit();
+        return { row, provider, request: this.request(order, row) };
+      }
       const number = row.providerTransactionNo ?? dto.transactionNo;
       if (!number)
         fail(
@@ -284,64 +323,57 @@ export class RefundsService {
           'REFUND_TRANSACTION_CONFLICT',
           'Refund number already assigned',
         );
-      if (row.lastQueryAt && Date.now() - row.lastQueryAt.getTime() < 10000)
-        fail(
-          429,
-          'REFUND_QUERY_RATE_LIMITED',
-          'Wait ten seconds before querying again',
-        );
-      await tx.refund.update({
-        where: { id: row.id },
-        data: { lastQueryAt: new Date() },
-      });
-      return { row, request, number };
+      await rateLimit();
+      return { row, provider, request, number };
     });
-    if ('request' in reserved && reserved.request && reserved.number) {
+    if ('request' in reserved && reserved.request) {
+      const wallet = this.wallets.get(reserved.provider);
       try {
-        await this.apply(
-          actorId,
-          id,
-          refundId,
-          await this.gateway.queryRefund(reserved.request, reserved.number),
-        );
+        const event = wallet
+          ? await wallet.queryRefund(reserved.request)
+          : 'number' in reserved && reserved.number
+            ? await this.gateway.queryRefund(reserved.request, reserved.number)
+            : null;
+        if (event) await this.apply(actorId, id, refundId, event);
       } catch {
         /* The current unresolved state retains the full reservation. */
       }
     }
-    return publicRefund(
-      await this.db.refund.findUniqueOrThrow({ where: { id: refundId } }),
-    );
+    return this.publicRow(refundId);
   }
   private apply(
     actorId: string,
     id: string,
     refundId: string,
-    event: VnpayRefundEvent,
+    event: RefundEvent,
   ) {
     return transaction(this.db, async (tx) => {
       const order = await this.order(tx, id),
         row = order.payment?.refunds.find((r) => r.id === refundId);
       if (!row) throw new NotFoundException();
       if (['SUCCEEDED', 'FAILED'].includes(row.status)) return;
+      // Success must carry the provider's refund number; a rejection may not.
+      if (event.status === 'SUCCEEDED' && !event.transactionNo) return;
+      const number = event.transactionNo ?? row.providerTransactionNo;
       if (
         row.providerTransactionNo &&
+        event.transactionNo &&
         row.providerTransactionNo !== event.transactionNo
       )
         return;
-      const reused = await tx.refund.findUnique({
-        where: { providerTransactionNo: event.transactionNo },
-      });
-      if (reused && reused.id !== row.id) return;
-      if (
-        row.status === event.status &&
-        row.providerTransactionNo === event.transactionNo
-      )
+      if (number) {
+        const reused = await tx.refund.findUnique({
+          where: { providerTransactionNo: number },
+        });
+        if (reused && reused.id !== row.id) return;
+      }
+      if (row.status === event.status && row.providerTransactionNo === number)
         return;
       await tx.refund.update({
         where: { id: row.id },
         data: {
           status: event.status,
-          providerTransactionNo: event.transactionNo,
+          providerTransactionNo: number,
           completedAt: ['SUCCEEDED', 'FAILED'].includes(event.status)
             ? new Date()
             : null,
@@ -366,7 +398,7 @@ export class RefundsService {
           id,
           'refund:' + row.id,
           'Đã ghi nhận hoàn tiền',
-          `VNPay sandbox xác nhận hoàn ${row.amount.toFixed(0)} VND. Mã hoàn tiền: ${row.id}.`,
+          `${providerLabel(order.payment!.provider)} sandbox xác nhận hoàn ${row.amount.toFixed(0)} VND. Mã hoàn tiền: ${row.id}.`,
         );
     });
   }

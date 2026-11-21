@@ -61,6 +61,49 @@ describe('Persistent browser sessions with real PostgreSQL', () => {
     if (app) await app.close();
   });
 
+  it('reports duplicate registration on both endpoints without changing the existing account or session', async () => {
+    const c = await register();
+    const before = await db.user.findUniqueOrThrow({ where: { id: c.id } });
+    for (const endpoint of ['/api/v1/auth/register', path() + '/register']) {
+      const duplicate = await request(app.getHttpServer())
+        .post(endpoint)
+        .set('Origin', origin)
+        .set('X-Wearly-Browser', '1')
+        .set('Cookie', c.cookie)
+        .send({
+          email: `  ${c.email.toUpperCase()}  `,
+          password: 'Different-password-2026',
+          name: 'Duplicate registration',
+        })
+        .expect(409);
+      expect(duplicate.body.error.code).toBe('EMAIL_ALREADY_EXISTS');
+      expect(duplicate.headers['set-cookie']).toBeUndefined();
+      expect(duplicate.body.accessToken).toBeUndefined();
+    }
+    expect(await db.user.findUniqueOrThrow({ where: { id: c.id } })).toEqual(before);
+    expect(await db.refreshToken.count({ where: { userId: c.id } })).toBe(1);
+    await call('refresh').set('Cookie', c.cookie).expect(201);
+    await call('login').send({ email: c.email, password }).expect(201);
+  });
+
+  it('returns an email conflict for concurrent registrations and creates only one account', async () => {
+    const email = `browser-${randomUUID()}@example.test`;
+    const results = await Promise.all(
+      Array.from({ length: 2 }, () =>
+        call('register').send({ email, password, name: 'Concurrent registration' }),
+      ),
+    );
+    for (const result of results) {
+      if (result.body.user?.id) ids.push(result.body.user.id);
+    }
+    expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
+    const duplicate = results.find((r) => r.status === 409)!;
+    expect(duplicate.body.error.code).toBe('EMAIL_ALREADY_EXISTS');
+    expect(duplicate.headers['set-cookie']).toBeUndefined();
+    expect(await db.user.count({ where: { email } })).toBe(1);
+    expect(await db.refreshToken.count({ where: { user: { email } } })).toBe(1);
+  });
+
   it('stores only a hash and issues private scoped cookies without a JSON refresh token', async () => {
     const c = await register();
     expect(Object.keys(c.r.body).sort()).toEqual([

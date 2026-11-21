@@ -54,6 +54,14 @@ export class OperationsService {
           configured: this.config.get('VNPAY_ENABLED') === 'true',
           sandbox: true,
         },
+        momo: {
+          configured: this.config.get('MOMO_ENABLED') === 'true',
+          sandbox: true,
+        },
+        zalopay: {
+          configured: this.config.get('ZALOPAY_ENABLED') === 'true',
+          sandbox: true,
+        },
         shipping: { mode: 'local', sandbox: true },
       },
     };

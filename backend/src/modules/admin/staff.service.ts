@@ -18,22 +18,29 @@ const select = {
 export class StaffService {
   constructor(private readonly db: PrismaService) {}
   async list(q: StaffQueryDto) {
-    const where = q.email
-      ? { email: q.email }
-      : { role: { not: 'CUSTOMER' as const } };
+    const where = {
+      deletedAt: null,
+      ...(q.email
+        ? { email: q.email }
+        : { role: { not: 'CUSTOMER' as const } }),
+    };
     return this.db.$transaction(
-      async (tx) => ({
-        items: await tx.user.findMany({
-          where,
-          select,
-          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-          skip: (q.page - 1) * q.limit,
-          take: q.limit,
-        }),
-        total: await tx.user.count({ where }),
-        page: q.page,
-        limit: q.limit,
-      }),
+      async (tx) => {
+        const total = await tx.user.count({ where });
+        const page = Math.min(q.page, Math.max(1, Math.ceil(total / q.limit)));
+        return {
+          items: await tx.user.findMany({
+            where,
+            select,
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            skip: (page - 1) * q.limit,
+            take: q.limit,
+          }),
+          total,
+          page,
+          limit: q.limit,
+        };
+      },
       { isolationLevel: 'RepeatableRead' },
     );
   }
@@ -47,7 +54,10 @@ export class StaffService {
       const actor = await tx.user.findUnique({ where: { id: actorId } });
       if (!actor?.active || actor.role !== 'ADMIN')
         fail(403, 'FORBIDDEN', 'Administrator access is required');
-      const current = await tx.user.findUnique({ where: { id }, select });
+      const current = await tx.user.findUnique({
+        where: { id, deletedAt: null },
+        select,
+      });
       if (!current) throw new NotFoundException();
       if (current.role === dto.role && current.active === dto.active)
         return current;

@@ -167,7 +167,7 @@ class FaqPage extends ConsumerWidget {
                     ? 'Đặt hàng ở đây được xử lý thế nào?'
                     : 'Đặt hàng ở đây có bị tính tiền không?',
                 remote
-                    ? 'Đơn hàng được lưu trên máy chủ local và có thể xem lại sau khi đăng nhập. VNPay sử dụng sandbox khi được cấu hình; vận chuyển được mô phỏng. Với COD, trạng thái đã giao không đồng nghĩa đã xác nhận thu tiền: cần đối soát có phân quyền.'
+                    ? 'Đơn hàng được lưu trên máy chủ local và có thể xem lại sau khi đăng nhập. VNPay, MoMo và ZaloPay sử dụng sandbox khi được cấu hình; vận chuyển được mô phỏng. Với COD, trạng thái đã giao không đồng nghĩa đã xác nhận thu tiền: cần đối soát có phân quyền.'
                     : 'Không. Checkout chỉ tạo đơn trong phiên demo, không thu tiền và không gửi hàng. Tải lại trang sẽ xóa đơn.',
               ),
               (

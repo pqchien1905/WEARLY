@@ -11,7 +11,21 @@ import {
   IsObject,
   ValidateIf,
   ValidateNested,
+  IsEmail,
+  Equals,
 } from 'class-validator';
+
+export class NewsletterDto {
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().toLowerCase() : value,
+  )
+  @IsEmail()
+  @MaxLength(254)
+  email!: string;
+
+  @Equals(true)
+  consent!: boolean;
+}
 
 export class ContentVersionDto {
   @ApiProperty()

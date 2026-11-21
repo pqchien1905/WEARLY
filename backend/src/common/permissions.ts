@@ -12,6 +12,7 @@ export const capabilities = [
   'returns.decide',
   'returns.receive',
   'customers.read',
+  'customers.manage',
   'promotions.manage',
   'content.manage',
   'support.manage',

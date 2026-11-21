@@ -7,145 +7,23 @@ import '../../core/design/tokens.dart';
 import '../../core/widgets/primitives.dart';
 import '../../core/widgets/product_card.dart';
 import '../../core/widgets/category_choices.dart';
-import '../../core/widgets/store_content.dart';
+import 'home_hero.dart';
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final catalog = ref.watch(catalogProvider(''));
+    final remote = ref.watch(remoteApiProvider);
+    final campaign = remote
+        ? ref.watch(catalogProvider('category=dam')).value?.items.firstOrNull
+        : null;
     final mobile = MediaQuery.sizeOf(context).width < 600;
     return Column(
       children: [
-        PageBody(
-          vertical: mobile ? 20 : 32,
-          child: LayoutBuilder(
-            builder: (_, c) {
-              final compact = c.maxWidth < 750;
-              final words = Container(
-                color: T.soft,
-                padding: EdgeInsets.all(
-                  compact ? 28 : (c.maxWidth * .045).clamp(32, 80),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Tủ đồ đương đại',
-                      style: T.small.copyWith(
-                        color: T.accent,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1.4,
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-                    StoreContentText(
-                      field: 'banner',
-                      fallback: 'Mặc theo\ncách bạn.',
-                      style: T.display(
-                        compact ? 50 : (c.maxWidth * .052).clamp(60, 94),
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 380),
-                      child: Text(
-                        'Phom dáng giản dị. Những sắc màu có chiều sâu. Một tủ đồ mang dấu ấn của riêng bạn.',
-                        style: T.body.copyWith(color: T.muted),
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-                    AppButton(
-                      'Khám phá bộ sưu tập',
-                      onPressed: () => context.go('/shop'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextButton.icon(
-                      onPressed: () => context.go('/ai-stylist'),
-                      icon: const Icon(Icons.auto_awesome_outlined, size: 17),
-                      label: const Text('Tìm phong cách cùng AI'),
-                    ),
-                    if (!compact) ...[
-                      const SizedBox(height: 60),
-                      Text(
-                        'Bộ sưu tập Everyday, 2026',
-                        style: T.small.copyWith(color: T.accent),
-                      ),
-                    ],
-                  ],
-                ),
-              );
-              final photo = Stack(
-                fit: StackFit.expand,
-                children: [
-                  ColoredBox(
-                    color: T.photo,
-                    child: Padding(
-                      padding: EdgeInsets.all(compact ? 0 : 24),
-                      child: const FashionImage(
-                        'assets/images/black-dress.jpg',
-                        label:
-                            'Người mẫu mặc đầm màu mận, ảnh campaign minh họa',
-                        fit: BoxFit.contain,
-                        alignment: Alignment.center,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 20,
-                    right: 20,
-                    child: FilledButton.icon(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: T.surface,
-                        foregroundColor: T.ink,
-                      ),
-                      onPressed: () => context.go('/products/nep-2'),
-                      icon: const Icon(Icons.north_east, size: 16),
-                      label: const Text('Khám phá thiết kế'),
-                    ),
-                  ),
-                ],
-              );
-              if (compact) {
-                return Column(
-                  children: [
-                    SizedBox(width: double.infinity, child: words),
-                    AspectRatio(aspectRatio: 3 / 4, child: photo),
-                  ],
-                );
-              }
-              return ColoredBox(
-                color: T.soft,
-                child: Stack(
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          flex: 5,
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(
-                              minHeight: (c.maxWidth * .42).clamp(600, 760),
-                            ),
-                            child: words,
-                          ),
-                        ),
-                        const Spacer(flex: 6),
-                      ],
-                    ),
-                    Positioned(
-                      top: 0,
-                      bottom: 0,
-                      left: c.maxWidth * 5 / 11,
-                      right: 0,
-                      child: photo,
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
+        HomeHero(
+          remote: remote,
+          product: campaign ?? catalog.value?.items.firstOrNull,
         ),
         PageBody(
           vertical: 24,
@@ -185,7 +63,12 @@ class HomePage extends ConsumerWidget {
               ),
               const SizedBox(height: 32),
               catalog.when(
-                data: (p) => ProductGrid(p.items.take(4).toList()),
+                data: (p) => p.items.isEmpty
+                    ? const StatePanel(
+                        title: 'Bộ sưu tập đang được cập nhật',
+                        message: 'Những thiết kế mới sẽ xuất hiện tại đây.',
+                      )
+                    : ProductGrid(p.items.take(4).toList()),
                 error: (_, _) => StatePanel(
                   title: 'Chưa tải được bộ sưu tập',
                   message: 'Thử kết nối lại để xem sản phẩm.',
@@ -265,14 +148,25 @@ class HomePage extends ConsumerWidget {
                     ? c.maxWidth
                     : (c.maxWidth * .44).clamp(480, 640),
                 width: double.infinity,
-                child: FashionImage(
-                  'assets/images/shirt.jpg',
-                  label: 'Gợi ý phối áo trắng cùng denim, ảnh minh họa',
-                  alignment: Alignment(0, -.65),
-                ),
+                child: remote && catalog.value?.items.firstOrNull == null
+                    ? const ColoredBox(color: T.photo)
+                    : FashionImage(
+                        remote
+                            ? catalog.value!.items.first.image
+                            : 'assets/images/shirt.jpg',
+                        label: remote
+                            ? catalog.value!.items.first.name
+                            : 'Gợi ý phối áo trắng cùng denim, ảnh minh họa',
+                        fit: BoxFit.contain,
+                        alignment: Alignment(0, -.65),
+                      ),
               );
               return Container(
-                color: T.canvas,
+                clipBehavior: Clip.antiAlias,
+                decoration: const BoxDecoration(
+                  color: T.canvas,
+                  borderRadius: T.heroRadius,
+                ),
                 child: c.maxWidth < 800
                     ? Column(children: [content, photo])
                     : Row(
@@ -292,8 +186,9 @@ class HomePage extends ConsumerWidget {
             children: [
               SectionTitle(
                 'Phòng thử, theo cách mới.',
-                subtitle:
-                    'Khám phá trải nghiệm trước khi công nghệ AI được kết nối.',
+                subtitle: remote
+                    ? 'Chọn trang phục, thêm ảnh và xem trạng thái xử lý trong phòng thử.'
+                    : 'Khám phá trải nghiệm trước khi công nghệ AI được kết nối.',
                 action: 'Vào phòng thử',
                 onAction: () => context.go('/virtual-try-on'),
               ),
@@ -312,12 +207,16 @@ class HomePage extends ConsumerWidget {
                       (
                         Icons.add_photo_alternate_outlined,
                         'Chọn ảnh của bạn',
-                        'Ảnh chỉ ở trong phiên trình duyệt.',
+                        remote
+                            ? 'Bạn quyết định khi nào tải ảnh lên và có thể xóa ảnh.'
+                            : 'Ảnh chỉ ở trong phiên trình duyệt.',
                       ),
                       (
                         Icons.compare_outlined,
-                        'Xem trải nghiệm mẫu',
-                        'Bản demo không biến đổi ảnh thực.',
+                        remote ? 'Theo dõi kết quả' : 'Xem trải nghiệm mẫu',
+                        remote
+                            ? 'Kết quả được lưu riêng trong tài khoản của bạn.'
+                            : 'Bản demo không biến đổi ảnh thực.',
                       ),
                     ])
                       SizedBox(
@@ -359,7 +258,10 @@ class HomePage extends ConsumerWidget {
           child: Container(
             width: double.infinity,
             padding: EdgeInsets.all(mobile ? 28 : 48),
-            decoration: const BoxDecoration(color: T.soft),
+            decoration: const BoxDecoration(
+              color: T.soft,
+              borderRadius: T.heroRadius,
+            ),
             child: LayoutBuilder(
               builder: (_, c) {
                 final heading = Text(

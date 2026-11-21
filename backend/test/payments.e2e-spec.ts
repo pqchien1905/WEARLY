@@ -115,8 +115,8 @@ describe('VNPay sandbox workflow with PostgreSQL and signed transport fixtures',
     const a = await customer();
     await db.user.update({ where: { id: a.user.id }, data: { role: 'ADMIN' } });
     admin = (
-      await call('post', 'auth/login')
-        .send({ email: a.user.email, password: 'Payment-Test-password-2026' })
+      await call('post', 'auth/admin/login')
+        .send({ username: a.user.username, password: 'Payment-Test-password-2026' })
         .expect(201)
     ).body.accessToken;
   });
@@ -402,12 +402,11 @@ describe('VNPay sandbox workflow with PostgreSQL and signed transport fixtures',
     const result = (await f.reconcile().expect(201)).body;
     expect(http).toHaveBeenCalledTimes(1);
     expect(result.reviewRequired).toBe(true);
-    const orders = (
-      await call('get', 'admin/orders?limit=100', admin).expect(200)
-    ).body.items;
-    expect(
-      orders.find((o: { id: string }) => o.id === f.order.id).payment.attempts,
-    ).toHaveLength(2);
+    // The admin list is a preview; attempts are part of the order detail.
+    const order = (
+      await call('get', `admin/orders/${f.order.id}`, admin).expect(200)
+    ).body;
+    expect(order.payment.attempts).toHaveLength(2);
   });
   it('requires verified expiry before retry/cancel and records a later success without restoring stock twice', async () => {
     const f = await unpaid(),

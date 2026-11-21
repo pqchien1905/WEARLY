@@ -1,6 +1,8 @@
 import {
+  Body,
   Controller,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Post,
@@ -39,5 +41,31 @@ export class PaymentsController {
   ) {
     res.setHeader('Cache-Control', 'no-store');
     res.redirect(302, this.service.returnUrl(query));
+  }
+  /** MoMo expects 204 once handled; any other status makes it retry. */
+  @Public() @Post('momo/ipn') async momoIpn(
+    @Body() body: unknown,
+    @Res() res: Response,
+  ) {
+    const result = await this.service.walletNotification('momo', body);
+    res
+      .status(result === null ? 400 : result === '99' ? 500 : 204)
+      .end();
+  }
+  /** ZaloPay: return_code 1 = handled, -1 = invalid MAC, 0 = retry later. */
+  @Public() @Post('zalopay/callback') @HttpCode(200) async zalopayCallback(
+    @Body() body: unknown,
+  ) {
+    const result = await this.service.walletNotification('zalopay', body);
+    if (result === null)
+      return { return_code: -1, return_message: 'mac not equal' };
+    if (result === '99') return { return_code: 0, return_message: 'retry' };
+    return { return_code: 1, return_message: 'success' };
+  }
+  @Public() @Get(['momo/return', 'zalopay/return']) walletReturned(
+    @Res() res: Response,
+  ) {
+    res.setHeader('Cache-Control', 'no-store');
+    res.redirect(302, this.service.walletReturnUrl());
   }
 }

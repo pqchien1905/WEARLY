@@ -8,12 +8,13 @@ import {
 import { createHash, randomUUID } from 'node:crypto';
 import { isUUID } from 'class-validator';
 import { PrismaService } from '../../database/prisma.service';
-import { lockImage, lockUser, transaction } from '../../common/transaction';
+import { lockImage, transaction } from '../../common/transaction';
 import { fail } from '../../common/errors';
 import { StorageService } from '../../integrations/storage/storage.service';
 import { normalizeImage } from '../../integrations/storage/image-policy';
 import { recordAdminActivity } from '../admin/audit';
 import { catalogReference } from './catalog-reference';
+import { lockCatalogActor } from '../admin/catalog-write';
 const digest = (value: Buffer | string) =>
   createHash('sha256').update(value).digest('hex');
 @Injectable()
@@ -47,7 +48,7 @@ export class CatalogMediaService {
     // as part of a serializable retry. Only the first reservation owner writes S3.
     const image = await normalizeImage(file.buffer, file.mimetype);
     const reserved = await transaction(this.db, async (tx) => {
-      await lockUser(tx, actorId);
+      await lockCatalogActor(tx, actorId);
       const prior = await tx.catalogAsset.findUnique({
         where: { actorId_requestKey: { actorId, requestKey } },
       });
@@ -104,6 +105,7 @@ export class CatalogMediaService {
     try {
       return await this.db.$transaction(
         async (tx) => {
+          await lockCatalogActor(tx, actorId);
           await lockImage(tx, id);
           const asset = await tx.catalogAsset.findUniqueOrThrow({
             where: { id },
@@ -143,6 +145,8 @@ export class CatalogMediaService {
               position: count,
             },
           });
+          // Upload changes the gallery and must invalidate a stale gallery editor.
+          await tx.$executeRaw`UPDATE "Product" SET "updatedAt"=GREATEST(clock_timestamp() AT TIME ZONE 'UTC', "updatedAt" + interval '1 millisecond') WHERE id=${productId}::uuid`;
           await tx.catalogAsset.update({
             where: { id },
             data: { verifiedAt: new Date(), receipt },

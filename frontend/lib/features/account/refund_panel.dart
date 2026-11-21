@@ -6,6 +6,7 @@ import '../../core/format.dart';
 import '../../core/widgets/primitives.dart';
 import '../../data/remote_refunds.dart';
 import 'order_tracking.dart';
+import '../../data/remote_payments.dart';
 
 class RefundHistory extends StatelessWidget {
   const RefundHistory({super.key, required this.refund});
@@ -19,7 +20,7 @@ class RefundHistory extends StatelessWidget {
         style: T.body.copyWith(fontWeight: FontWeight.w600),
       ),
       Text(
-        '${money(refund.amount)} · ${refund.provider == 'cod' ? 'COD' : 'VNPay sandbox'}',
+        '${money(refund.amount)} · ${refund.provider == 'cod' ? 'COD' : '${paymentProviderName(refund.provider)} sandbox'}',
         style: T.body,
       ),
       Text(

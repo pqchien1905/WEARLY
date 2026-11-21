@@ -55,6 +55,7 @@ void main() {
       ),
     );
     await t.pumpAndSettle();
+    await t.ensureVisible(find.text('Thêm địa chỉ'));
     await t.tap(find.text('Thêm địa chỉ'));
     await t.pumpAndSettle();
     await t.ensureVisible(find.text('Lưu địa chỉ demo'));
@@ -104,6 +105,7 @@ void main() {
     await t.pumpAndSettle();
     final name = find.widgetWithText(TextFormField, 'Họ và tên');
     expect(t.widget<TextFormField>(name).controller!.text, isEmpty);
+    await t.ensureVisible(find.text('Chọn địa chỉ đã lưu'));
     await t.tap(find.text('Chọn địa chỉ đã lưu'));
     await t.pumpAndSettle();
     await t.tap(find.text('Nhà — Nguyễn An').last);

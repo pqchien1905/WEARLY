@@ -82,26 +82,44 @@ export class SupportService {
     }
   }
   async list(dto: ListSupportDto) {
-    const rows = await this.db.supportTicket.findMany({
-      where: { status: dto.status },
-      take: 31,
-      ...(dto.cursor ? { cursor: { id: dto.cursor }, skip: 1 } : {}),
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        status: true,
-        version: true,
-        createdAt: true,
-        updatedAt: true,
-        _count: { select: { replies: true } },
+    return this.db.$transaction(
+      async (tx) => {
+        const total = await tx.supportTicket.count({
+          where: { status: dto.status },
+        });
+        const limit = dto.limit ?? 10;
+        const page = Math.min(
+          dto.page ?? 1,
+          Math.max(1, Math.ceil(total / limit)),
+        );
+        const rows = await tx.supportTicket.findMany({
+          where: { status: dto.status },
+          take: limit + 1,
+          ...(dto.cursor
+            ? { cursor: { id: dto.cursor }, skip: 1 }
+            : { skip: (page - 1) * limit }),
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            status: true,
+            version: true,
+            createdAt: true,
+            updatedAt: true,
+            _count: { select: { replies: true } },
+          },
+        });
+        return {
+          items: rows.slice(0, limit),
+          nextCursor: rows.length > limit ? rows[limit - 1].id : null,
+          total,
+          page,
+          limit,
+        };
       },
-    });
-    return {
-      items: rows.slice(0, 30),
-      nextCursor: rows.length > 30 ? rows[29].id : null,
-    };
+      { isolationLevel: 'RepeatableRead' },
+    );
   }
   async detail(id: string) {
     const row = await this.db.supportTicket.findUnique({
@@ -150,7 +168,7 @@ export class SupportService {
         replyId: reply.id,
         recipient: ticket.email,
         subject: 'WEARLY — Trả lời yêu cầu ' + id.slice(0, 8),
-        body: `Xin chào ${ticket.name},\n\n${dto.message}\n\nMã yêu cầu: ${id}\nThư được lưu trong hộp thư local của hệ thống.`,
+        body: `Xin chào ${ticket.name},\n\n${dto.message}\n\nMã yêu cầu: ${id}\nWEARLY — Hỗ trợ khách hàng`,
       });
       const updated = await tx.supportTicket.update({
         where: { id },

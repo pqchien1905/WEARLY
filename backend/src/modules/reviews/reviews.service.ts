@@ -5,6 +5,7 @@ import { lockUser, transaction } from '../../common/transaction';
 import { fail } from '../../common/errors';
 import {
   CreateReviewDto,
+  OwnedReviewPageDto,
   ReviewPageDto,
   ReviewVersionDto,
   UpdateReviewDto,
@@ -22,10 +23,42 @@ type Db = Prisma.TransactionClient;
 @Injectable()
 export class ReviewsService {
   constructor(private readonly db: PrismaService) {}
-  history(userId: string, q: ReviewPageDto) {
+  history(userId: string, q: OwnedReviewPageDto) {
     return this.db.$transaction(
       async (tx) => {
-        const where = { userId };
+        const where: Prisma.ReviewWhereInput = {
+          userId,
+          ...(q.rating ? { rating: q.rating } : {}),
+          // Search every owned page. Hidden product metadata must not become
+          // discoverable through search, even though its review is still owned.
+          ...(q.q
+            ? {
+                AND: q.q.split(/\s+/).map((part) => {
+                  const word = part.replace(/[\\%_]/g, '\\$&');
+                  return {
+                    OR: [
+                      {
+                        comment: {
+                          contains: word,
+                          mode: 'insensitive' as const,
+                        },
+                      },
+                      {
+                        product: {
+                          active: true,
+                          variants: { some: { active: true } },
+                          name: {
+                            contains: word,
+                            mode: 'insensitive' as const,
+                          },
+                        },
+                      },
+                    ],
+                  };
+                }),
+              }
+            : {}),
+        };
         const rows = await tx.review.findMany({
           where,
           select: {
@@ -36,6 +69,11 @@ export class ReviewsService {
                 name: true,
                 slug: true,
                 active: true,
+                images: {
+                  orderBy: { position: 'asc' },
+                  take: 1,
+                  select: { url: true },
+                },
                 variants: {
                   where: { active: true },
                   take: 1,
@@ -71,7 +109,11 @@ export class ReviewsService {
             return {
               ...review,
               product: available
-                ? { name: product.name, slug: product.slug }
+                ? {
+                    name: product.name,
+                    slug: product.slug,
+                    image: product.images[0]?.url ?? null,
+                  }
                 : null,
               canEdit: available && purchased.has(review.productId),
             };

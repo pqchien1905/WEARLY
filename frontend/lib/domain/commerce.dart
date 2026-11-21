@@ -12,9 +12,15 @@ class CartItem {
     required this.quantity,
     required this.stock,
     this.id = '',
+    this.originalUnitPrice,
+    this.promotionName,
   });
   final String id, slug, sku, name, image, color, size;
   final int unitPrice, quantity, stock;
+  final int? originalUnitPrice;
+  final String? promotionName;
+  bool get discounted =>
+      originalUnitPrice != null && originalUnitPrice! > unitPrice;
   int get total => unitPrice * quantity;
   CartItem withQuantity(int value) => CartItem(
     id: id,
@@ -25,6 +31,8 @@ class CartItem {
     color: color,
     size: size,
     unitPrice: unitPrice,
+    originalUnitPrice: originalUnitPrice,
+    promotionName: promotionName,
     quantity: value,
     stock: stock,
   );
@@ -74,6 +82,7 @@ class Shipment {
 class Order {
   const Order({
     required this.id,
+    this.code = '',
     required this.items,
     required this.draft,
     required this.shipping,
@@ -85,8 +94,10 @@ class Order {
     this.couponCode,
     this.shipment,
     this.history = const [],
+    this.isSample = false,
   });
-  final String id, status, paymentProvider, paymentStatus;
+  final String id, code, status, paymentProvider, paymentStatus;
+  String get displayCode => code.isEmpty ? id : code;
   final List<CartItem> items;
   final CheckoutDraft draft;
   final int shipping;
@@ -95,10 +106,12 @@ class Order {
   final DateTime createdAt;
   final Shipment? shipment;
   final List<OrderEvent> history;
+  final bool isSample;
   int get subtotal => items.fold(0, (sum, i) => sum + i.total);
   int get total => subtotal + shipping - discount;
   Order withStatus(String value) => Order(
     id: id,
+    code: code,
     items: items,
     draft: draft,
     shipping: shipping,
@@ -110,6 +123,7 @@ class Order {
     couponCode: couponCode,
     shipment: shipment,
     history: history,
+    isSample: isSample,
   );
 }
 

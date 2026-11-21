@@ -136,7 +136,7 @@ void main() {
             'items': [row],
             'total': 1,
             'page': 1,
-            'limit': 20,
+            'limit': 10,
           });
         }),
       );
@@ -163,7 +163,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Chỉnh sửa SAVE50'));
+      await tester.ensureVisible(find.byTooltip('Chỉnh sửa SAVE50'));
+      await tester.tap(find.byTooltip('Chỉnh sửa SAVE50'));
       await tester.pumpAndSettle();
       final limit = find.widgetWithText(TextFormField, 'Lượt tối đa mỗi khách');
       await tester.ensureVisible(limit);
@@ -180,7 +181,9 @@ void main() {
       expect(body!['startsAt'], row['startsAt']);
       expect(body!['expiresAt'], row['expiresAt']);
       expect(
-        find.text('Dữ liệu đã thay đổi. Tải lại trước khi tiếp tục.'),
+        find.text(
+          'Dữ liệu đã thay đổi hoặc số lượng không còn hợp lệ. Tải lại trước khi thao tác tiếp.',
+        ),
         findsOneWidget,
       );
       await tester.tap(find.text('Tải lại dữ liệu'));
@@ -238,7 +241,7 @@ void main() {
       );
       addTearDown(api.close);
       final cart = RemoteCartRepository(api);
-      final orders = RemoteOrderRepository(api, cart);
+      final orders = RemoteOrderRepository(api, cart, autoRetries: 0);
       await cart.refresh();
       const coupon = CheckoutDraft(
         name: 'An',

@@ -62,7 +62,7 @@ module.exports = async function verify({ root, fixture, email, customerEmail, pa
     await page.locator('flt-semantics').getByText('Tài khoản này chưa có quyền quản trị. Vui lòng dùng tài khoản được cửa hàng cấp quyền.', { exact: true }).waitFor();
     assert(page.url().includes('/admin/login'));
     await login(email);
-    await page.getByText('Một góc nhìn toàn cảnh.', { exact: true }).waitFor();
+    await page.getByText('Tổng quan cửa hàng', { exact: true }).waitFor();
     await page.screenshot({ path: path.join(output, 'dashboard-desktop.png'), fullPage: true });
     console.log('Chrome admin: authenticated dashboard.');
     assert(!requests.some(r => r.path.endsWith('/auth/browser/customer/login') || r.path.endsWith('/cart') || r.path.includes('/users/me')), 'Admin login must not initialize shopper data');
@@ -224,7 +224,7 @@ module.exports = async function verify({ root, fixture, email, customerEmail, pa
     await page.waitForTimeout(500);
     assert((await page.locator('body').ariaSnapshot()).includes('Khách kiểm thử'));
     assert(!(await page.locator('body').ariaSnapshot()).includes('Quản trị kiểm thử'));
-    await button('Đăng xuất quản trị');
+    await (async()=>{await page.getByRole('button',{name:'Tài khoản quản trị',exact:true}).click();await page.getByRole('menuitem',{name:'Đăng xuất',exact:true}).or(page.getByRole('button',{name:'Đăng xuất',exact:true})).first().click();})();
     await page.getByRole('button', { name: 'Đăng nhập quản trị', exact: true }).waitFor();
     await page.setViewportSize({ width: 1440, height: 900 });
     await route('/login?next=%2Fadmin');
@@ -237,7 +237,7 @@ module.exports = async function verify({ root, fixture, email, customerEmail, pa
     await page.getByRole('button', { name: 'Đăng nhập quản trị', exact: true }).waitFor();
     await login(email);
     await page.getByText('Khách hàng', { exact: true }).last().waitFor();
-    await button('Đăng xuất quản trị');
+    await (async()=>{await page.getByRole('button',{name:'Tài khoản quản trị',exact:true}).click();await page.getByRole('menuitem',{name:'Đăng xuất',exact:true}).or(page.getByRole('button',{name:'Đăng xuất',exact:true})).first().click();})();
     await route('/account');
     await page.getByText('Chào Khách kiểm thử.', { exact: true }).waitFor();
     await route('/admin/customers'); await login(email);

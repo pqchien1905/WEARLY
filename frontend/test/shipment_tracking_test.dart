@@ -66,7 +66,7 @@ void main() {
     },
   );
   testWidgets(
-    'customer tracking labels simulation, exposes code, notes and UTC+7 times',
+    'customer tracking exposes shipment code, notes and Vietnam local times',
     (tester) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -79,13 +79,11 @@ void main() {
           ),
         ),
       );
-      expect(find.text('Mô phỏng vận chuyển local'), findsOneWidget);
+      expect(find.text('Theo dõi vận chuyển'), findsOneWidget);
+      expect(find.textContaining('Mô phỏng'), findsNothing);
       expect(find.textContaining('LOCAL-00000000'), findsOneWidget);
       expect(find.text('Khách hẹn giao lại'), findsOneWidget);
-      expect(
-        find.textContaining('2026-10-21 14:30:00 (UTC+7)'),
-        findsOneWidget,
-      );
+      expect(find.textContaining('21/10/2026 · 14:30'), findsOneWidget);
     },
   );
   for (final conflict in [false, true]) {

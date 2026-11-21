@@ -61,7 +61,13 @@ export class GeminiTryOnProvider extends TryOnProvider {
           aspect_ratio: '3:4',
         },
       },
-      { timeoutMs: 90000, maxBytes: 16 * 1024 * 1024, signal: input.signal },
+      {
+        // Inline multimodal input uses the image API's documented beta contract.
+        apiVersion: 'v1beta',
+        timeoutMs: 90000,
+        maxBytes: 16 * 1024 * 1024,
+        signal: input.signal,
+      },
     );
     const parts = modelContent(data).filter((c) => c.type === 'image');
     if (parts.length !== 1) throw new Error('INVALID_PROVIDER_OUTPUT');

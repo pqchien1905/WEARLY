@@ -1,7 +1,8 @@
 # VNPay sandbox on localhost
 
 This integration only uses VNPay's sandbox endpoints. COD remains available when
-VNPay is disabled. A browser return is never proof of payment.
+VNPay is disabled. A browser return is never proof of payment. MoMo and ZaloPay
+sandboxes are described in [WALLETS_SANDBOX.md](WALLETS_SANDBOX.md).
 
 Add your own sandbox values to `backend/.env` (never commit or send the secret):
 

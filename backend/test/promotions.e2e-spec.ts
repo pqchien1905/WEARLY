@@ -8,6 +8,7 @@ import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/bootstrap';
 import { PrismaService } from '../src/database/prisma.service';
 import * as audit from '../src/modules/admin/audit';
+import { PromotionsService } from '../src/modules/promotions/promotions.service';
 describe('Transactional promotions with PostgreSQL', () => {
   let app: INestApplication,
     db: PrismaService,
@@ -15,7 +16,7 @@ describe('Transactional promotions with PostgreSQL', () => {
     categoryId: string,
     brandId: string;
   const call = (
-    method: 'get' | 'post' | 'patch',
+    method: 'get' | 'post' | 'patch' | 'delete',
     path: string,
     token?: string,
   ) => {
@@ -43,8 +44,11 @@ describe('Transactional promotions with PostgreSQL', () => {
     const a = await register();
     await db.user.update({ where: { id: a.user.id }, data: { role: 'ADMIN' } });
     admin = (
-      await call('post', 'auth/login')
-        .send({ email: a.user.email, password: 'Promotion-Test-password-2026' })
+      await call('post', 'auth/admin/login')
+        .send({
+          username: a.user.username,
+          password: 'Promotion-Test-password-2026',
+        })
         .expect(201)
     ).body.accessToken;
     const suffix = randomUUID();
@@ -61,6 +65,215 @@ describe('Transactional promotions with PostgreSQL', () => {
   });
   afterAll(async () => {
     if (app) await app.close();
+  });
+  it('can disable a targeted offer after its last product is deleted, but cannot reactivate it without targets', async () => {
+    const c = await buyer();
+    const variant = await db.productVariant.findUniqueOrThrow({
+      where: { id: c.variantId },
+    });
+    const offer = (
+      await coupon({
+        application: 'AUTOMATIC',
+        name: 'Removed target',
+        scope: 'PRODUCTS',
+        productIds: [variant.productId],
+        minSubtotal: '0',
+        usageLimit: null,
+      }).expect(201)
+    ).body;
+    // This is the same join removal performed by the product FK cascade.
+    await db.couponProduct.deleteMany({ where: { couponId: offer.id } });
+    const stopped = (
+      await call('patch', 'admin/promotions/' + offer.id, admin)
+        .send({ expectedVersion: offer.version, active: false })
+        .expect(200)
+    ).body;
+    await call('patch', 'admin/promotions/' + offer.id, admin)
+      .send({ expectedVersion: stopped.version, active: true })
+      .expect(400);
+    await call('delete', 'admin/promotions/' + offer.id, admin)
+      .send({ expectedVersion: stopped.version })
+      .expect(200);
+  });
+  it('applies selected-product and storewide automatic prices consistently, snapshots orders, and keeps codes optional', async () => {
+    const c = await buyer('200001');
+    const variant = await db.productVariant.findUniqueOrThrow({
+      where: { id: c.variantId },
+    });
+    await db.productImage.create({
+      data: {
+        productId: variant.productId,
+        url: 'assets/images/shirt.jpg',
+        alt: 'Promotion product',
+        position: 0,
+      },
+    });
+    const automatic = (
+      await coupon({
+        application: 'AUTOMATIC',
+        name: 'Ưu đãi sản phẩm',
+        scope: 'PRODUCTS',
+        productIds: [variant.productId],
+        kind: 'PERCENT',
+        amount: '10',
+      }).expect(201)
+    ).body;
+    let globalId: string | undefined;
+    try {
+      const detail = (await call('get', `products/${c.sku}`).expect(200)).body;
+      expect(detail.variants[0]).toMatchObject({
+        price: { amount: '180001' },
+        originalPrice: { amount: '200001' },
+        promotion: { id: automatic.id, name: 'Ưu đãi sản phẩm' },
+      });
+      const filtered = (
+        await call(
+          'get',
+          `products?q=Coupon&maxPrice=180001&sort=price-asc`,
+        ).expect(200)
+      ).body;
+      expect(
+        filtered.items.some((p: { id: string }) => p.id === variant.productId),
+      ).toBe(true);
+      let cart = (await call('get', 'cart', c.accessToken).expect(200)).body;
+      expect(cart).toMatchObject({
+        subtotal: '180001',
+        items: [
+          expect.objectContaining({
+            unitPrice: '180001',
+            originalUnitPrice: '200001',
+            promotionName: 'Ưu đãi sản phẩm',
+          }),
+        ],
+      });
+      expect((await c.preview(automatic.code)).status).toBe(409);
+      await c.create().expect(409);
+      const global = (
+        await coupon({
+          application: 'AUTOMATIC',
+          name: 'Toàn cửa hàng',
+          amount: '10000',
+        }).expect(201)
+      ).body;
+      globalId = global.id;
+      cart = (await call('get', 'cart', c.accessToken).expect(200)).body;
+      expect(cart.subtotal).toBe('180001'); // The best offer wins; they never stack.
+      const manual = (
+        await coupon({
+          scope: 'PRODUCTS',
+          productIds: [variant.productId],
+          amount: '1000',
+        }).expect(201)
+      ).body;
+      const preview = await c.preview(manual.code);
+      expect(preview.body).toMatchObject({
+        subtotal: '180001',
+        discount: '1000',
+        total: '209001',
+      });
+      const order = (
+        await c
+          .create({ code: manual.code, discount: '1000' }, randomUUID(), {
+            expectedSubtotal: '180001',
+          })
+          .expect(201)
+      ).body;
+      expect(order).toMatchObject({
+        subtotal: '180001',
+        discount: '1000',
+        total: '209001',
+        items: [
+          expect.objectContaining({
+            unitPrice: '180001',
+            originalUnitPrice: '200001',
+            automaticPromotionId: automatic.id,
+          }),
+        ],
+      });
+      const history = (
+        await call(
+          'get',
+          `admin/promotions/${automatic.id}/redemptions`,
+          admin,
+        ).expect(200)
+      ).body;
+      expect(history.items).toEqual([
+        expect.objectContaining({ orderId: order.id, discount: '20000' }),
+      ]);
+      const adminDetail = (
+        await call('get', `admin/promotions/${automatic.id}`, admin).expect(200)
+      ).body;
+      expect(adminDetail).toMatchObject({
+        canDelete: false,
+        usedCount: 1,
+        productIds: [variant.productId],
+      });
+      await call('delete', `admin/promotions/${automatic.id}`, admin)
+        .send({ expectedVersion: 0 })
+        .expect(409);
+      await call('patch', `admin/promotions/${automatic.id}`, admin)
+        .send({ expectedVersion: 0, active: false })
+        .expect(200);
+      const changed = (await call('get', `products/${c.sku}`).expect(200)).body;
+      expect(changed.variants[0].price.amount).toBe('190001');
+      expect(
+        (
+          await db.orderItem.findFirstOrThrow({ where: { orderId: order.id } })
+        ).unitPrice.toString(),
+      ).toBe('180001');
+      await call('patch', `admin/promotions/${globalId}`, admin)
+        .send({ expectedVersion: 0, expiresAt: '2020-01-01T00:00:00Z' })
+        .expect(200);
+      expect(
+        (await call('get', `products/${c.sku}`).expect(200)).body.variants[0]
+          .price.amount,
+      ).toBe('200001');
+    } finally {
+      await db.coupon.updateMany({
+        where: { id: { in: [automatic.id, ...(globalId ? [globalId] : [])] } },
+        data: { active: false },
+      });
+    }
+  });
+  it('validates automatic scope, rejects missing products and prevents changing application type', async () => {
+    await coupon({
+      application: 'AUTOMATIC',
+      name: 'Automatic',
+      scope: 'PRODUCTS',
+    }).expect(400);
+    await coupon({
+      application: 'AUTOMATIC',
+      name: 'Automatic',
+      scope: 'PRODUCTS',
+      productIds: [randomUUID()],
+    }).expect(400);
+    await coupon({
+      application: 'AUTOMATIC',
+      name: 'Automatic',
+      minSubtotal: '1',
+    }).expect(400);
+    const automatic = (
+      await coupon({
+        application: 'AUTOMATIC',
+        name: 'Scheduled',
+        startsAt: '2099-01-01T00:00:00Z',
+      }).expect(201)
+    ).body;
+    await call('patch', `admin/promotions/${automatic.id}`, admin)
+      .send({ expectedVersion: 0, application: 'CODE' })
+      .expect(400);
+    expect(
+      (
+        await call(
+          'get',
+          `admin/promotions?application=AUTOMATIC&scope=ALL`,
+          admin,
+        ).expect(200)
+      ).body.items.every(
+        (p: { application: string; scope: string }) =>
+          p.application === 'AUTOMATIC' && p.scope === 'ALL',
+      ),
+    ).toBe(true);
   });
   async function register() {
     return (
@@ -304,9 +517,20 @@ describe('Transactional promotions with PostgreSQL', () => {
     app.get(ConfigService).set('VNPAY_ENABLED', 'false');
     const c = await buyer('1500000'),
       p = (await coupon({ kind: 'PERCENT', amount: '100' }).expect(201)).body;
-    const free = (await c.create({ ...p, discount: '1500000' }, randomUUID(), { paymentMethod: 'vnpay' }).expect(201)).body;
-    expect(free).toMatchObject({ total: '0', payment: { provider: 'free', status: 'PAID', amount: '0' } });
-    expect(await db.paymentAttempt.count({ where: { paymentId: free.payment.id } })).toBe(0);
+    const free = (
+      await c
+        .create({ ...p, discount: '1500000' }, randomUUID(), {
+          paymentMethod: 'vnpay',
+        })
+        .expect(201)
+    ).body;
+    expect(free).toMatchObject({
+      total: '0',
+      payment: { provider: 'free', status: 'PAID', amount: '0' },
+    });
+    expect(
+      await db.paymentAttempt.count({ where: { paymentId: free.payment.id } }),
+    ).toBe(0);
     expect(await uses(p.code)).toBe(1);
   });
   it('handles zero totals without collecting money and signs VNPay with the discounted total', async () => {
@@ -362,6 +586,306 @@ describe('Transactional promotions with PostgreSQL', () => {
       expect(await db.coupon.count({ where: { code: label } })).toBe(0);
     } finally {
       spy.mockRestore();
+    }
+  });
+  it('normalizes codes and reports concurrent duplicates without partial writes', async () => {
+    const label = code();
+    const results = await Promise.all([
+      coupon({ code: ' ' + label.toLowerCase() + ' ' }),
+      coupon({ code: label }),
+    ]);
+    expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
+    expect(results.find((r) => r.status === 409)!.body.error.code).toBe(
+      'PROMOTION_CODE_EXISTS',
+    );
+    expect(await db.coupon.count({ where: { code: label } })).toBe(1);
+  });
+  it('enforces roles on all admin endpoints and rechecks revoked actors in writes', async () => {
+    const p = (await coupon().expect(201)).body;
+    for (const role of [
+      'MANAGER',
+      'WAREHOUSE',
+      'SUPPORT',
+      'CUSTOMER',
+    ] as const) {
+      const u = await register();
+      await db.user.update({ where: { id: u.user.id }, data: { role } });
+      for (const path of [
+        '',
+        '/summary',
+        '/' + p.id,
+        '/' + p.id + '/redemptions',
+      ])
+        await call('get', 'admin/promotions' + path, u.accessToken).expect(
+          role === 'MANAGER' ? 200 : 403,
+        );
+      if (role === 'MANAGER') {
+        const made = (
+          await call('post', 'admin/promotions', u.accessToken)
+            .send({ code: code(), kind: 'FIXED', amount: '1' })
+            .expect(201)
+        ).body;
+        await call('delete', 'admin/promotions/' + made.id, u.accessToken)
+          .send({ expectedVersion: made.version })
+          .expect(200);
+        await db.user.update({
+          where: { id: u.user.id },
+          data: { role: 'CUSTOMER' },
+        });
+        await expect(
+          app.get(PromotionsService).update(u.user.id, p.id, {
+            expectedVersion: p.version,
+            active: false,
+          }),
+        ).rejects.toMatchObject({ status: 403 });
+        await expect(
+          app.get(PromotionsService).remove(u.user.id, p.id, p.version),
+        ).rejects.toMatchObject({ status: 403 });
+        await expect(
+          app.get(PromotionsService).create(u.user.id, {
+            application: 'CODE',
+            scope: 'ALL',
+            name: '',
+            productIds: [],
+            code: code(),
+            kind: 'FIXED',
+            amount: '1',
+            active: false,
+            minSubtotal: '0',
+            perUserLimit: 1,
+          }),
+        ).rejects.toMatchObject({ status: 403 });
+      } else {
+        await call('post', 'admin/promotions', u.accessToken)
+          .send({ code: code(), kind: 'FIXED', amount: '1' })
+          .expect(403);
+        await call('patch', 'admin/promotions/' + p.id, u.accessToken)
+          .send({ expectedVersion: p.version, active: false })
+          .expect(403);
+        await call('delete', 'admin/promotions/' + p.id, u.accessToken)
+          .send({ expectedVersion: p.version })
+          .expect(403);
+      }
+    }
+  });
+  it('filters real lifecycle states, searches literally, clamps pages and sorts deterministically', async () => {
+    const prefix = code();
+    const fixtures = [
+      { code: prefix + '_ACTIVE', active: true },
+      {
+        code: prefix + '_SCHEDULED',
+        active: true,
+        startsAt: new Date(Date.now() + 3600000).toISOString(),
+      },
+      {
+        code: prefix + '_EXPIRED',
+        active: true,
+        expiresAt: new Date(Date.now() - 60000).toISOString(),
+      },
+      { code: prefix + '_INACTIVE', active: false },
+      { code: prefix + '_EXHAUSTED', active: true, usageLimit: 1 },
+    ];
+    const before = (
+      await call('get', 'admin/promotions/summary', admin).expect(200)
+    ).body;
+    const rows = [];
+    for (const fixture of fixtures)
+      rows.push((await coupon(fixture).expect(201)).body);
+    const c = await buyer();
+    await c.create(rows[4]).expect(201);
+    for (const status of [
+      'active',
+      'scheduled',
+      'expired',
+      'inactive',
+      'exhausted',
+    ]) {
+      const r = (
+        await call('get', 'admin/promotions', admin)
+          .query({ q: prefix.toLowerCase(), status })
+          .expect(200)
+      ).body;
+      expect(r.total).toBe(1);
+      expect(r.items[0].status).toBe(status);
+    }
+    const summary = (
+      await call('get', 'admin/promotions/summary', admin).expect(200)
+    ).body;
+    expect(summary.total - before.total).toBe(5);
+    for (const status of [
+      'active',
+      'scheduled',
+      'expired',
+      'inactive',
+      'exhausted',
+    ])
+      expect(summary[status] - before[status]).toBe(1);
+    const page = (
+      await call('get', 'admin/promotions', admin)
+        .query({ q: prefix, sort: 'code_asc', limit: 2, page: 999 })
+        .expect(200)
+    ).body;
+    expect(page).toMatchObject({ total: 5, page: 3, limit: 2 });
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0].code).toBe(prefix + '_SCHEDULED');
+    for (const q of [prefix + '%', prefix + '_NO_MATCH', prefix + '\\']) {
+      expect(
+        (await call('get', 'admin/promotions', admin).query({ q }).expect(200))
+          .body.total,
+      ).toBe(0);
+    }
+    expect(
+      (
+        await call('get', 'admin/promotions', admin)
+          .query({ q: prefix, kind: 'PERCENT' })
+          .expect(200)
+      ).body.total,
+    ).toBe(0);
+    for (const sort of ['newest', 'updated', 'expiry', 'usage_desc'])
+      await call('get', 'admin/promotions', admin)
+        .query({ q: prefix, sort })
+        .expect(200);
+  });
+  it('preserves released redemption history and blocks deletion even after cancellation', async () => {
+    const c = await buyer(),
+      p = (await coupon({ usageLimit: 1 }).expect(201)).body;
+    const order = (await c.create(p).expect(201)).body;
+    const detail = () =>
+      call('get', 'admin/promotions/' + p.id, admin).expect(200);
+    expect((await detail()).body).toMatchObject({
+      usedCount: 1,
+      historyCount: 1,
+      discountTotal: '50000',
+      canDelete: false,
+      status: 'exhausted',
+      _count: { redemptions: 1 },
+    });
+    await call('delete', 'admin/promotions/' + p.id, admin)
+      .send({ expectedVersion: p.version })
+      .expect(409);
+    await call('post', `orders/${order.id}/cancel`, c.accessToken).expect(201);
+    expect((await detail()).body).toMatchObject({
+      usedCount: 0,
+      historyCount: 1,
+      discountTotal: '0',
+      canDelete: false,
+      status: 'active',
+    });
+    const history = (
+      await call('get', 'admin/promotions/' + p.id + '/redemptions', admin)
+        .query({ page: 999, limit: 1 })
+        .expect(200)
+    ).body;
+    expect(history).toMatchObject({ page: 1, total: 1, limit: 1 });
+    expect(history.items[0]).toMatchObject({
+      orderId: order.id,
+      discount: '50000',
+      order: { status: 'CANCELLED' },
+    });
+    expect(history.items[0].releasedAt).toBeTruthy();
+    expect(history.items[0].userId).toBeUndefined();
+    const blocked = await call('delete', 'admin/promotions/' + p.id, admin)
+      .send({ expectedVersion: p.version })
+      .expect(409);
+    expect(blocked.body.error.code).toBe('PROMOTION_IN_USE');
+  });
+  it('deletes only the expected version and rolls deletion back with its audit', async () => {
+    const p = (await coupon().expect(201)).body;
+    await call('delete', 'admin/promotions/' + p.id, admin)
+      .send({ expectedVersion: p.version + 1 })
+      .expect(409);
+    const spy = jest
+      .spyOn(audit, 'recordAdminActivity')
+      .mockRejectedValueOnce(new Error('Audit unavailable'));
+    try {
+      await call('delete', 'admin/promotions/' + p.id, admin)
+        .send({ expectedVersion: p.version })
+        .expect(500);
+      expect(
+        await db.coupon.findUnique({ where: { id: p.id } }),
+      ).not.toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
+    const responses = await Promise.all([
+      call('delete', 'admin/promotions/' + p.id, admin).send({
+        expectedVersion: p.version,
+      }),
+      call('delete', 'admin/promotions/' + p.id, admin).send({
+        expectedVersion: p.version,
+      }),
+    ]);
+    expect(responses.map((r) => r.status).sort()).toEqual([200, 404]);
+    expect(
+      await db.adminAuditEvent.count({
+        where: { targetId: p.id, action: 'PROMOTION_DELETED' },
+      }),
+    ).toBe(1);
+    await call('get', 'admin/promotions/' + p.id, admin).expect(404);
+    await call(
+      'get',
+      'admin/promotions/' + p.id + '/redemptions',
+      admin,
+    ).expect(404);
+  });
+  it('validates list and deletion input and rejects null required promotion values', async () => {
+    for (const query of [
+      { page: 0 },
+      { limit: 101 },
+      { status: 'unknown' },
+      { kind: 'other' },
+      { sort: 'code;DROP' },
+      { q: 'a'.repeat(101) },
+    ])
+      await call('get', 'admin/promotions', admin).query(query).expect(400);
+    const p = (await coupon().expect(201)).body;
+    for (const field of [
+      'kind',
+      'amount',
+      'active',
+      'minSubtotal',
+      'perUserLimit',
+    ])
+      await call('patch', 'admin/promotions/' + p.id, admin)
+        .send({ expectedVersion: p.version, [field]: null })
+        .expect(400);
+    for (const body of [
+      {},
+      { expectedVersion: -1 },
+      { expectedVersion: null },
+      { expectedVersion: '0' },
+    ])
+      await call('delete', 'admin/promotions/' + p.id, admin)
+        .send(body)
+        .expect(400);
+    await call('delete', 'admin/promotions/bad-id', admin)
+      .send({ expectedVersion: 0 })
+      .expect(400);
+    await coupon({ startsAt: '0000-01-01T00:00:00Z' }).expect(400);
+    await coupon({ startsAt: '2026-01-01T00:00:00+25:00' }).expect(400);
+  });
+  it('serializes deletion against checkout without losing an order discount or history', async () => {
+    const c = await buyer(),
+      p = (await coupon().expect(201)).body;
+    const [checkout, deleted] = await Promise.all([
+      c.create(p),
+      call('delete', 'admin/promotions/' + p.id, admin).send({
+        expectedVersion: p.version,
+      }),
+    ]);
+    if (checkout.status === 201) {
+      expect(deleted.status).toBe(409);
+      expect(deleted.body.error.code).toBe('PROMOTION_IN_USE');
+      expect(
+        await db.couponRedemption.count({ where: { couponId: p.id } }),
+      ).toBe(1);
+      expect(checkout.body.discount).toBe('50000');
+    } else {
+      expect(checkout.status).toBe(409);
+      expect(deleted.status).toBe(200);
+      expect(
+        await db.couponRedemption.count({ where: { couponId: p.id } }),
+      ).toBe(0);
     }
   });
 });

@@ -14,7 +14,7 @@ import 'package:nep_storefront/features/account/reset_password_page.dart';
 
 void main() {
   test(
-    'malformed success invalidates original sessions; late responses preserve a subsequent login',
+    'recovery invalidates only customer sessions; late responses preserve subsequent login',
     () async {
       final response = Completer<http.Response>();
       final api = ApiClient(
@@ -40,11 +40,12 @@ void main() {
         throwsA(isA<ApiException>().having((e) => e.code, 'code', 'TIMEOUT')),
       );
       expect(shopper.accessToken, isNull);
-      expect(admin.accessToken, isNull);
+      expect(admin.accessToken, 'old-admin');
       shopper.set(accessToken: 'new-session', refreshToken: 'new-refresh');
       response.complete(http.Response('{"changed":true}', 200));
       await Future<void>.delayed(const Duration(milliseconds: 10));
       expect(shopper.accessToken, 'new-session');
+      expect(admin.accessToken, 'old-admin');
 
       final malformed = ApiClient(
         baseUrl: 'http://localhost/api/v1',
@@ -71,6 +72,32 @@ void main() {
       expect(other.read(sessionTokensProvider).accessToken, isNull);
     },
   );
+  test(
+    'successful customer recovery preserves the independent admin session',
+    () async {
+      final api = ApiClient(
+        baseUrl: 'http://localhost/api/v1',
+        client: MockClient((_) async => http.Response('{"changed":true}', 200)),
+      );
+      final container = ProviderContainer(
+        overrides: [apiClientProvider.overrideWithValue(api)],
+      );
+      addTearDown(() {
+        container.dispose();
+        api.close();
+      });
+      final customer = container.read(sessionTokensProvider),
+          admin = container.read(adminSessionTokensProvider);
+      customer.set(accessToken: 'customer-session');
+      admin.set(accessToken: 'admin-session');
+      await container
+          .read(passwordRecoveryProvider)
+          .reset('a' * 43, 'Customer-new-password-2026');
+      expect(customer.accessToken, isNull);
+      expect(admin.accessToken, 'admin-session');
+    },
+  );
+
   test(
     'request uses the public endpoint and never attaches an existing session',
     () async {

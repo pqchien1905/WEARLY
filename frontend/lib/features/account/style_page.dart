@@ -9,6 +9,9 @@ import '../../core/design/tokens.dart';
 import '../../core/format.dart';
 import '../../core/widgets/primitives.dart';
 import 'account_navigation.dart';
+import 'account_components.dart';
+
+part 'style_choices.dart';
 
 class StylePage extends ConsumerWidget {
   const StylePage({super.key});
@@ -48,35 +51,91 @@ class _StyleEditor extends ConsumerStatefulWidget {
 }
 
 class _StyleEditorState extends ConsumerState<_StyleEditor> {
-  late String size = widget.initial.size,
-      style = widget.initial.style,
-      color = widget.initial.color;
-  late int budget = widget.initial.budget;
-  late int version = widget.initial.version;
-  bool busy = false, saved = false;
-  bool reconcile = false;
+  late StylePreferences baseline = widget.initial;
+  late String size = baseline.size,
+      style = baseline.style,
+      color = baseline.color;
+  late int budget = baseline.budget;
+  bool busy = false, saved = false, reconcile = false, confirming = false;
   bool reloadRequested = false;
   String? error;
+  bool get dirty =>
+      size != baseline.size ||
+      style != baseline.style ||
+      color != baseline.color ||
+      budget != baseline.budget;
+  bool get locked => busy || reconcile || confirming;
+
+  void restore(StylePreferences value) {
+    baseline = value;
+    size = value.size;
+    style = value.style;
+    color = value.color;
+    budget = value.budget;
+    saved = false;
+    reconcile = false;
+    reloadRequested = false;
+    error = null;
+  }
+
   @override
   void didUpdateWidget(covariant _StyleEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!busy &&
         !identical(oldWidget.initial, widget.initial) &&
-        (widget.initial.version != version || reconcile || reloadRequested)) {
-      size = widget.initial.size;
-      style = widget.initial.style;
-      color = widget.initial.color;
-      budget = widget.initial.budget;
-      version = widget.initial.version;
-      saved = false;
-      reconcile = false;
-      reloadRequested = false;
-      error = null;
+        (reloadRequested || widget.initial.version != baseline.version)) {
+      if (dirty && !reloadRequested) {
+        reconcile = true;
+        error =
+            'Hồ sơ đã thay đổi ở nơi khác. Tải lại để xem lựa chọn mới nhất.';
+      } else {
+        restore(widget.initial);
+      }
     }
   }
 
+  void change(VoidCallback update) {
+    if (locked) return;
+    setState(() {
+      update();
+      saved = false;
+      error = null;
+    });
+  }
+
+  Future<void> reload() async {
+    if (busy || confirming) return;
+    if (dirty && !reconcile) {
+      setState(() => confirming = true);
+      final discard = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('Tải lại hồ sơ?'),
+          content: const Text(
+            'Bạn có thay đổi chưa lưu. Tải lại sẽ thay thế các lựa chọn này bằng hồ sơ đã lưu.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Tiếp tục chỉnh sửa'),
+            ),
+            AppButton(
+              'Bỏ thay đổi và tải lại',
+              onPressed: () => Navigator.pop(c, true),
+            ),
+          ],
+        ),
+      );
+      if (!mounted) return;
+      setState(() => confirming = false);
+      if (discard != true) return;
+    }
+    reloadRequested = true;
+    ref.invalidate(accountDetailsProvider);
+  }
+
   Future<void> save({bool openStylist = false}) async {
-    if (busy || reconcile) return;
+    if (locked) return;
     setState(() {
       busy = true;
       saved = false;
@@ -91,16 +150,15 @@ class _StyleEditorState extends ConsumerState<_StyleEditor> {
               style: style,
               color: color,
               budget: budget,
-              version: version,
+              version: baseline.version,
             ),
           );
       if (!mounted) return;
-      version = persisted.version;
-      if (openStylist) {
-        context.go('/ai-stylist');
-      } else {
-        setState(() => saved = true);
-      }
+      setState(() {
+        restore(persisted);
+        saved = true;
+      });
+      if (openStylist) context.go('/ai-stylist');
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -115,147 +173,270 @@ class _StyleEditorState extends ConsumerState<_StyleEditor> {
     }
   }
 
-  Widget select(
-    String label,
-    String value,
-    List<String> values,
-    ValueChanged<String> onChanged,
-    String empty,
-  ) => DropdownButtonFormField<String>(
-    key: ValueKey((label, value)),
-    initialValue: value,
-    isExpanded: true,
-    decoration: InputDecoration(labelText: label),
-    items: values
-        .map(
-          (v) => DropdownMenuItem(value: v, child: Text(v.isEmpty ? empty : v)),
-        )
-        .toList(),
-    onChanged: busy || reconcile
-        ? null
-        : (v) => setState(() {
-            onChanged(v!);
-            saved = false;
-          }),
-  );
   @override
-  Widget build(BuildContext context) => ConstrainedBox(
-    constraints: const BoxConstraints(maxWidth: 720),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        DemoNotice(
-          text: ref.watch(remoteApiProvider)
-              ? 'Lựa chọn được lưu theo tài khoản và giữ lại khi đăng nhập lại. Chỉ dùng sở thích bạn tự chọn, không phân tích cơ thể hay suy đoán từ ảnh.'
-              : 'Chỉ dùng những sở thích bạn tự chọn. Không phân tích cơ thể hay suy đoán từ ảnh. Hồ sơ được xóa khi đăng xuất hoặc tải lại trang.',
-        ),
-        const SizedBox(height: 28),
-        Text('Bắt đầu từ điều bạn thích', style: T.display(26)),
-        const SizedBox(height: 12),
-        Text(
-          ref.watch(remoteApiProvider)
-              ? 'Ghi lại size, màu và ngân sách bạn thường chọn. Bạn có thể cập nhật bất cứ lúc nào.'
-              : 'Lưu lựa chọn để áp dụng nhanh trong Stylist. Bạn vẫn có thể đổi ngân sách và size cho mỗi cuộc trò chuyện.',
-        ),
-        const SizedBox(height: 28),
-        select(
-          'Size thường chọn',
-          size,
-          StylePreferences.sizes,
-          (v) => size = v,
-          '',
-        ),
-        const SizedBox(height: 20),
-        select(
-          'Phong cách yêu thích',
-          style,
-          StylePreferences.styles,
-          (v) => style = v,
-          ref.watch(remoteApiProvider)
-              ? 'Không ưu tiên phong cách'
-              : 'Để Stylist gợi ý',
-        ),
-        const SizedBox(height: 20),
-        select(
-          'Màu ưu tiên',
-          color,
-          StylePreferences.colors,
-          (v) => color = v,
-          'Không giới hạn màu',
-        ),
-        const SizedBox(height: 20),
-        DropdownButtonFormField<int>(
-          key: ValueKey(budget),
-          initialValue: budget,
-          isExpanded: true,
-          decoration: const InputDecoration(labelText: 'Ngân sách mỗi outfit'),
-          items: StylePreferences.budgets
-              .map((v) => DropdownMenuItem(value: v, child: Text(money(v))))
-              .toList(),
-          onChanged: busy || reconcile
-              ? null
-              : (v) => setState(() {
-                  budget = v!;
-                  saved = false;
-                }),
-        ),
-        const SizedBox(height: 24),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            AppButton(
-              'Lưu hồ sơ phong cách',
-              busy: busy,
-              onPressed: reconcile ? null : save,
+  Widget build(BuildContext context) {
+    final remote = ref.watch(remoteApiProvider);
+    return AccountCard(
+      title: 'Bắt đầu từ điều bạn thích',
+      description:
+          'Chọn những gì khiến bạn thấy thoải mái và tự tin. Mỗi mục chọn một lựa chọn; bạn có thể đổi bất cứ lúc nào.',
+      icon: Icons.tune,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AccountGrid(
+            minColumnWidth: 340,
+            children: [
+              _StyleSection(
+                key: const ValueKey('style-size-section'),
+                number: '01',
+                title: 'Size thường chọn',
+                description: 'Kích cỡ bạn thường mặc hằng ngày.',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final value in StylePreferences.sizes)
+                          _StyleChoice(
+                            label: value,
+                            group: 'Size thường chọn',
+                            selected: size == value,
+                            onPressed: locked
+                                ? null
+                                : () => change(() => size = value),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Mỗi thiết kế có độ vừa vặn khác nhau. Hãy đối chiếu số đo trên trang sản phẩm trước khi chọn mua.',
+                      style: T.small,
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      icon: const Icon(Icons.straighten_outlined, size: 18),
+                      label: const Text('Cách chọn size phù hợp'),
+                      onPressed: () => showDialog<void>(
+                        context: context,
+                        builder: (c) => AlertDialog(
+                          title: const Text('Chọn size vừa với bạn'),
+                          content: const Text(
+                            'Đo vòng ngực, eo và hông bằng thước dây, sau đó đối chiếu với bảng số đo của từng sản phẩm.\n\nSize trong hồ sơ là sở thích của bạn, không phải kết quả đo cơ thể. Ảnh thử đồ không xác nhận độ vừa vặn.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(c),
+                              child: const Text('Đã hiểu'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _StyleSection(
+                key: const ValueKey('style-preference-section'),
+                number: '02',
+                title: 'Phong cách yêu thích',
+                description: 'Một điểm bắt đầu cho gu ăn mặc của bạn.',
+                child: _StyleOptions(
+                  children: [
+                    for (final value in StylePreferences.styles)
+                      _StyleChoice(
+                        label: value.isEmpty ? 'Linh hoạt' : value,
+                        group: 'Phong cách yêu thích',
+                        description: switch (value) {
+                          'Tối giản' => 'Gọn gàng, dễ phối',
+                          'Thanh lịch' => 'Chỉn chu, tinh tế',
+                          'Thư giãn' => 'Thoải mái, tự nhiên',
+                          _ => 'Không ưu tiên cố định',
+                        },
+                        icon: switch (value) {
+                          'Tối giản' => Icons.crop_square_rounded,
+                          'Thanh lịch' => Icons.diamond_outlined,
+                          'Thư giãn' => Icons.wb_sunny_outlined,
+                          _ => Icons.auto_awesome_outlined,
+                        },
+                        selected: style == value,
+                        onPressed: locked
+                            ? null
+                            : () => change(() => style = value),
+                      ),
+                  ],
+                ),
+              ),
+              _StyleSection(
+                number: '03',
+                title: 'Màu ưu tiên',
+                description: 'Chọn tông màu bạn hay tìm đến nhất.',
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final value in StylePreferences.colors)
+                      _StyleChoice(
+                        label: value.isEmpty ? 'Không giới hạn màu' : value,
+                        group: 'Màu ưu tiên',
+                        swatch: _styleColors[value],
+                        icon: value.isEmpty ? Icons.palette_outlined : null,
+                        selected: color == value,
+                        onPressed: locked
+                            ? null
+                            : () => change(() => color = value),
+                      ),
+                  ],
+                ),
+              ),
+              _StyleSection(
+                number: '04',
+                title: 'Ngân sách mỗi outfit',
+                description: 'Mức bạn dự định chi cho một bộ trang phục.',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final value in StylePreferences.budgets) ...[
+                      if (value != StylePreferences.budgets.first)
+                        const SizedBox(height: 8),
+                      _StyleChoice(
+                        label: money(value),
+                        group: 'Ngân sách mỗi outfit',
+                        selected: budget == value,
+                        onPressed: locked
+                            ? null
+                            : () => change(() => budget = value),
+                        trailingCheck: true,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 28),
+          Container(
+            key: const ValueKey('style-summary'),
+            padding: const EdgeInsets.all(16),
+            decoration: const BoxDecoration(
+              color: T.canvas,
+              borderRadius: T.radius,
             ),
-            if (!ref.watch(remoteApiProvider))
-              AppButton(
-                'Lưu & mở Stylist',
-                outlined: true,
-                onPressed: busy ? null : () => save(openStylist: true),
-              ),
-            if (ref.watch(remoteApiProvider))
-              TextButton.icon(
-                onPressed: busy
-                    ? null
-                    : () {
-                        reloadRequested = true;
-                        ref.invalidate(accountDetailsProvider);
-                      },
-                icon: const Icon(Icons.refresh, size: 18),
-                label: const Text('Tải lại hồ sơ'),
-              ),
-          ],
-        ),
-        if (saved || error != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 16),
-            child: Semantics(
-              liveRegion: true,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Lựa chọn của bạn',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Size $size · ${style.isEmpty ? 'Phong cách linh hoạt' : style} · ${color.isEmpty ? 'Không giới hạn màu' : 'Màu $color'} · ${money(budget)} / bộ',
+                  style: T.body.copyWith(color: T.muted),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 40),
+          Semantics(
+            liveRegion: true,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  error != null
+                      ? Icons.error_outline
+                      : saved
+                      ? Icons.check_circle_outline
+                      : dirty
+                      ? Icons.edit_outlined
+                      : Icons.check_circle_outline,
+                  size: 18,
+                  color: error != null
+                      ? T.danger
+                      : saved
+                      ? T.success
+                      : T.muted,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    error ??
+                        (busy
+                            ? 'Đang lưu hồ sơ…'
+                            : saved
+                            ? remote
+                                  ? 'Đã lưu hồ sơ phong cách.'
+                                  : 'Đã lưu phong cách trong phiên demo.'
+                            : dirty
+                            ? 'Bạn có thay đổi chưa lưu.'
+                            : remote && baseline.version > 0
+                            ? 'Đang hiển thị hồ sơ đã lưu.'
+                            : 'Chọn sở thích rồi lưu hồ sơ của bạn.'),
+                    style: T.small.copyWith(
+                      color: error != null
+                          ? T.danger
+                          : saved
+                          ? T.success
+                          : T.muted,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (reconcile)
+            const Padding(
+              padding: EdgeInsets.only(top: 12),
               child: Text(
-                error ??
-                    (ref.watch(remoteApiProvider)
-                        ? 'Đã lưu hồ sơ phong cách.'
-                        : 'Đã lưu phong cách trong phiên demo.'),
-                style: TextStyle(color: error == null ? T.success : T.danger),
+                'Tải lại hồ sơ để kiểm tra kết quả trước khi lưu tiếp. Thay đổi chưa lưu sẽ được bỏ.',
+                style: T.small,
               ),
             ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              AppButton(
+                'Lưu hồ sơ phong cách',
+                busy: busy,
+                icon: Icons.check,
+                onPressed: locked ? null : save,
+              ),
+              TextButton.icon(
+                icon: const Icon(Icons.undo, size: 18),
+                label: const Text('Hoàn tác thay đổi'),
+                onPressed: !dirty || locked
+                    ? null
+                    : () => setState(() => restore(baseline)),
+              ),
+              if (remote)
+                TextButton.icon(
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: const Text('Tải lại hồ sơ'),
+                  onPressed: busy || confirming ? null : reload,
+                ),
+              if (!remote)
+                AppButton(
+                  'Lưu & mở Stylist',
+                  outlined: true,
+                  onPressed: locked ? null : () => save(openStylist: true),
+                ),
+            ],
           ),
-        if (reconcile)
-          const Padding(
-            padding: EdgeInsets.only(top: 12),
-            child: Text(
-              'Tải lại hồ sơ để kiểm tra kết quả trước khi lưu tiếp. Thay đổi chưa lưu sẽ được bỏ.',
-              style: T.small,
-            ),
+          const SizedBox(height: 24),
+          AccountNotice(
+            icon: Icons.verified_user_outlined,
+            text: remote
+                ? 'Sở thích được lưu theo tài khoản và giữ lại khi đăng nhập lại. Chỉ sử dụng lựa chọn bạn cung cấp, không phân tích cơ thể hay suy đoán từ ảnh.'
+                : 'Chỉ dùng những sở thích bạn tự chọn. Không phân tích cơ thể hay suy đoán từ ảnh. Hồ sơ được xóa khi đăng xuất hoặc tải lại trang.',
           ),
-        const SizedBox(height: 24),
-        const Text(
-          'Size yêu thích không phải kết quả đo. Xem bảng số đo của từng sản phẩm trước khi chọn mua.',
-          style: T.small,
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }

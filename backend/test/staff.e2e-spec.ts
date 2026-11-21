@@ -108,7 +108,11 @@ describe('Staff authorization and atomic administration', () => {
     (
       await request(app.getHttpServer())
         .post('/api/v1/auth/admin/login')
-        .send({ username: (await db.user.findUniqueOrThrow({ where: { email } })).username, password })
+        .send({
+          username: (await db.user.findUniqueOrThrow({ where: { email } }))
+            .username,
+          password,
+        })
         .expect(201)
     ).body.accessToken as string;
 
@@ -368,7 +372,12 @@ describe('Staff authorization and atomic administration', () => {
       ).details,
     ).toEqual({
       before: { quantity: 5, version: 0 },
-      after: { quantity: 3, version: 1 },
+      after: {
+        quantity: 3,
+        version: 1,
+        movementId: expect.any(String),
+        operation: 'delta',
+      },
     });
   });
   it('records order transitions without customer address snapshots', async () => {

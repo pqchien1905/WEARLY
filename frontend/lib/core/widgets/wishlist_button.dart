@@ -10,9 +10,15 @@ import '../design/tokens.dart';
 import 'primitives.dart';
 
 class WishlistButton extends ConsumerWidget {
-  const WishlistButton(this.product, {super.key, this.card = false});
+  const WishlistButton(
+    this.product, {
+    super.key,
+    this.card = false,
+    this.enabled = true,
+  });
   final Product product;
   final bool card;
+  final bool enabled;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final remote = ref.watch(remoteApiProvider);
@@ -55,7 +61,7 @@ class WishlistButton extends ConsumerWidget {
       size: card ? 20 : 24,
       color: saved ? T.accent : T.ink,
     );
-    final disabled = remote && (wishlist!.busy || wishlist.loading);
+    final disabled = !enabled || remote && (wishlist!.busy || wishlist.loading);
     return card
         ? IconButton.filledTonal(
             tooltip: tooltip,

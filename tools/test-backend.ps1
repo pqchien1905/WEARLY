@@ -1,7 +1,7 @@
 param([switch]$WithWorker, [switch]$WithStorage)
 $ErrorActionPreference = 'Stop'
 $previousEnvironment = @{}
-foreach ($name in @('PATH','DATABASE_URL','TEST_DATABASE_URL','NODE_ENV','TEST_REDIS_HOST','TEST_REDIS_PORT','TEST_S3_ENDPOINT','TEST_S3_BUCKET','PASSWORD_RECOVERY_ENABLED','LOCAL_MAIL_ENABLED','VNPAY_ENABLED','GEMINI_API_KEY')) {
+foreach ($name in @('PATH','DATABASE_URL','TEST_DATABASE_URL','NODE_ENV','TEST_REDIS_HOST','TEST_REDIS_PORT','TEST_S3_ENDPOINT','TEST_S3_BUCKET','PASSWORD_RECOVERY_ENABLED','LOCAL_MAIL_ENABLED','MAIL_DELIVERY_ENABLED','VNPAY_ENABLED','MOMO_ENABLED','ZALOPAY_ENABLED','GEMINI_API_KEY')) {
   $previousEnvironment[$name] = [Environment]::GetEnvironmentVariable($name,'Process')
 }
 $workspace = Split-Path -Parent $PSScriptRoot
@@ -24,7 +24,10 @@ try {
   # not activate unrelated integrations or impose its browser origin on tests.
   $env:PASSWORD_RECOVERY_ENABLED = 'false'
   $env:LOCAL_MAIL_ENABLED = 'false'
+  $env:MAIL_DELIVERY_ENABLED = 'false'
   $env:VNPAY_ENABLED = 'false'
+  $env:MOMO_ENABLED = 'false'
+  $env:ZALOPAY_ENABLED = 'false'
   # Windows removes empty environment values. Whitespace survives dotenv loading
   # and is normalized to an unconfigured key by validateEnv.
   $env:GEMINI_API_KEY = ' '

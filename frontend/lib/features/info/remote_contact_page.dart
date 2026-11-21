@@ -98,7 +98,7 @@ class _RemoteContactPageState extends ConsumerState<RemoteContactPage> {
                   title: 'Đã lưu yêu cầu hỗ trợ',
                   icon: Icons.check_circle_outline,
                   message:
-                      'Mã tiếp nhận: ${receipt!.id}\nYêu cầu đã được lưu. Phản hồi sẽ có trong hộp thư local sau khi quản trị viên trả lời.',
+                      'Mã tiếp nhận: ${receipt!.id}\nYêu cầu đã được lưu. Phản hồi sẽ được gửi tới email liên hệ của bạn sau khi cửa hàng trả lời.',
                   action: AppButton(
                     'Viết yêu cầu khác',
                     outlined: true,
@@ -118,7 +118,7 @@ class _RemoteContactPageState extends ConsumerState<RemoteContactPage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const Text(
-                        'Hệ thống chạy local. Thư phản hồi được giữ trên máy này, không gửi đến hộp thư bên ngoài.',
+                        'Cửa hàng sẽ trả lời qua email liên hệ bạn cung cấp. Không gửi mật khẩu hoặc thông tin thanh toán trong nội dung.',
                         style: T.small,
                       ),
                       const SizedBox(height: 24),

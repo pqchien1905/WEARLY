@@ -71,9 +71,25 @@ function createStaticServer(directory) {
   });
 }
 module.exports = { createStaticServer };
-if (require.main === module)
-  createStaticServer(path.resolve(__dirname, "../frontend/build/web")).listen(
-    4173,
-    "127.0.0.1",
-    () => console.log("Wearly preview: http://127.0.0.1:4173"),
-  );
+if (require.main === module) {
+  const port = Number(process.argv[2] ?? 4173);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    console.error("Preview port must be an integer between 1 and 65535.");
+    process.exitCode = 1;
+  } else {
+    const server = createStaticServer(
+      path.resolve(__dirname, "../frontend/build/web"),
+    );
+    server.on("error", (error) => {
+      console.error(
+        error.code === "EADDRINUSE"
+          ? `Port ${port} is already in use. If the preview is running, open http://localhost:${port}. Otherwise choose -PreviewPort or stop its terminal with Ctrl+C.`
+          : `Preview failed: ${error.code ?? error.message}`,
+      );
+      process.exitCode = 1;
+    });
+    server.listen(port, "127.0.0.1", () =>
+      console.log(`Wearly preview: http://localhost:${port} (Ctrl+C to stop)`),
+    );
+  }
+}

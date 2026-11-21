@@ -40,7 +40,8 @@ export function sources(order: RefundOrder) {
       p?.refunds.map((r) => ({ ...r, amount: r.amount.toFixed(0) })) ?? [],
   });
 }
-export function publicRefund(row: RefundRow, admin = false) {
+/** `provider` is the order's payment provider; COD receipts have no attempt. */
+export function publicRefund(row: RefundRow, provider: string, admin = false) {
   return {
     id: row.id,
     amount: row.amount,
@@ -49,7 +50,7 @@ export function publicRefund(row: RefundRow, admin = false) {
     providerTransactionNo: row.providerTransactionNo,
     createdAt: row.createdAt,
     completedAt: row.completedAt,
-    provider: row.attemptId ? 'vnpay' : 'cod',
+    provider: row.attemptId ? provider : 'cod',
     ...(admin
       ? {
           attemptId: row.attemptId,
@@ -70,7 +71,9 @@ export function refundState(order: RefundOrder, admin: boolean) {
       .filter((r) => r.status === 'SUCCEEDED')
       .reduce((s, r) => s + BigInt(r.amount.toFixed(0)), 0n)
       .toString(),
-    refunds: rows.map((r) => publicRefund(r, admin)),
+    refunds: rows.map((r) =>
+      publicRefund(r, order.payment?.provider ?? 'cod', admin),
+    ),
     ...(admin
       ? {
           sources: sources(order).map((s) => ({

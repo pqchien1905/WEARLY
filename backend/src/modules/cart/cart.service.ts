@@ -4,6 +4,11 @@ import { Prisma } from '../../generated/prisma/client';
 import { transaction, lockUser } from '../../common/transaction';
 import { fail } from '../../common/errors';
 import { totalForItems } from '../../common/money';
+import {
+  automaticOffers,
+  automaticPrice,
+  AutomaticOffer,
+} from '../promotions/automatic-pricing';
 export const cartInclude = {
   items: {
     orderBy: { createdAt: 'asc' as const },
@@ -21,6 +26,7 @@ export const cartInclude = {
 } satisfies Prisma.CartInclude;
 export function cartJson(
   cart: Prisma.CartGetPayload<{ include: typeof cartInclude }>,
+  offers: AutomaticOffer[] = [],
 ) {
   const items = cart.items.map((i) => ({
     id: i.id,
@@ -30,7 +36,15 @@ export function cartJson(
     image: i.variant.product.images[0]?.url ?? '',
     size: i.variant.size,
     color: i.variant.color,
-    unitPrice: i.variant.price.toString(),
+    unitPrice: automaticPrice(
+      i.variant.productId,
+      i.variant.price,
+      offers,
+    ).price.toString(),
+    originalUnitPrice: i.variant.price.toString(),
+    promotionName:
+      automaticPrice(i.variant.productId, i.variant.price, offers).promotion
+        ?.name ?? null,
     quantity: i.quantity,
     available:
       i.variant.active && i.variant.product.active
@@ -58,6 +72,7 @@ export class CartService {
         update: {},
         include: cartInclude,
       }),
+      await automaticOffers(this.db),
     );
   }
   mutate(
@@ -108,7 +123,7 @@ export class CartService {
         data: { version: { increment: 1 } },
         include: cartInclude,
       });
-      return cartJson(updated);
+      return cartJson(updated, await automaticOffers(tx));
     });
   }
 }

@@ -352,6 +352,11 @@ void main() {
   testWidgets(
     'startup waits for both identities before mounting a private route',
     (tester) async {
+      tester.binding.platformDispatcher.defaultRouteNameTestValue =
+          '/account/orders';
+      addTearDown(
+        tester.binding.platformDispatcher.clearDefaultRouteNameTestValue,
+      );
       final customerResponse = Completer<http.Response>(),
           staffResponse = Completer<http.Response>();
       var reads = 0;

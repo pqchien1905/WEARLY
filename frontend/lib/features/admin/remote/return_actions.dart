@@ -71,7 +71,15 @@ class AdminReturnActions extends ConsumerWidget {
         },
       ),
     );
-    if (context.mounted && changed == true) refreshAdmin(ref);
+    if (context.mounted && changed == true) {
+      refreshAdmin(ref);
+      toast(
+        context,
+        cancellation
+            ? 'Đã hủy đơn hàng và cập nhật lại tồn kho.'
+            : 'Đã cập nhật yêu cầu trả hàng.',
+      );
+    }
   }
 
   @override

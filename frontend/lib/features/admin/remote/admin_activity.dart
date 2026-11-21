@@ -1,3 +1,4 @@
+import 'admin_pagination.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/design/tokens.dart';
@@ -6,18 +7,26 @@ import 'admin_providers.dart';
 import 'admin_widgets.dart';
 
 const _actions = {
-  'STAFF_UPDATED': 'Thay đổi quyền nhân viên',
+  'CUSTOMER_CREATED': 'Thêm tài khoản khách hàng',
+  'CUSTOMER_DELETED': 'Xóa tài khoản khách hàng',
+  'STAFF_UPDATED': 'Cập nhật tài khoản',
   'SUPPORT_REPLIED': 'Trả lời yêu cầu hỗ trợ',
   'SUPPORT_STATUS_CHANGED': 'Đổi trạng thái yêu cầu hỗ trợ',
   'PRODUCT_CREATED': 'Tạo sản phẩm',
   'PRODUCT_UPDATED': 'Cập nhật sản phẩm',
+  'PRODUCT_DELETED': 'Xóa sản phẩm',
   'PRODUCT_IMAGE_UPLOADED': 'Tải ảnh sản phẩm',
   'SKU_CREATED': 'Tạo biến thể',
   'SKU_UPDATED': 'Cập nhật biến thể',
   'CATEGORY_CREATED': 'Tạo danh mục',
   'CATEGORY_RENAMED': 'Đổi tên danh mục',
+  'CATEGORY_DELETED': 'Xóa danh mục',
+  'BRAND_DELETED': 'Xóa thương hiệu',
   'BRAND_CREATED': 'Tạo thương hiệu',
   'BRAND_RENAMED': 'Đổi tên thương hiệu',
+  'COLLECTION_DELETED': 'Xóa bộ sưu tập',
+  'COLLECTION_CREATED': 'Tạo bộ sưu tập',
+  'COLLECTION_UPDATED': 'Cập nhật bộ sưu tập',
   'INVENTORY_ADJUSTED': 'Điều chỉnh tồn kho',
   'ORDER_STATUS_CHANGED': 'Chuyển trạng thái đơn hàng',
   'COD_SETTLED': 'Đối soát tiền thu COD',
@@ -28,7 +37,9 @@ const _actions = {
   'REFUND_CREATED': 'Tạo khoản hoàn tiền',
   'REFUND_UPDATED': 'Xác minh kết quả hoàn tiền',
   'PROMOTION_CREATED': 'Tạo mã khuyến mãi',
+  'PROMOTION_DELETED': 'Xóa mã khuyến mãi',
   'PROMOTION_UPDATED': 'Cập nhật mã khuyến mãi',
+  'CONTENT_DRAFT_RESTORED': 'Khôi phục bản nháp từ bản công khai',
   'CONTENT_DRAFT_SAVED': 'Lưu bản nháp nội dung',
   'CONTENT_PUBLISHED': 'Xuất bản nội dung',
 };
@@ -78,7 +89,11 @@ class _AdminActivityPanelState extends ConsumerState<AdminActivityPanel> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _actions[event['action']] ?? 'Thao tác quản trị',
+                        event['action'] == 'STAFF_UPDATED' &&
+                                event['details']?['after']?['passwordChanged'] ==
+                                    true
+                            ? 'Đặt lại mật khẩu khách hàng'
+                            : _actions[event['action']] ?? 'Thao tác quản trị',
                         style: T.body,
                       ),
                       const SizedBox(height: 8),
@@ -101,28 +116,9 @@ class _AdminActivityPanelState extends ConsumerState<AdminActivityPanel> {
                   ),
                 ),
               if (data.total > 0 || page > 1)
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    AppButton(
-                      'Trang trước',
-                      outlined: true,
-                      onPressed: page > 1 ? () => setState(() => page--) : null,
-                    ),
-                    Text(
-                      'Trang $page · ${data.total} thao tác',
-                      style: T.small,
-                    ),
-                    AppButton(
-                      'Trang sau',
-                      outlined: true,
-                      onPressed: data.hasNext
-                          ? () => setState(() => page++)
-                          : null,
-                    ),
-                  ],
+                AdminPagination(
+                  page: data,
+                  onPage: (n) => setState(() => page = n),
                 ),
             ],
           ),
@@ -153,6 +149,11 @@ const _fields = {
   'categoryId': 'Danh mục',
   'brandId': 'Thương hiệu',
   'productId': 'Sản phẩm',
+  'slug': 'Đường dẫn',
+  'title': 'Tiêu đề',
+  'style': 'Phong cách',
+  'position': 'Thứ tự hiển thị',
+  'coverProductId': 'Sản phẩm làm ảnh bìa',
   'provider': 'Thanh toán',
   'primary': 'Khoản thu chính',
 };

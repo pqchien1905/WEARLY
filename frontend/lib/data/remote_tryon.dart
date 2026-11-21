@@ -43,6 +43,13 @@ class PrivateImageAsset {
   final DateTime createdAt, expiresAt;
 }
 
+typedef TryOnProduct = ({
+  String name,
+  String slug,
+  String? image,
+  bool tryOnSupported,
+});
+
 class RemoteTryOnJob {
   const RemoteTryOnJob({
     required this.id,
@@ -55,9 +62,14 @@ class RemoteTryOnJob {
     required this.resultAvailable,
     this.requestKey,
     this.errorCode,
+    this.product,
+    this.size,
+    this.color,
   });
   final String id, imageId, sku, status;
   final String? requestKey, errorCode;
+  final TryOnProduct? product;
+  final String? size, color;
   final DateTime createdAt, expiresAt;
   final int estimatedCost;
   final bool resultAvailable;
@@ -190,10 +202,21 @@ class RemoteTryOnRepository {
       }
       final result = row['resultAvailable'] as bool;
       if (result && state != 'completed') throw _invalid;
+      final product = row['product'] as Map?;
       return RemoteTryOnJob(
         id: row['id'] as String,
         imageId: row['imageId'] as String,
         sku: row['sku'] as String,
+        size: row['size'] as String?,
+        color: row['color'] as String?,
+        product: product == null
+            ? null
+            : (
+                name: product['name'] as String,
+                slug: product['slug'] as String,
+                image: product['image'] as String?,
+                tryOnSupported: product['tryOnSupported'] as bool,
+              ),
         requestKey: row['requestKey'] as String?,
         errorCode: row['errorCode'] as String?,
         status: state,
@@ -217,6 +240,8 @@ String tryonError(Object error) {
     'AI_BUSY' => 'Đang có yêu cầu AI khác. Hãy kiểm tra lại sau ít phút.',
     'AI_PROVIDER_RATE_LIMIT' =>
       'Gemini đang giới hạn lượt dùng. Yêu cầu này đã kết thúc.',
+    'AI_PROVIDER_UNAVAILABLE' =>
+      'Dịch vụ thử đồ tạm thời không phản hồi. Lượt thử này chưa tạo được ảnh.',
     'AI_CATALOG_CHANGED' =>
       'Trang phục đã thay đổi hoặc hết hàng. Hãy chọn lại sản phẩm.',
     'AI_GARMENT_UNAVAILABLE' =>

@@ -145,7 +145,17 @@ storageDescribe('Catalog image upload with PostgreSQL and private S3', () => {
       .post(`/api/v1/admin/products/${productId}/images`)
       .expect(401);
     await upload(customer).expect(403);
+    const before = await db.product.findUniqueOrThrow({
+      where: { id: productId },
+    });
     first = (await upload(admin).expect(201)).body;
+    // An editor opened before the upload must not erase the newly saved image.
+    await request(app.getHttpServer())
+      .patch(`/api/v1/admin/products/${productId}`)
+      .auth(admin, { type: 'bearer' })
+      .send({ images: [], expectedUpdatedAt: before.updatedAt.toISOString() })
+      .expect(409);
+    expect(await db.productImage.count({ where: { productId } })).toBe(1);
   });
   const gallery = (images: { url: string; alt: string }[]) =>
     request(app.getHttpServer())

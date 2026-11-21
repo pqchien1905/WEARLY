@@ -7,10 +7,12 @@ import '../../app/account_details.dart';
 import '../../app/config.dart';
 import '../../app/payment_providers.dart';
 import '../../app/promotion_providers.dart';
+import '../../data/remote_payments.dart';
 import '../../data/remote_promotions.dart';
 import 'payment_panel.dart';
 import '../../core/design/tokens.dart';
 import '../../core/widgets/primitives.dart';
+import '../../core/widgets/purchase_progress.dart';
 import '../../domain/commerce.dart';
 import '../cart/cart_page.dart';
 import '../cart/commerce_feedback.dart';
@@ -37,6 +39,17 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
   void initState() {
     super.initState();
     final pending = ref.read(commerceProvider).pendingCheckout;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final store = ref.read(commerceProvider);
+      if (store.remote &&
+          store.signedIn &&
+          store.cartState.loaded &&
+          store.cartState.pending == 0 &&
+          !store.cart.locked) {
+        store.refreshCart();
+      }
+    });
     if (ref.read(commerceProvider).remote) payment = 'COD';
     if (pending != null) {
       name.text = pending.draft.name;
@@ -117,7 +130,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               addressId: addressId,
               express: express,
               payment: payment,
-              paymentMethod: payment == 'VNPay sandbox' ? 'vnpay' : 'cod',
+              paymentMethod: paymentMethodFor(payment),
               couponCode: applied?.code,
               discount: applied?.discount ?? 0,
             ),
@@ -174,6 +187,11 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     }
     final remote = cart.remote;
     final methods = remote ? ref.watch(paymentMethodsProvider) : null;
+    final onlineChoices = checkoutPaymentMethods.values
+        .where(
+          (m) => m != 'cod' && (methods?.asData?.value.enabled(m) ?? false),
+        )
+        .length;
     final locked = busy || cart.checkoutPending || quoting;
     final applied =
         quote?.cartVersion == cart.cartVersion &&
@@ -187,7 +205,9 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
     final savedAddresses = profile == null
         ? null
         : ref.watch(accountDetailsProvider);
-    if (cart.items.isEmpty) {
+    // An unresolved checkout stays re-checkable even after the server emptied
+    // the cart into the (possibly committed) order.
+    if (cart.items.isEmpty && !cart.checkoutPending) {
       return StatePanel(
         title: 'Giỏ hàng chưa có sản phẩm',
         message: 'Thêm một sản phẩm để bắt đầu đặt hàng.',
@@ -209,7 +229,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         children: [
           DemoNotice(
             text: remote
-                ? 'Chọn địa chỉ đã lưu và phương thức thanh toán. VNPay sandbox là thanh toán thử nghiệm.'
+                ? 'Chọn địa chỉ đã lưu và phương thức thanh toán. VNPay, MoMo và ZaloPay sandbox là thanh toán thử nghiệm.'
                 : 'Đặt hàng demo. Không có thanh toán hoặc giao hàng thật. Bạn có thể dùng thông tin minh họa.',
           ),
           if (cart.checkoutPending)
@@ -346,10 +366,14 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
             items:
                 (remote
                         ? [
-                            'COD',
-                            if (methods?.asData?.value == true ||
-                                payment == 'VNPay sandbox')
-                              'VNPay sandbox',
+                            for (final entry in checkoutPaymentMethods.entries)
+                              if (entry.value == 'cod' ||
+                                  payment == entry.key ||
+                                  (methods?.asData?.value.enabled(
+                                        entry.value,
+                                      ) ??
+                                      false))
+                                entry.key,
                           ]
                         : ['COD demo', 'Thẻ / ví điện tử demo'])
                     .map((p) => DropdownMenuItem(value: p, child: Text(p)))
@@ -392,12 +416,20 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                 style: T.small,
               ),
           ],
-          if (remote && methods?.asData?.value != true)
+          if (remote && onlineChoices == 0)
             Text(
               methods?.isLoading == true
-                  ? 'Đang kiểm tra VNPay sandbox…'
-                  : 'VNPay sandbox chưa sẵn sàng. Bạn vẫn có thể chọn COD.',
+                  ? 'Đang kiểm tra thanh toán trực tuyến…'
+                  : 'Thanh toán trực tuyến chưa sẵn sàng. Bạn vẫn có thể chọn COD.',
               style: T.small,
+            ),
+          if (remote && paymentMethodFor(payment) != 'cod')
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                '$payment là thanh toán thử nghiệm. Sau khi đặt hàng, mở trang thanh toán trong chi tiết đơn và kiểm tra kết quả khi hoàn tất.',
+                style: T.small,
+              ),
             ),
           const SizedBox(height: 20),
           CheckboxListTile(
@@ -422,8 +454,16 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
       ),
     );
     final summary = CartSummary(
+      automaticSavings: cart.items.fold<int>(
+        0,
+        (sum, i) =>
+            sum +
+            (i.discounted
+                ? (i.originalUnitPrice! - i.unitPrice) * i.quantity
+                : 0),
+      ),
       remote: remote,
-      paymentMethod: payment == 'VNPay sandbox' ? 'vnpay' : 'cod',
+      paymentMethod: paymentMethodFor(payment),
       discount: discount,
       couponCode: couponCode,
       subtotal: subtotal,
@@ -432,9 +472,9 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
         cart.checkoutPending
             ? 'Kiểm tra lại đơn vừa đặt'
             : remote
-            ? (payment == 'VNPay sandbox'
-                  ? 'Đặt hàng với VNPay sandbox'
-                  : 'Đặt hàng COD')
+            ? (paymentMethodFor(payment) == 'cod'
+                  ? 'Đặt hàng COD'
+                  : 'Đặt hàng với $payment')
             : 'Tạo đơn hàng demo',
         busy: busy,
         onPressed: quoting || (cart.cart.locked && !cart.checkoutPending)
@@ -449,7 +489,13 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Một bước nữa thôi.', style: T.display(40)),
+              const PurchaseProgress(current: 1),
+              Text(
+                'Một bước nữa thôi.',
+                style: T.display(
+                  MediaQuery.sizeOf(context).width < 600 ? 32 : 40,
+                ),
+              ),
               const SizedBox(height: 12),
               TextButton(
                 onPressed: () => context.go('/cart'),
@@ -459,7 +505,11 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
               LayoutBuilder(
                 builder: (_, c) => c.maxWidth < 850
                     ? Column(
-                        children: [fields, const SizedBox(height: 32), summary],
+                        children: [
+                          SurfacePanel(child: fields),
+                          const SizedBox(height: 32),
+                          summary,
+                        ],
                       )
                     : Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -472,7 +522,7 @@ class _CheckoutPageState extends ConsumerState<CheckoutPage> {
                                 constraints: const BoxConstraints(
                                   maxWidth: 760,
                                 ),
-                                child: fields,
+                                child: SurfacePanel(child: fields),
                               ),
                             ),
                           ),
@@ -542,7 +592,7 @@ class _OrderSuccessPageState extends ConsumerState<OrderSuccessPage> {
                       ? 'Kiểm tra lại mã đơn trong lịch sử tài khoản.'
                       : 'Dữ liệu demo được xóa khi tải lại trang.')
                 : (store.remote
-                      ? '$id · ${order.status}\n${order.draft.payment}'
+                      ? '${order.displayCode} · ${order.status}\n${order.draft.payment}'
                       : 'Đơn hàng mô phỏng – chưa thanh toán thật'),
             icon: Icons.check_circle_outline,
             action: AppButton(
@@ -556,6 +606,14 @@ class _OrderSuccessPageState extends ConsumerState<OrderSuccessPage> {
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 520),
               child: CartSummary(
+                automaticSavings: order.items.fold<int>(
+                  0,
+                  (sum, i) =>
+                      sum +
+                      (i.discounted
+                          ? (i.originalUnitPrice! - i.unitPrice) * i.quantity
+                          : 0),
+                ),
                 remote: store.remote,
                 paymentMethod: order.paymentProvider,
                 discount: order.discount,

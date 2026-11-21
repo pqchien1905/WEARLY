@@ -25,7 +25,12 @@ export async function geminiInteraction(
   send: typeof fetch,
   key: string,
   body: Record<string, unknown>,
-  limits: { timeoutMs: number; maxBytes: number; signal?: AbortSignal },
+  limits: {
+    timeoutMs: number;
+    maxBytes: number;
+    signal?: AbortSignal;
+    apiVersion?: 'v1' | 'v1beta';
+  },
 ): Promise<Record<string, unknown>> {
   if (!key.trim()) throw new Error('AI_PROVIDER_NOT_CONFIGURED');
   if (limits.signal?.aborted) throw new Error('PROVIDER_ABORTED');
@@ -41,7 +46,7 @@ export async function geminiInteraction(
     return await Promise.race([
       (async () => {
         const response = await send(
-          'https://generativelanguage.googleapis.com/v1/interactions',
+          `https://generativelanguage.googleapis.com/${limits.apiVersion === 'v1beta' ? 'v1beta' : 'v1'}/interactions`,
           {
             method: 'POST',
             redirect: 'error',

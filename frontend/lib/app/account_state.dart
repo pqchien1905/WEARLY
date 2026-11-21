@@ -3,6 +3,7 @@ import '../domain/account.dart';
 import '../data/mock_account.dart';
 import '../data/remote_account.dart';
 import '../core/network/session_tokens.dart';
+import '../core/network/api_client.dart';
 import 'api_providers.dart';
 export '../domain/account.dart';
 
@@ -47,6 +48,7 @@ class AccountController extends Notifier<UserProfile?> {
   Provider<SessionTokens> get _tokens =>
       admin ? adminSessionTokensProvider : sessionTokensProvider;
   int _generation = 0;
+  int _profileWrites = 0;
   @override
   UserProfile? build() {
     // Riverpod may retain this notifier across invalidation. A reset must
@@ -89,8 +91,38 @@ class AccountController extends Notifier<UserProfile?> {
 
   Future<void> save(UserProfile profile) async {
     final token = ++_generation;
-    final saved = await ref.read(_repository).save(profile);
-    if (ref.mounted && token == _generation) state = saved;
+    _profileWrites++;
+    try {
+      final saved = await ref.read(_repository).save(profile);
+      if (ref.mounted && token == _generation) state = saved;
+    } finally {
+      _profileWrites--;
+    }
+  }
+
+  Future<void> refreshProfile() async {
+    final current = state;
+    if (current == null) throw sessionChanged;
+    if (_profileWrites > 0) {
+      throw const ApiException(
+        'BUSY',
+        'Thông tin đang được lưu. Vui lòng thử lại sau.',
+      );
+    }
+    final repository = ref.read(_repository);
+    if (repository is! RemoteAccountRepository) return;
+    final generation = _generation;
+    final profile = await repository.readProfile();
+    if (!ref.mounted || generation != _generation || state?.id != current.id) {
+      throw sessionChanged;
+    }
+    if (profile.id != current.id) {
+      throw const ApiException(
+        'INVALID_RESPONSE',
+        'Chưa đọc được thông tin tài khoản. Vui lòng thử lại.',
+      );
+    }
+    state = profile;
   }
 
   Future<void> restore() async {
@@ -106,6 +138,18 @@ class AccountController extends Notifier<UserProfile?> {
 
   Future<void> requestPasswordReset(String email) =>
       ref.read(_repository).requestPasswordReset(email);
+  Future<void> changePassword(String current, String next) async {
+    final repository = ref.read(_repository);
+    if (repository is! RemoteAccountRepository) {
+      throw const ApiException(
+        'UNSUPPORTED',
+        'Chế độ demo không lưu mật khẩu. Hãy dùng cửa hàng kết nối API.',
+      );
+    }
+    if (state == null) throw sessionChanged;
+    await repository.changePassword(current, next);
+  }
+
   Future<void> signOut() async {
     final generation = ++_generation;
     final repository = ref.read(_repository);

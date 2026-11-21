@@ -16,6 +16,7 @@ class RemoteProductRepository implements ProductRepository {
       authenticated: false,
       query: {
         if (query.search.isNotEmpty) 'q': query.search,
+        if (query.brand.isNotEmpty) 'brand': query.brand,
         if (query.category.isNotEmpty) 'category': query.category,
         if (query.size.isNotEmpty) 'size': query.size,
         if (query.color.isNotEmpty) 'color': query.color,
@@ -109,6 +110,10 @@ class RemoteProductRepository implements ProductRepository {
                 radix: 16,
               ),
               price: _money(v['price'] as Map<String, dynamic>),
+              originalPrice: v['originalPrice'] == null
+                  ? null
+                  : _money(v['originalPrice'] as Map<String, dynamic>),
+              promotionName: v['promotion']?['name'] as String?,
               stock: v['available'] as int,
             ),
           )

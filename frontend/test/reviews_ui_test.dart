@@ -226,6 +226,7 @@ void main() {
       await tester.tap(find.text('Sửa đánh giá'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextFormField), 'Mặc rất thoải mái');
+      await tester.pump();
       await tester.tap(find.text('Lưu đánh giá'));
       await tester.pumpAndSettle();
       expect(own!['comment'], 'Mặc rất thoải mái');

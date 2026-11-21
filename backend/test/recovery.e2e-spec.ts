@@ -30,7 +30,7 @@ redisDescribe('Password recovery with PostgreSQL, Redis and SMTP', () => {
   const nextPassword = 'Recovery-replaced-2026';
   const mails: string[] = [];
   const users: string[] = [];
-  let access: string, refresh: string;
+  let access: string, refresh: string, firstGrant: string;
   let recovery: RecoveryService, worker: RecoveryWorker, queue: Queue;
   let rejectMail = false;
   const eventually = async (condition: () => Promise<boolean> | boolean) => {
@@ -40,7 +40,7 @@ redisDescribe('Password recovery with PostgreSQL, Redis and SMTP', () => {
     }
     throw new Error('Expected recovery state did not arrive');
   };
-  const mailToken = (mail: string) => {
+  const mailCode = (mail: string) => {
     const split = mail.indexOf('\r\n\r\n');
     const headers = mail.slice(0, split);
     const body = mail.slice(split + 4);
@@ -51,11 +51,11 @@ redisDescribe('Password recovery with PostgreSQL, Redis and SMTP', () => {
           .replace(/=([0-9A-F]{2})/gi, (_, hex: string) =>
             String.fromCharCode(parseInt(hex, 16)),
           );
-    const token = decoded.match(/token=([A-Za-z0-9_-]{43})/)?.[1];
-    if (!token) throw new Error('Reset token absent from delivered mail');
-    return token;
+    const code = decoded.match(/:\s*(\d{6})\r?\n/)?.[1];
+    if (!code) throw new Error('Recovery code absent from delivered mail');
+    return code;
   };
-  const issue = async () => {
+  const issueCode = async () => {
     await eventually(async () => {
       const counts = await queue.getJobCounts('waiting', 'active');
       return counts.waiting === 0 && counts.active === 0;
@@ -67,8 +67,10 @@ redisDescribe('Password recovery with PostgreSQL, Redis and SMTP', () => {
       requestedAt: (await databaseNow(db)).toISOString(),
     });
     expect(mails.length).toBe(before + 1);
-    return mailToken(mails[before]);
+    return mailCode(mails[before]);
   };
+  const issue = async () =>
+    (await recovery.verifyCode(email, await issueCode())).resetToken;
   const call = (path: string) =>
     request(app.getHttpServer()).post('/api/v1/auth/' + path);
   beforeAll(async () => {
@@ -111,6 +113,10 @@ redisDescribe('Password recovery with PostgreSQL, Redis and SMTP', () => {
       SMTP_HOST: '127.0.0.1',
       SMTP_PORT: (smtp.server.address() as AddressInfo).port,
       SMTP_FROM: 'store@example.test',
+      SMTP_SECURE: 'false',
+      SMTP_USER: '',
+      SMTP_PASSWORD: '',
+      LOCAL_MAIL_ENABLED: 'false',
       SMTP_ALLOW_INSECURE_LOCAL: 'true',
       PASSWORD_RESET_WEB_URL: 'http://localhost:4183/#/reset-password',
     });
@@ -167,35 +173,73 @@ redisDescribe('Password recovery with PostgreSQL, Redis and SMTP', () => {
       async () => (await queue.getJobCounts('waiting', 'active')).active === 0,
     );
     expect(mails).toHaveLength(1);
-    const token = mailToken(mails[0]);
-    const row = await db.passwordResetToken.findUnique({
-      where: { tokenHash: createHash('sha256').update(token).digest('hex') },
+    const code = mailCode(mails[0]);
+    const row = await db.passwordResetCode.findUnique({
+      where: { userId: users[0] },
     });
     expect(Boolean(row)).toBe(true);
-    expect(row!.tokenHash).not.toBe(token);
+    expect(code).toMatch(/^\d{6}$/);
+    expect(row!.codeHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(row!.codeHash).not.toBe(
+      createHash('sha256').update(code).digest('hex'),
+    );
+    expect(row!.deliveredAt).not.toBeNull();
+    expect(mails[0]).toContain('Content-Type: text/html');
+    expect(mails[0]).not.toContain('?token=');
+    expect(row!.expiresAt.getTime() - row!.createdAt.getTime()).toBe(600000);
     expect(
-      row!.expiresAt.getTime() - row!.createdAt.getTime(),
-    ).toBeLessThanOrEqual(900100);
+      await db.passwordResetToken.count({ where: { userId: users[0] } }),
+    ).toBe(0);
+    const verified = await call('verify-reset-code')
+      .send({ email: email.toUpperCase(), code })
+      .expect(200);
+    firstGrant = verified.body.resetToken;
+    expect(firstGrant).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(verified.body.expiresIn).toBe(600);
+    await call('verify-reset-code').send({ email, code }).expect(400);
     await request(app.getHttpServer())
       .get('/api/v1/auth/me')
       .auth(access, { type: 'bearer' })
       .expect(200);
   });
-  it('atomically consumes one link, invalidates other links and revokes all sessions', async () => {
-    const first = mailToken(mails[0]);
-    const other = await issue();
-    await db.user.update({ where: { id: users[0] }, data: { role: 'ADMIN' } });
-    const { username } = await db.user.findUniqueOrThrow({ where: { email } });
+  it('consumes customer grants and sessions without changing a separate administrator', async () => {
+    const first = firstGrant;
+    // Legacy links remain supported until used/expired; a reset revokes them too.
+    const other = Buffer.alloc(32, 2).toString('base64url');
+    await db.passwordResetToken.create({
+      data: {
+        userId: users[0],
+        tokenHash: createHash('sha256').update(other).digest('hex'),
+        expiresAt: new Date(Date.now() + 60000),
+      },
+    });
+    const administrator = await db.user.create({
+      data: {
+        email: `admin-${suffix}@example.test`,
+        name: 'Separate administrator',
+        passwordHash: await argon2.hash(password),
+        role: 'ADMIN',
+      },
+    });
+    users.push(administrator.id);
+    const { username } = administrator;
     const adminSession = await call('admin/login')
       .send({ username, password })
       .expect(201);
     const browserSessions = [];
     for (const scope of ['customer', 'admin']) {
       const response = await call('browser/' + scope + '/login')
-        .set('Origin', 'http://localhost:4183').set('X-Wearly-Browser', '1')
-        .send(scope === 'admin' ? { username, password } : { email, password }).expect(201);
-      browserSessions.push({ scope, access: response.body.accessToken as string,
-        cookie: (response.headers['set-cookie'] as unknown as string[])[0].split(';')[0] });
+        .set('Origin', 'http://localhost:4183')
+        .set('X-Wearly-Browser', '1')
+        .send(scope === 'admin' ? { username, password } : { email, password })
+        .expect(201);
+      browserSessions.push({
+        scope,
+        access: response.body.accessToken as string,
+        cookie: (
+          response.headers['set-cookie'] as unknown as string[]
+        )[0].split(';')[0],
+      });
     }
     await call('reset-password')
       .send({ token: first, password: 'short' })
@@ -214,14 +258,26 @@ redisDescribe('Password recovery with PostgreSQL, Redis and SMTP', () => {
     await call('refresh').send({ refreshToken: refresh }).expect(401);
     for (const session of browserSessions) {
       await call('browser/' + session.scope + '/refresh')
-        .set('Origin', 'http://localhost:4183').set('X-Wearly-Browser', '1')
-        .set('Cookie', session.cookie).expect(401);
-      await request(app.getHttpServer()).get('/api/v1/auth/me')
-        .auth(session.access, { type: 'bearer' }).expect(401);
+        .set('Origin', 'http://localhost:4183')
+        .set('X-Wearly-Browser', '1')
+        .set('Cookie', session.cookie)
+        .expect(session.scope === 'customer' ? 401 : 201);
+      await request(app.getHttpServer())
+        .get('/api/v1/auth/me')
+        .auth(session.access, { type: 'bearer' })
+        .expect(session.scope === 'customer' ? 401 : 200);
     }
     await request(app.getHttpServer())
       .get('/api/v1/auth/me')
       .auth(adminSession.body.accessToken, { type: 'bearer' })
+      .expect(200);
+    const unchangedAdmin = await db.user.findUniqueOrThrow({
+      where: { id: administrator.id },
+    });
+    expect(unchangedAdmin.passwordHash).toBe(administrator.passwordHash);
+    await call('admin/login').send({ username, password }).expect(201);
+    await call('admin/login')
+      .send({ username, password: nextPassword })
       .expect(401);
     await call('login').send({ email, password }).expect(401);
     await call('login').send({ email, password: nextPassword }).expect(201);
@@ -235,7 +291,7 @@ redisDescribe('Password recovery with PostgreSQL, Redis and SMTP', () => {
         (mail) =>
           !(() => {
             try {
-              mailToken(mail);
+              mailCode(mail);
               return true;
             } catch {
               return false;
@@ -339,7 +395,7 @@ redisDescribe('Password recovery with PostgreSQL, Redis and SMTP', () => {
         'simulated-sensitive',
       );
       expect(
-        await db.passwordResetToken.count({
+        await db.passwordResetCode.count({
           where: {
             userId: users[0],
             consumedAt: null,
@@ -363,6 +419,261 @@ redisDescribe('Password recovery with PostgreSQL, Redis and SMTP', () => {
       await db.passwordResetToken.count({ where: { userId: users[0] } }),
     ).toBe(count);
   });
+  it('commits a five-guess budget across concurrent requests without locking the account', async () => {
+    const code = await issueCode();
+    const wrong = code === '000000' ? '000001' : '000000';
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () =>
+        recovery.verifyCode(email, wrong).then(
+          () => 'accepted',
+          (e) => e.getResponse().code,
+        ),
+      ),
+    );
+    expect(results).toEqual(Array(5).fill('RESET_CODE_INVALID'));
+    const row = await db.passwordResetCode.findUniqueOrThrow({
+      where: { userId: users[0] },
+    });
+    expect(row.attempts).toBe(5);
+    expect(row.consumedAt).not.toBeNull();
+    await expect(recovery.verifyCode(email, code)).rejects.toMatchObject({
+      status: 400,
+    });
+    await call('login').send({ email, password }).expect(201);
+    const fresh = await issueCode();
+    expect(
+      (
+        await db.passwordResetCode.findUniqueOrThrow({
+          where: { userId: users[0] },
+        })
+      ).attempts,
+    ).toBe(0);
+    await expect(recovery.verifyCode(email, fresh)).resolves.toHaveProperty(
+      'resetToken',
+    );
+  });
+
+  it('replaces the previous code and ignores older deliveries and successful retries', async () => {
+    const old = await issueCode();
+    const first = await db.passwordResetCode.findUniqueOrThrow({
+      where: { userId: users[0] },
+    });
+    const next = await issueCode();
+    const latest = await db.passwordResetCode.findUniqueOrThrow({
+      where: { userId: users[0] },
+    });
+    expect(latest.id).not.toBe(first.id);
+    expect(latest.codeHash).not.toBe(first.codeHash);
+    const count = mails.length;
+    for (const requestedAt of [first.requestedAt, latest.requestedAt]) {
+      await recovery.process({
+        kind: 'request',
+        email,
+        requestedAt: requestedAt.toISOString(),
+      });
+    }
+    expect(mails).toHaveLength(count);
+    if (old !== next)
+      await expect(recovery.verifyCode(email, old)).rejects.toMatchObject({
+        status: 400,
+      });
+    const results = await Promise.all(
+      [1, 2].map(() =>
+        recovery.verifyCode(email, next).then(
+          () => 'accepted',
+          () => 'rejected',
+        ),
+      ),
+    );
+    expect(results.sort()).toEqual(['accepted', 'rejected']);
+    expect(
+      await db.passwordResetToken.count({
+        where: { userId: users[0], consumedAt: null },
+      }),
+    ).toBe(1);
+  });
+
+  it('retries a request left pending by an interrupted worker', async () => {
+    await issueCode();
+    const pending = await db.passwordResetCode.update({
+      where: { userId: users[0] },
+      data: { deliveredAt: null },
+    });
+    const count = mails.length;
+    await recovery.process({
+      kind: 'request',
+      email,
+      requestedAt: pending.requestedAt.toISOString(),
+    });
+    const fresh = await db.passwordResetCode.findUniqueOrThrow({
+      where: { userId: users[0] },
+    });
+    expect(fresh.id).not.toBe(pending.id);
+    expect(fresh.deliveredAt).not.toBeNull();
+    expect(mails).toHaveLength(count + 1);
+    await expect(
+      recovery.verifyCode(email, mailCode(mails.at(-1)!)),
+    ).resolves.toHaveProperty('resetToken');
+  });
+
+  it('rejects expired codes, malformed input and codes submitted for another email', async () => {
+    const code = await issueCode();
+    for (const invalidCode of ['12345', '1234567', 'abcdef', 123456]) {
+      await call('verify-reset-code')
+        .send({ email, code: invalidCode })
+        .expect(400);
+    }
+    const unknown = await call('verify-reset-code')
+      .send({ email: `absent-${suffix}@example.test`, code })
+      .expect(400);
+    expect(unknown.body.error.code).toBe('RESET_CODE_INVALID');
+    await db.passwordResetCode.update({
+      where: { userId: users[0] },
+      data: { expiresAt: new Date(0) },
+    });
+    const expired = await call('verify-reset-code')
+      .send({ email, code })
+      .expect(400);
+    expect(expired.body.error.code).toBe(unknown.body.error.code);
+    await recovery.purgeExpired();
+    expect(
+      await db.passwordResetCode.count({ where: { userId: users[0] } }),
+    ).toBe(0);
+  });
+
+  it('customer recovery rejects staff accounts and grants issued before promotion', async () => {
+    const user = await db.user.create({
+      data: {
+        email: `promoted-${suffix}@example.test`,
+        name: 'Recovery isolation',
+        passwordHash: await argon2.hash(password),
+        // Keep role isolation independent of timestamp rounding and older test
+        // schemas that default passwordChangedAt to CURRENT_TIMESTAMP.
+        passwordChangedAt: new Date('2000-01-01T00:00:00Z'),
+      },
+    });
+    users.push(user.id);
+    // Other tests can still have delayed notification retries in this queue.
+    // Assert delivery for this recipient, not unrelated customers' messages.
+    const recipientMails = () =>
+      mails.filter((mail) => mail.includes(`To: ${user.email}\r\n`));
+    const requestedAt = (await databaseNow(db)).toISOString();
+    await recovery.process({
+      kind: 'request',
+      email: user.email,
+      requestedAt,
+    });
+    expect(
+      await db.passwordResetCode.count({ where: { userId: user.id } }),
+    ).toBe(1);
+    expect(recipientMails()).toHaveLength(1);
+    const code = mailCode(recipientMails().at(-1)!);
+    const token = Buffer.alloc(32, 4).toString('base64url');
+    await db.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: createHash('sha256').update(token).digest('hex'),
+        expiresAt: new Date(Date.now() + 60000),
+      },
+    });
+    await db.user.update({ where: { id: user.id }, data: { role: 'ADMIN' } });
+    const before = recipientMails().length;
+    await call('forgot-password')
+      .send({ email: user.email })
+      .expect(202, { accepted: true });
+    await eventually(async () => {
+      const counts = await queue.getJobCounts('active', 'waiting');
+      return counts.active === 0 && counts.waiting === 0;
+    });
+    expect(recipientMails()).toHaveLength(before);
+    await call('verify-reset-code')
+      .send({ email: user.email, code })
+      .expect(400);
+    await call('reset-password')
+      .send({ token, password: nextPassword })
+      .expect(400);
+    expect(
+      (await db.user.findUniqueOrThrow({ where: { id: user.id } }))
+        .passwordHash,
+    ).toBe(user.passwordHash);
+    await call('admin/login')
+      .send({ username: user.username, password })
+      .expect(201);
+  });
+
+  it('does not issue a code to an email changed while a recovery lookup was in flight', async () => {
+    const oldEmail = `old-contact-${suffix}@example.test`;
+    const newEmail = `new-contact-${suffix}@example.test`;
+    const user = await db.user.create({
+      data: {
+        email: oldEmail,
+        name: 'Changed customer contact',
+        passwordHash: await argon2.hash(password),
+        passwordChangedAt: new Date('2000-01-01T00:00:00Z'),
+      },
+    });
+    users.push(user.id);
+    const lookup = db.user.findUnique.bind(db.user);
+    let release!: () => void, entered!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const reached = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const delayedLookup = async (
+      args: Parameters<typeof db.user.findUnique>[0],
+    ) => {
+      const found = await lookup(args);
+      if (args.where.email === oldEmail) {
+        entered();
+        await gate;
+      }
+      return found;
+    };
+    // This code path awaits the lookup; it never calls Prisma relation helpers.
+    const spy = jest
+      .spyOn(db.user, 'findUnique')
+      .mockImplementation(
+        delayedLookup as unknown as typeof db.user.findUnique,
+      );
+    const pending = recovery.process({
+      kind: 'request',
+      email: oldEmail,
+      requestedAt: (await databaseNow(db)).toISOString(),
+    });
+    try {
+      await reached;
+      await db.user.update({
+        where: { id: user.id },
+        data: { email: newEmail },
+      });
+    } finally {
+      release();
+      spy.mockRestore();
+    }
+    await pending;
+    expect(
+      await db.passwordResetCode.count({ where: { userId: user.id } }),
+    ).toBe(0);
+    expect(
+      mails.filter((mail) => mail.includes(`To: ${oldEmail}\r\n`)),
+    ).toHaveLength(0);
+    // A new request to the current contact still works.
+    await recovery.process({
+      kind: 'request',
+      email: newEmail,
+      requestedAt: (await databaseNow(db)).toISOString(),
+    });
+    const delivered = mails.filter((mail) =>
+      mail.includes(`To: ${newEmail}\r\n`),
+    );
+    expect(delivered).toHaveLength(1);
+    await expect(
+      recovery.verifyCode(newEmail, mailCode(delivered[0])),
+    ).resolves.toHaveProperty('resetToken');
+  });
+
   it('does not send mail for inactive accounts and limits public request frequency', async () => {
     await eventually(
       async () => (await queue.getJobCounts('active')).active === 0,

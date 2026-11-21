@@ -5,16 +5,26 @@ import 'package:nep_storefront/domain/catalog.dart';
 
 void main() {
   const url = String.fromEnvironment('LIVE_API_BASE_URL');
-  test('loads the seeded catalog through a live NestJS/PostgreSQL API', () async {
-    final client = ApiClient(baseUrl: url);
-    addTearDown(client.close);
-    final repo = RemoteProductRepository(client);
-    final page = await repo.list(const ProductQuery(limit: 100));
-    expect(page.total, 32);
-    expect(page.items.length, 32);
-    final product = await repo.bySlug('nep-1');
-    expect(product?.variants.length, 8);
-    expect(product?.price, 490000);
-    expect(await repo.availableColors(), contains('Đen'));
-  }, skip: url.isEmpty ? 'Set LIVE_API_BASE_URL to run against the seeded API.' : false);
+  test(
+    'loads unique photographed products through the live PostgreSQL API',
+    () async {
+      final client = ApiClient(baseUrl: url);
+      addTearDown(client.close);
+      final repo = RemoteProductRepository(client);
+      final page = await repo.list(const ProductQuery(limit: 100));
+      expect(page.total, greaterThan(0));
+      expect(page.items.length, page.total.clamp(0, 100));
+      expect(page.items.map((p) => p.id).toSet().length, page.items.length);
+      expect(
+        page.items.every((p) => p.media.isNotEmpty && p.variants.isNotEmpty),
+        isTrue,
+      );
+      final product = await repo.bySlug(page.items.first.slug);
+      expect(product?.id, page.items.first.id);
+      expect(await repo.availableColors(), isNotEmpty);
+    },
+    skip: url.isEmpty
+        ? 'Set LIVE_API_BASE_URL to run the read-only catalog check.'
+        : false,
+  );
 }

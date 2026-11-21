@@ -1,6 +1,7 @@
 import { Prisma } from '../../generated/prisma/client';
 import { fail } from '../../common/errors';
 import { queueOrderStatus } from '../mail/outbox';
+import { isOnlineProvider } from '../../integrations/payments/wallet-gateway';
 type Order = Prisma.OrderGetPayload<{
   include: { items: true; payment: true };
 }>;
@@ -12,7 +13,8 @@ export async function cancelOrder(
   note: string,
 ) {
   if (
-    order.payment?.provider === 'vnpay' &&
+    order.payment &&
+    isOnlineProvider(order.payment.provider) &&
     (await tx.paymentAttempt.count({
       where: { paymentId: order.payment.id, status: 'PENDING' },
     }))

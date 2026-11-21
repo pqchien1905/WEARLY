@@ -28,7 +28,7 @@ class _ProductReviewsState extends ConsumerState<ProductReviews> {
   Future<void> edit({ProductReview? previous, bool deleting = false}) async {
     final repository = ref.read(ownerReviewRepositoryProvider);
     if (repository == null) return;
-    await showDialog<void>(
+    await showDialog<ReviewEditorResult>(
       context: context,
       barrierDismissible: false,
       builder: (_) => ReviewEditor(

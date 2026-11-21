@@ -106,11 +106,13 @@ Từ root dự án, khi backend đã chạy:
 .\tools\frontend.ps1 api
 ```
 
-Lệnh mở Flutter trên Chrome, cổng8080, bật `USE_REMOTE_API=true` và API `http://localhost:3000/api/v1`. CORS hiện tại đã cho phép `http://localhost:8080`. Đăng ký tài khoản mới với mật khẩu12–128 ký tự, thêm địa chỉ, chọn size sản phẩm rồi đặt COD. Lịch sử đơn và giỏ hàng lưu theo tài khoản trong PostgreSQL; cookie HttpOnly giữ phiên qua tải lại trang, JWT chỉ ở RAM. Không cần Docker cho luồng native này.
+Lệnh chạy Flutter web-server trên cổng8080; tự mở `http://localhost:8080` bằng trình duyệt. Lệnh bật `USE_REMOTE_API=true` và API `http://localhost:3000/api/v1`. CORS hiện tại đã cho phép `http://localhost:8080`. Đăng ký tài khoản mới với mật khẩu12–128 ký tự, thêm địa chỉ, chọn size sản phẩm rồi đặt COD. Lịch sử đơn và giỏ hàng lưu theo tài khoản trong PostgreSQL; cookie HttpOnly giữ phiên qua tải lại trang, JWT chỉ ở RAM. Không cần Docker cho luồng native này.
+
+Sau khi sửa mã, nhấn `R` trong terminal Flutter rồi tải lại trang. Nhấn `q` để dừng server. Chế độ này cho phép đóng/mở lại trình duyệt mà không phụ thuộc cổng debug Chrome. Khi cần debugger, dùng `.\tools\frontend.ps1 api -Device chrome` và giữ cửa sổ Chrome được Flutter mở; nếu cửa sổ đó đã đóng, thoát phiên cũ và chạy lại lệnh.
 
 `./tools/frontend.ps1 build-api` tạo Web release cho API mặc định. `-ApiUrl http://host:port/api/v1` đổi đích kết nối; cấu hình CORS của backend phải khớp origin frontend. Nếu cổng8080 đang chạy Flutter cũ, dùng `Ctrl+C` trong terminal đó rồi chạy lại lệnh trên.
 
-Chạy demo độc lập bằng `.\tools\frontend.ps1 run`, hoặc:
+Chạy demo độc lập bằng `.\tools\frontend.ps1 demo`, hoặc:
 
 ```powershell
 cd 'D:\Fashion Shop\frontend'

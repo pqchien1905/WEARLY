@@ -1,5 +1,6 @@
 import {
   Body,
+  Delete,
   Controller,
   Get,
   Param,
@@ -9,7 +10,11 @@ import {
   Query,
 } from '@nestjs/common';
 import { Admin, CurrentUser, Identity } from '../../common/decorators/auth';
-import { PageDto } from '../products/dto/query-products.dto';
+import { AdminPageDto as PageDto } from '../../common/admin-page.dto';
+import {
+  AdminPromotionsQueryDto,
+  DeletePromotionDto,
+} from './promotions-query.dto';
 import { PromotionsService } from './promotions.service';
 import {
   CreatePromotionDto,
@@ -30,8 +35,24 @@ export class PromotionsController {
 @Controller('admin/promotions')
 export class AdminPromotionsController {
   constructor(private readonly service: PromotionsService) {}
-  @Get() list(@Query() q: PageDto) {
+  @Get() list(@Query() q: AdminPromotionsQueryDto) {
     return this.service.list(q);
+  }
+  @Get('summary') summary() {
+    return this.service.summary();
+  }
+  @Get(':id/redemptions') history(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() q: PageDto,
+  ) {
+    return this.service.history(id, q);
+  }
+  @Delete(':id') remove(
+    @CurrentUser() u: Identity,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: DeletePromotionDto,
+  ) {
+    return this.service.remove(u.id, id, dto.expectedVersion);
   }
   @Get(':id') get(@Param('id', ParseUUIDPipe) id: string) {
     return this.service.get(id);

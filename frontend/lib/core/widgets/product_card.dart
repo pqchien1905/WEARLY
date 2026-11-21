@@ -1,17 +1,23 @@
+import 'promotion_price.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'wishlist_button.dart';
 import '../../domain/catalog.dart';
 import '../design/tokens.dart';
-import '../format.dart';
 import 'primitives.dart';
 import 'motion_widgets.dart';
 import '../../features/catalog/quick_add_sheet.dart';
 
 class ProductCard extends ConsumerWidget {
-  const ProductCard(this.product, {super.key});
+  const ProductCard(
+    this.product, {
+    super.key,
+    this.actionsEnabled = true,
+    this.showQuickAddLabel = false,
+  });
   final Product product;
+  final bool actionsEnabled, showQuickAddLabel;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Column(
@@ -26,28 +32,61 @@ class ProductCard extends ConsumerWidget {
                 onTap: () => context.go('/products/${product.slug}'),
                 child: FashionImage(
                   product.image,
-                  label: '${product.name}, ảnh minh họa',
+                  label: product.media.isNotEmpty
+                      ? product.media.first.label
+                      : product.name,
+                  fit: BoxFit.contain,
                 ),
               ),
+              if (!product.variants.any((variant) => variant.stock > 0))
+                Positioned(
+                  top: 12,
+                  left: 12,
+                  child: DecoratedBox(
+                    decoration: const BoxDecoration(
+                      color: T.surface,
+                      borderRadius: T.radius,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      child: Text(
+                        'Hết hàng',
+                        style: T.small.copyWith(color: T.ink),
+                      ),
+                    ),
+                  ),
+                ),
               Positioned(
                 top: 8,
                 right: 8,
-                child: WishlistButton(product, card: true),
-              ),
-              Positioned(
-                bottom: 10,
-                right: 10,
-                child: IconButton.filledTonal(
-                  tooltip: 'Chọn size ${product.name}',
-                  onPressed: () => showQuickAdd(context, product.slug),
-                  style: IconButton.styleFrom(backgroundColor: T.surface),
-                  icon: const Icon(Icons.add, size: 20),
+                child: WishlistButton(
+                  product,
+                  card: true,
+                  enabled: actionsEnabled,
                 ),
               ),
+              if (!showQuickAddLabel)
+                Positioned(
+                  bottom: 10,
+                  right: 10,
+                  child: IconButton.filledTonal(
+                    tooltip: 'Chọn size ${product.name}',
+                    onPressed:
+                        actionsEnabled &&
+                            product.variants.any((variant) => variant.stock > 0)
+                        ? () => showQuickAdd(context, product.slug)
+                        : null,
+                    style: IconButton.styleFrom(backgroundColor: T.surface),
+                    icon: const Icon(Icons.add, size: 20),
+                  ),
+                ),
             ],
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 16),
         InkWell(
           onTap: () => context.go('/products/${product.slug}'),
           child: Padding(
@@ -56,14 +95,18 @@ class ProductCard extends ConsumerWidget {
               product.name,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: T.body.copyWith(fontWeight: FontWeight.w500),
+              style: T.body.copyWith(fontWeight: FontWeight.w600, height: 1.5),
             ),
           ),
         ),
         const SizedBox(height: 4),
-        Text(
-          money(product.price),
-          style: T.body.copyWith(fontWeight: FontWeight.w600),
+        PromotionPrice(
+          price: product.price,
+          original: product.cheapestVariant.originalPrice,
+          name: product.cheapestVariant.promotionName,
+          prefix: product.variants.any((v) => v.price != product.price)
+              ? 'Từ '
+              : '',
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -94,6 +137,24 @@ class ProductCard extends ConsumerWidget {
             Text('${product.colors.length} màu', style: T.small),
           ],
         ),
+        if (showQuickAddLabel) ...[
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed:
+                  actionsEnabled && product.variants.any((v) => v.stock > 0)
+                  ? () => showQuickAdd(context, product.slug)
+                  : null,
+              icon: const Icon(Icons.add_shopping_cart_outlined, size: 18),
+              label: Text(
+                product.variants.any((v) => v.stock > 0)
+                    ? 'Chọn size'
+                    : 'Tạm hết hàng',
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -134,10 +195,12 @@ class SizeSelector extends StatelessWidget {
     required this.variants,
     required this.selected,
     required this.onSelected,
+    this.enabled = true,
   });
   final List<ProductVariant> variants;
   final String? selected;
   final ValueChanged<String> onSelected;
+  final bool enabled;
   @override
   Widget build(BuildContext context) => Wrap(
     spacing: 8,
@@ -148,7 +211,7 @@ class SizeSelector extends StatelessWidget {
             selected: v.size == selected,
             label: 'Size ${v.size}${v.stock == 0 ? ", hết hàng" : ""}',
             child: SizedBox(
-              width: 58,
+              width: v.size.length > 4 ? 96 : 58,
               height: 48,
               child: OutlinedButton(
                 style: OutlinedButton.styleFrom(
@@ -157,7 +220,9 @@ class SizeSelector extends StatelessWidget {
                   foregroundColor: selected == v.size ? T.surface : T.ink,
                   side: BorderSide(color: selected == v.size ? T.ink : T.line),
                 ),
-                onPressed: v.stock == 0 ? null : () => onSelected(v.size),
+                onPressed: !enabled || v.stock == 0
+                    ? null
+                    : () => onSelected(v.size),
                 child: Text(
                   v.size,
                   style: TextStyle(

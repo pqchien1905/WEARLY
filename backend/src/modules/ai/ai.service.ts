@@ -13,7 +13,22 @@ import { fail } from '../../common/errors';
 
 const detail = {
   usage: true,
-  variant: true,
+  variant: {
+    include: {
+      product: {
+        select: {
+          name: true,
+          slug: true,
+          active: true,
+          tryOnSupported: true,
+          images: {
+            orderBy: { position: 'asc' },
+            select: { url: true, color: true },
+          },
+        },
+      },
+    },
+  },
   image: true,
   result: true,
 } as const;
@@ -187,6 +202,22 @@ export class AiService {
           : null),
       imageId: row.imageId,
       sku: row.variant.sku,
+      size: row.variant.size,
+      color: row.variant.color,
+      product: row.variant.product.active
+        ? {
+            name: row.variant.product.name,
+            slug: row.variant.product.slug,
+            image:
+              (
+                row.variant.product.images.find(
+                  (image) => image.color === row.variant.color,
+                ) ?? row.variant.product.images[0]
+              )?.url ?? null,
+            tryOnSupported:
+              row.variant.active && row.variant.product.tryOnSupported,
+          }
+        : null,
       createdAt: row.createdAt,
       expiresAt: row.image.expiresAt,
       estimatedCostVnd: row.usage?.estimatedCostVnd.toString() ?? '0',

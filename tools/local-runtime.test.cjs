@@ -297,6 +297,49 @@ test("native child configuration is local, consistent and leaves source settings
       /LOCAL_CONFIGURATION_REQUIRED/,
     );
 });
+test("native recovery preserves external SMTP while local plaintext stays loopback-only", () => {
+  const input = {
+    DATABASE_URL: "postgresql://fixture:synthetic@localhost:5432/fixture_test",
+    REDIS_HOST: "localhost",
+    S3_ENDPOINT: "http://127.0.0.1:9000",
+    PASSWORD_RECOVERY_ENABLED: "true",
+    LOCAL_MAIL_ENABLED: "false",
+    SMTP_HOST: "smtp.example.com",
+    SMTP_PORT: "465",
+    SMTP_SECURE: "true",
+    SMTP_ALLOW_INSECURE_LOCAL: "false",
+    SMTP_USER: "fixture@example.com",
+    SMTP_PASSWORD: "synthetic-test-only",
+  };
+  const options = { apiPort: 13001, webPort: 13002 };
+  const configured = runtime.configure(input, options);
+  for (const key of [
+    "SMTP_HOST",
+    "SMTP_PORT",
+    "SMTP_SECURE",
+    "SMTP_USER",
+    "SMTP_PASSWORD",
+  ])
+    assert.equal(configured[key], input[key]);
+  for (const patch of [
+    { LOCAL_MAIL_ENABLED: "true" },
+    { SMTP_ALLOW_INSECURE_LOCAL: "true" },
+  ])
+    assert.throws(
+      () => runtime.configure({ ...input, ...patch }, options),
+      /LOCAL_CONFIGURATION_REQUIRED/,
+    );
+  assert.doesNotThrow(() =>
+    runtime.configure(
+      {
+        ...input,
+        SMTP_HOST: "127.0.0.1",
+        SMTP_ALLOW_INSECURE_LOCAL: "true",
+      },
+      options,
+    ),
+  );
+});
 test("changed compiled assets and a different API origin require a fresh runtime build", async (t) => {
   const root = workspace(t),
     loc = runtime.locations(root, true);

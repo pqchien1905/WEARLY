@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/api_providers.dart';
 import '../network/catalog_image.dart';
 import '../design/tokens.dart';
+import '../design/motion.dart';
 
 class PageBody extends StatelessWidget {
   const PageBody({super.key, required this.child, this.vertical = 40});
@@ -40,7 +42,7 @@ class TableViewport extends StatelessWidget {
   );
 }
 
-class AppButton extends StatelessWidget {
+class AppButton extends StatefulWidget {
   const AppButton(
     this.label, {
     super.key,
@@ -48,33 +50,128 @@ class AppButton extends StatelessWidget {
     this.outlined = false,
     this.busy = false,
     this.icon,
+    this.light = false,
   });
   final String label;
   final VoidCallback? onPressed;
-  final bool outlined, busy;
+  final bool outlined, busy, light;
   final IconData? icon;
+  @override
+  State<AppButton> createState() => _AppButtonState();
+}
+
+class _AppButtonState extends State<AppButton> {
+  final states = WidgetStatesController();
+  bool pressed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    states.addListener(updatePressed);
+  }
+
+  void updatePressed() {
+    if (states.value.contains(WidgetState.pressed) == pressed) return;
+    // ButtonStyleButton can update disabled/pressed states while rebuilding.
+    // Defer that notification so its ancestor is never dirtied during build.
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) updatePressed();
+      });
+      return;
+    }
+    setState(() => pressed = states.value.contains(WidgetState.pressed));
+  }
+
+  @override
+  void dispose() {
+    states.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final child = Row(
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        if (busy)
-          const SizedBox(
+        if (widget.busy)
+          SizedBox(
             width: 16,
             height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2, color: T.muted),
+            child: Motion.reduced(context)
+                ? const Icon(
+                    Icons.hourglass_top_rounded,
+                    size: 16,
+                    color: T.muted,
+                  )
+                : const CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: T.muted,
+                  ),
           )
-        else if (icon != null)
-          Icon(icon, size: 18),
-        if (busy || icon != null) const SizedBox(width: 10),
-        Flexible(child: Text(label, textAlign: TextAlign.center)),
+        else if (widget.icon != null)
+          Icon(widget.icon, size: 18),
+        if (widget.busy || widget.icon != null) const SizedBox(width: 10),
+        Flexible(child: Text(widget.label, textAlign: TextAlign.center)),
       ],
     );
-    return outlined
-        ? OutlinedButton(onPressed: busy ? null : onPressed, child: child)
-        : FilledButton(onPressed: busy ? null : onPressed, child: child);
+    final button = widget.outlined
+        ? OutlinedButton(
+            statesController: states,
+            onPressed: widget.busy ? null : widget.onPressed,
+            child: child,
+          )
+        : FilledButton(
+            statesController: states,
+            style: widget.light
+                ? FilledButton.styleFrom(
+                    backgroundColor: T.surface,
+                    foregroundColor: T.accentDeep,
+                  )
+                : null,
+            onPressed: widget.busy ? null : widget.onPressed,
+            child: child,
+          );
+    // Native button states retain keyboard, disabled and pointer semantics.
+    // Only paint is scaled; surrounding controls never move on press.
+    return Semantics(
+      liveRegion: widget.busy,
+      value: widget.busy ? 'Đang xử lý' : null,
+      child: AnimatedScale(
+        scale:
+            !Motion.reduced(context) &&
+                !widget.busy &&
+                widget.onPressed != null &&
+                pressed
+            ? .98
+            : 1,
+        duration: Motion.duration(context, Motion.fast),
+        curve: Motion.curve,
+        child: button,
+      ),
+    );
   }
+}
+
+/// A bounded work area for forms, previews and results, with no idle shadow.
+class SurfacePanel extends StatelessWidget {
+  const SurfacePanel({super.key, required this.child, this.tinted = false});
+  final Widget child;
+  final bool tinted;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: EdgeInsets.all(MediaQuery.sizeOf(context).width < 600 ? 20 : 28),
+    decoration: BoxDecoration(
+      color: tinted ? T.canvas : T.surface,
+      borderRadius: T.panelRadius,
+      border: Border.all(color: T.line),
+    ),
+    child: Material(type: MaterialType.transparency, child: child),
+  );
 }
 
 class AppField extends StatelessWidget {
@@ -89,6 +186,8 @@ class AppField extends StatelessWidget {
     this.onSubmitted,
     this.hint,
     this.readOnly = false,
+    this.autofillHints,
+    this.textInputAction,
   });
   final String label;
   final String? hint;
@@ -96,12 +195,16 @@ class AppField extends StatelessWidget {
   final String? Function(String?)? validator;
   final bool obscure;
   final bool readOnly;
+  final Iterable<String>? autofillHints;
+  final TextInputAction? textInputAction;
   final TextInputType? keyboardType;
   final int maxLines;
   final ValueChanged<String>? onSubmitted;
   @override
   Widget build(BuildContext context) => TextFormField(
     readOnly: readOnly,
+    autofillHints: autofillHints,
+    textInputAction: textInputAction,
     controller: controller,
     validator: validator,
     obscureText: obscure,
@@ -154,9 +257,26 @@ class StatePanel extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: 460),
         child: Column(
           children: [
-            Icon(icon, size: 40, color: T.accent),
+            ExcludeSemantics(
+              child: Container(
+                width: 72,
+                height: 72,
+                decoration: const BoxDecoration(
+                  color: T.soft,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 30, color: T.accent),
+              ),
+            ),
             const SizedBox(height: 20),
-            Text(title, style: T.display(26), textAlign: TextAlign.center),
+            Semantics(
+              header: true,
+              child: Text(
+                title,
+                style: T.display(26),
+                textAlign: TextAlign.center,
+              ),
+            ),
             const SizedBox(height: 12),
             Text(
               message,
@@ -179,32 +299,50 @@ class LoadingPanel extends StatelessWidget {
     label: 'Đang tải sản phẩm',
     liveRegion: true,
     child: LayoutBuilder(
-      builder: (_, c) => Wrap(
-        spacing: 16,
-        runSpacing: 16,
-        children: List.generate(
-          4,
-          (_) => SizedBox(
-            width: (c.maxWidth - 16) / 2,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(height: 240, color: T.canvas),
-                const SizedBox(height: 12),
-                FractionallySizedBox(
-                  widthFactor: .8,
-                  child: Container(height: 12, color: T.canvas),
-                ),
-                const SizedBox(height: 8),
-                FractionallySizedBox(
-                  widthFactor: .4,
-                  child: Container(height: 12, color: T.canvas),
-                ),
-              ],
+      builder: (_, c) {
+        final columns = c.maxWidth < 330
+            ? 1
+            : c.maxWidth < 650
+            ? 2
+            : c.maxWidth < 1000
+            ? 3
+            : 4;
+        final gap = c.maxWidth < 600 ? 14.0 : 24.0;
+        return Wrap(
+          spacing: gap,
+          runSpacing: 32,
+          children: List.generate(
+            4,
+            (_) => SizedBox(
+              width: (c.maxWidth - gap * (columns - 1)) / columns,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const AspectRatio(
+                    aspectRatio: 3 / 4,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: T.canvas,
+                        borderRadius: T.imageRadius,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  FractionallySizedBox(
+                    widthFactor: .8,
+                    child: Container(height: 12, color: T.canvas),
+                  ),
+                  const SizedBox(height: 8),
+                  FractionallySizedBox(
+                    widthFactor: .4,
+                    child: Container(height: 12, color: T.canvas),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     ),
   );
 }
