@@ -56,16 +56,34 @@ jobs:
           git clone --depth 1 --branch 3.47.7 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/flutter/bin/flutter" --version
+      # MinIO no longer publishes container images; use the pinned release
+      # binary (same version as tools/start-storage.ps1) with a checksum.
       - name: Start synthetic private storage
-        run: >-
-          docker run -d --name wearly-ci-minio -p 127.0.0.1:9000:9000
-          -e MINIO_ROOT_USER=ci-fixture -e MINIO_ROOT_PASSWORD=ci-storage-fixture-only
-          minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
+        env:
+          MINIO_RELEASE: RELEASE.2025-09-07T16-13-09Z
+          MINIO_SHA256: 7c5bd8512c6e966455b1d198209358b2d191c77a83ab377c4073281065fb855f
+          MINIO_ROOT_USER: ci-fixture
+          MINIO_ROOT_PASSWORD: ci-storage-fixture-only
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/minio" \
+            "https://github.com/minio/minio/releases/download/$MINIO_RELEASE/minio.linux-amd64.$MINIO_RELEASE"
+          echo "$MINIO_SHA256  $RUNNER_TEMP/minio" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/minio"
+          mkdir -p "$RUNNER_TEMP/minio-data"
+          nohup "$RUNNER_TEMP/minio" server "$RUNNER_TEMP/minio-data" \
+            --address 127.0.0.1:9000 > "$RUNNER_TEMP/minio.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/minio.pid"
+          for i in $(seq 1 30); do
+            curl -fs http://127.0.0.1:9000/minio/health/live && exit 0
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/minio.log"
+          exit 1
       - run: node tools/ci-verify.cjs prepare
       - run: node tools/ci-verify.cjs storage
       - run: node tools/ci-verify.cjs backend
       - run: node tools/ci-verify.cjs frontend
       - run: node tools/ci-verify.cjs tools
-      - name: Stop this job's storage container
+      - name: Stop this job's storage process
         if: always()
-        run: docker rm -f wearly-ci-minio || true
+        run: kill "$(cat "$RUNNER_TEMP/minio.pid" 2>/dev/null)" 2>/dev/null || true
